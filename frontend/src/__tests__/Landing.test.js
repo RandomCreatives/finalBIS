@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material';
 import theme from '../theme';
@@ -16,37 +16,23 @@ const renderWithProviders = (ui) =>
     );
 
 describe('Landing Page', () => {
-    test('renders hero headline and branding', () => {
+    test('renders school branding and sign-in button', () => {
         renderWithProviders(<Landing />);
-        expect(
-            screen.getByText(/The Complete Digital Spine for/i)
-        ).toBeInTheDocument();
-        expect(
-            screen.getAllByText(/British International School/i).length
-        ).toBeGreaterThan(0);
+        expect(screen.getAllByText(/British International School/i).length).toBeGreaterThan(0);
+        expect(screen.getByRole('link', { name: /Staff Sign In/i })).toBeInTheDocument();
     });
 
-    test('renders interactive simulators section', () => {
+    test('renders welcome tagline', () => {
         renderWithProviders(<Landing />);
         expect(
-            screen.getByText(/Interactive Backend Logic Simulators/i)
-        ).toBeInTheDocument();
-        expect(
-            screen.getByText(/Marksheet Grading Engine/i)
-        ).toBeInTheDocument();
-        expect(
-            screen.getByText(/Library Overdue Calculator/i)
+            screen.getByText(/manage teaching assignments/i)
         ).toBeInTheDocument();
     });
 
-    test('opens module detail modal when clicking a feature card', () => {
+    test('renders footer with copyright', () => {
         renderWithProviders(<Landing />);
-        const exploreButtons = screen.getAllByText(/Explore Workflow & Specs/i);
-        expect(exploreButtons.length).toBeGreaterThan(0);
-
-        fireEvent.click(exploreButtons[0]);
         expect(
-            screen.getByText(/ARCHITECTURAL OVERVIEW/i)
+            screen.getByText(/Internal Staff Use Only/i)
         ).toBeInTheDocument();
     });
 });
