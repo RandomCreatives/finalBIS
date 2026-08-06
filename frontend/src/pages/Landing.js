@@ -1,10 +1,25 @@
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Container, Typography } from '@mui/material';
+import {
+    AppBar,
+    Toolbar,
+    Box,
+    Button,
+    Container,
+    Typography,
+    Switch,
+    FormControlLabel,
+    useTheme,
+} from '@mui/material';
 import LoginIcon from '@mui/icons-material/Login';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
+import { useColorScheme } from '../theme';
 
 export default function Landing() {
     const { isAuthenticated } = useAuth();
+    const { toggleColorScheme } = useColorScheme();
+    const theme = useTheme();
 
     return (
         <Box
@@ -12,11 +27,67 @@ export default function Landing() {
                 minHeight: '100vh',
                 display: 'flex',
                 flexDirection: 'column',
-                backgroundColor: '#0f172a',
-                color: '#f8fafc',
+                backgroundColor: 'background.default',
+                color: 'text.primary',
                 fontFamily: '"Inter", "Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
             }}
         >
+            <AppBar
+                position="sticky"
+                elevation={0}
+                sx={{
+                    backgroundColor: 'background.paper',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    color: 'text.primary',
+                    zIndex: (t) => t.zIndex.drawer + 1,
+                }}
+            >
+                <Container maxWidth="xl">
+                    <Toolbar disableGutters sx={{ justifyContent: 'space-between', minHeight: 72 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography
+                                variant="h6"
+                                sx={{ fontWeight: 800, lineHeight: 1.15, color: 'primary.main', mr: 1 }}
+                            >
+                                BIS NOC Gerji
+                            </Typography>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={theme.palette.mode === 'dark'}
+                                        onChange={toggleColorScheme}
+                                        icon={<LightModeIcon sx={{ fontSize: 20 }} />}
+                                        checkedIcon={<DarkModeIcon sx={{ fontSize: 20 }} />}
+                                    />
+                                }
+                                label=""
+                                sx={{ m: 0 }}
+                                aria-label="Toggle dark mode"
+                            />
+
+                            <Button
+                                variant="contained"
+                                component={RouterLink}
+                                to={isAuthenticated ? '/app' : '/login'}
+                                startIcon={<LoginIcon />}
+                                sx={{
+                                    fontWeight: 700,
+                                    px: 2.5,
+                                    py: 1,
+                                    borderRadius: 2,
+                                }}
+                            >
+                                {isAuthenticated ? 'Dashboard' : 'Sign In'}
+                            </Button>
+                        </Box>
+                    </Toolbar>
+                </Container>
+            </AppBar>
+
             <Container
                 maxWidth="md"
                 sx={{
@@ -27,6 +98,7 @@ export default function Landing() {
                     alignItems: 'center',
                     textAlign: 'center',
                     px: { xs: 2, sm: 3 },
+                    pb: 8,
                 }}
             >
                 <Typography
@@ -48,7 +120,7 @@ export default function Landing() {
                     sx={{
                         fontSize: { xs: '1.3rem', sm: '1.6rem' },
                         fontWeight: 300,
-                        color: '#cbd5e1',
+                        color: 'text.secondary',
                         mb: 4,
                     }}
                 >
@@ -59,7 +131,7 @@ export default function Landing() {
                     variant="body1"
                     sx={{
                         fontSize: '1.05rem',
-                        color: '#94a3b8',
+                        color: 'text.secondary',
                         mb: 5,
                         maxWidth: 520,
                         lineHeight: 1.7,
@@ -68,43 +140,18 @@ export default function Landing() {
                     Staff Portal — manage teaching assignments, attendance,
                     lessons and student records.
                 </Typography>
-
-                <Button
-                    variant="contained"
-                    size="large"
-                    component={RouterLink}
-                    to={isAuthenticated ? '/app' : '/login'}
-                    startIcon={<LoginIcon />}
-                    sx={{
-                        backgroundColor: '#ffffff',
-                        color: '#0f172a',
-                        fontWeight: 700,
-                        px: 5,
-                        py: 1.8,
-                        fontSize: '1.05rem',
-                        borderRadius: 2,
-                        boxShadow: '0 10px 30px rgba(255, 255, 255, 0.15)',
-                        transition: 'all 0.25s ease',
-                        '&:hover': {
-                            backgroundColor: '#f1f5f9',
-                            transform: 'translateY(-2px)',
-                            boxShadow: '0 14px 34px rgba(255, 255, 255, 0.22)',
-                        },
-                    }}
-                >
-                    {isAuthenticated ? 'Open Staff Dashboard' : 'Staff Sign In'}
-                </Button>
             </Container>
 
             <Box
                 sx={{
-                    py: 2.5,
+                    py: 3,
                     textAlign: 'center',
-                    borderTop: '1px solid #1e293b',
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
                     mt: 'auto',
                 }}
             >
-                <Typography variant="caption" sx={{ color: '#64748a', fontSize: '0.8rem' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
                     &copy; {new Date().getFullYear()} British International School, NOC Gerji Campus.
                     &nbsp;|&nbsp; Internal Staff Use Only
                 </Typography>

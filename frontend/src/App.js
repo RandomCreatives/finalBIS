@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { CssBaseline } from '@mui/material';
 
-import theme from './theme';
+import { ThemeProvider } from './theme';
 import { AuthProvider } from './auth/AuthContext';
 import RequireAuth from './auth/RequireAuth';
 import AppLayout from './components/AppLayout';
@@ -26,7 +26,7 @@ import Planning from './pages/Planning';
 
 export default function App() {
     return (
-        <ThemeProvider theme={theme}>
+        <ThemeProvider>
             <CssBaseline />
             <BrowserRouter>
                 <AuthProvider>
