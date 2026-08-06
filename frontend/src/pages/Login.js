@@ -26,7 +26,14 @@ export default function Login() {
     const [params] = useSearchParams();
 
     const expired = params.get('expired') === '1';
-    const destination = location.state?.from?.pathname || '/app';
+    const requestedDestination = location.state?.from?.pathname;
+    const destination =
+        typeof requestedDestination === 'string' &&
+        requestedDestination.startsWith('/') &&
+        !requestedDestination.startsWith('//') &&
+        !requestedDestination.includes('\\')
+            ? requestedDestination
+            : '/app';
 
     const handleSubmit = async (event) => {
         event.preventDefault();

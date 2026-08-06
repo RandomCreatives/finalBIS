@@ -652,5 +652,6 @@ router.delete('/tasks/:id', authenticate, uuid('id'), validate, tasks.deleteTask
 // =============================================================================
 router.get('/dashboard/summary', authenticate, authorize(ROLES.ADMIN), dashboard.getAdminSummary);
 router.get('/dashboard/me', authenticate, dashboard.getMySummary);
+router.get('/dashboard/data-flow', authenticate, dashboard.getDataFlow);
 
 module.exports = router;

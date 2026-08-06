@@ -12,6 +12,7 @@ export const authApi = {
 export const dashboardApi = {
     summary: () => client.get('/dashboard/summary').then((r) => r.data),
     me: () => client.get('/dashboard/me').then((r) => r.data),
+    dataFlow: () => client.get('/dashboard/data-flow').then((r) => r.data),
 };
 
 export const academicYearApi = {

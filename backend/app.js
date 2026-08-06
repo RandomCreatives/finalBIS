@@ -4,16 +4,33 @@ const helmet = require('helmet');
 
 const env = require('./config/env');
 const routes = require('./routes');
-const { apiLimiter } = require('./middleware/security');
+const { apiLimiter, isAllowedOrigin } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
+
+// Do not disclose the framework on every response.
+app.disable('x-powered-by');
 
 // Behind Vercel/Render the client IP arrives via X-Forwarded-For; without
 // this the rate limiter would see one proxy IP for every visitor.
 app.set('trust proxy', 1);
 
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: env.isProduction
+        ? {
+            useDefaults: true,
+            directives: {
+                "default-src": ["'self'"],
+                "connect-src": ["'self'", env.supabaseUrl, ...env.corsOrigins],
+                "img-src": ["'self'", 'data:', 'https:'],
+                "style-src": ["'self'", "'unsafe-inline'"],
+            },
+        }
+        : false,
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: 'no-referrer' },
+}));
 
 /**
  * CORS: strict allow-list. An unknown origin is rejected outright — the
@@ -24,12 +41,7 @@ app.use(
         origin(origin, callback) {
             // Same-origin/curl requests carry no Origin header.
             if (!origin) return callback(null, true);
-            if (
-                env.corsOrigins.includes(origin) ||
-                origin.endsWith('.e2b.app') ||
-                origin.includes('localhost') ||
-                env.nodeEnv === 'development'
-            ) {
+            if (isAllowedOrigin(origin, env)) {
                 return callback(null, true);
             }
             callback(new Error(`Origin ${origin} is not permitted by CORS`));

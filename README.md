@@ -158,6 +158,19 @@ Three connected pieces, designed so nothing depends on someone remembering:
 Messages arrive asynchronously: the inbox polls every 30s and the sidebar badge every
 60s. No extra infrastructure, and RLS stays fully closed.
 
+### Data-flow command center
+
+The dashboard now opens with a live **Teacher ↔ Admin data-flow command center** powered
+by `GET /api/dashboard/data-flow`:
+
+- **Admins** see branch-wide flow health across staffing, attendance, planning review,
+  tasks, conversations, notice acknowledgements and clinic leave approvals.
+- **Teachers** see only their own obligations: registers due, planning gaps, assigned
+  tasks, unread messages and notices requiring acknowledgement.
+- Each flow exposes a progress score, the current metric, the source/destination of the
+  data and a next action link, so operational bottlenecks are visible before they become
+  missed deadlines.
+
 ---
 
 ## Getting started
@@ -240,6 +253,10 @@ missing staff.
 - Conversations are private to their participants — admins are not auto-joined into
   every thread.
 - Rate limiting: 10 failed logins per IP+email per 15 min; 300 API requests per IP.
+- Helmet security headers are enabled, `X-Powered-By` is disabled, and production CSP
+  allows API connections only to the configured Supabase/backend origins.
+- CORS uses exact origin matching plus safe local/Arena preview host checks in
+  non-production; substring lookalikes such as `localhost.evil.example` are rejected.
 
 ---
 
@@ -247,18 +264,19 @@ missing staff.
 
 ```sh
 cd backend
-npm test          # everything (168 tests)
+npm test          # everything (174 tests)
 npm run test:api  # API layer only
 npm run test:db   # database layer only
 ```
 
 Two layers, both offline — no Supabase project, no Docker, no external server.
 
-**API tests (124)** run the Express app against a stubbed Supabase client: authentication,
+**API tests (130)** run the Express app against a stubbed Supabase client: authentication,
 token handling, role authorisation on every protected route, input validation, password
 hashing, teaching assignments, timetable visibility per role, teacher rotation, student
 placement, scheme and lesson-plan ownership, the submit/review workflow, calendar
-audience targeting, thread privacy, task permissions and notice targeting.
+audience targeting, thread privacy, task permissions, notice targeting and the dashboard
+data-flow rollups.
 
 **Database tests (44)** apply `schema.sql` and `functions.sql` to a **real PostgreSQL 18
 engine** (PGlite, Postgres compiled to WebAssembly) and exercise what a stub cannot:
@@ -300,6 +318,20 @@ supabase/
   schema.sql
   functions.sql
 ```
+
+## CI/CD
+
+The repository includes a ready-to-enable GitHub Actions workflow template at
+`docs/ci/github-actions.yml.example`. Copy it to `.github/workflows/ci.yml` in an
+environment with GitHub workflow permissions to run it on pull requests and pushes to
+`main` or `arena/**` branches. The template covers:
+
+- **Backend job:** `npm ci`, the full API/database test suite, then a high-severity
+  production dependency audit.
+- **Frontend job:** `npm ci`, React tests, a production build with CI warnings enforced,
+  then a critical-severity production dependency audit.
+- npm caching keyed by each package lockfile and cancellation of superseded runs on the
+  same branch.
 
 ## Deployment
 
