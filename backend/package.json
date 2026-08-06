@@ -2,7 +2,7 @@
   "name": "bisnoc-sms-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "School management API \u2014 Express + Supabase",
+  "description": "School management API — Express + Supabase",
   "main": "server.js",
   "engines": {
     "node": ">=18"
@@ -24,7 +24,9 @@
     "express-rate-limit": "^7.4.0",
     "express-validator": "^7.2.0",
     "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.2.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",

@@ -111,6 +111,9 @@ export const studentApi = {
     transfer: (id, toClassId, reason) =>
         client.post(`/students/${id}/transfer`, { toClassId, reason }).then((r) => r.data),
     transfers: (id) => client.get(`/students/${id}/transfers`).then((r) => r.data.transfers),
+    import: (formData) => client.post('/students/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
 };
 
 export const classApi = {

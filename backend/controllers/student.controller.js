@@ -1,5 +1,7 @@
 const supabase = require('../config/supabase');
-const { NotFoundError, ConflictError, asyncHandler } = require('../utils/errors');
+const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
+
+const XLSX = require('xlsx');
 
 const SELECT = `
     id, admission_no, name, roll_num, date_of_birth, gender,
@@ -242,7 +244,74 @@ const getTransferHistory = asyncHandler(async (req, res) => {
     });
 });
 
+/**
+ * POST /api/students/import
+ *
+ * Accepts an Excel file with columns: admissionNo, name, rollNum, dateOfBirth,
+ * gender, guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote
+ * Optional: classId (UUID) — students without a class go to unassigned pool.
+ */
+const importStudents = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        throw new BadRequestError('No file uploaded');
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet);
+
+    if (!rows || rows.length === 0) {
+        throw new BadRequestError('Excel file contains no data');
+    }
+
+    // Required columns
+    const requiredCols = ['admissionNo', 'name'];
+    const firstRow = rows[0];
+    const missingCols = requiredCols.filter((c) => !(c in firstRow));
+    if (missingCols.length > 0) {
+        throw new BadRequestError(`Missing required columns: ${missingCols.join(', ')}`);
+    }
+
+    const studentsToInsert = rows.map((row) => ({
+        admission_no: String(row.admissionNo || '').trim(),
+        name: String(row.name || '').trim(),
+        roll_num: row.rollNum ? Number(row.rollNum) : null,
+        date_of_birth: row.dateOfBirth ? new Date(row.dateOfBirth).toISOString().split('T')[0] : null,
+        gender: row.gender ? String(row.gender).toLowerCase() : null,
+        guardian_name: row.guardianName ? String(row.guardianName).trim() : null,
+        guardian_phone: row.guardianPhone ? String(row.guardianPhone).trim() : null,
+        guardian_email: row.guardianEmail ? String(row.guardianEmail).trim() : null,
+        special_needs: row.specialNeeds === true || String(row.specialNeeds).toLowerCase() === 'yes' || row.specialNeeds === 'TRUE',
+        special_needs_note: row.specialNeedsNote ? String(row.specialNeedsNote).trim() : null,
+        class_id: row.classId || null,
+        school_id: req.user.school_id,
+    })).filter((s) => s.admission_no && s.name);
+
+    if (studentsToInsert.length === 0) {
+        throw new BadRequestError('No valid student rows found');
+    }
+
+    const { data, error } = await supabase
+        .from('students')
+        .insert(studentsToInsert)
+        .select(SELECT);
+
+    if (error) {
+        if (error.code === '23505') {
+            throw new ConflictError('One or more admission numbers already exist');
+        }
+        throw error;
+    }
+
+    res.status(201).json({
+        message: `${data.length} students imported successfully`,
+        imported: data.length,
+        students: data.map(shape),
+    });
+});
+
 module.exports = {
     listStudents, listUnassigned, assignStudents, getStudent, createStudent,
-    updateStudent, transferStudent, getTransferHistory,
+    updateStudent, transferStudent, getTransferHistory, importStudents,
 };

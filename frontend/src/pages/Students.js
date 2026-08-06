@@ -7,6 +7,8 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import DownloadIcon from '@mui/icons-material/Download';
 import { studentApi, classApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -31,6 +33,9 @@ export default function Students() {
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
+    const [importDialog, setImportDialog] = useState(false);
+    const [importFile, setImportFile] = useState(null);
+    const [importing, setImporting] = useState(false);
 
     const classes = useApi(() => classApi.list(), []);
     const students = useApi(
@@ -115,6 +120,40 @@ export default function Students() {
         }
     };
 
+    const handleImport = async () => {
+        if (!importFile) return;
+        setImporting(true);
+        setFormError('');
+        const formData = new FormData();
+        formData.append('file', importFile);
+        try {
+            const data = await studentApi.import(formData);
+            setToast(data.message || `${data.imported} students imported`);
+            students.reload();
+            setImportDialog(false);
+            setImportFile(null);
+        } catch (err) {
+            setFormError(err.message);
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const downloadTemplate = () => {
+        const csv = [
+            'admissionNo,name,rollNum,dateOfBirth,gender,guardianName,guardianPhone,guardianEmail,specialNeeds,specialNeedsNote',
+            'STU001,"John Doe",1,2010-05-15,male,"Jane Doe","+251 91 123 4567","jane@example.com",yes,"Needs extra math support"',
+            'STU002,"Mary Smith",2,2010-08-22,female,"Mark Smith","+251 92 234 5678","mark@example.com",no,',
+        ].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student-import-template.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
+
     const rows = students.data || [];
 
     return (
@@ -123,9 +162,14 @@ export default function Students() {
                 title="Students"
                 subtitle="Enrolment records, guardians and class placement."
                 action={canEdit && (
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-                        Add student
-                    </Button>
+                    <>
+                        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+                            Add student
+                        </Button>
+                        <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportDialog(true)}>
+                            Import Excel
+                        </Button>
+                    </>
                 )}
             />
 
@@ -337,6 +381,51 @@ export default function Students() {
                     <Button onClick={() => setTransfer(null)}>Cancel</Button>
                     <Button variant="contained" onClick={handleTransfer} disabled={saving || !transfer?.toClassId}>
                         Transfer
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Import Excel -------------------------------------------------------- */}
+            <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Import Students from Excel</DialogTitle>
+                <DialogContent>
+                    {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
+                    <Stack spacing={3} sx={{ mt: 1 }}>
+                        <TextField
+                            type="file"
+                            accept=".xlsx,.xls,.csv"
+                            onChange={(e) => {
+                                setImportFile(e.target.files[0]);
+                                setFormError('');
+                            }}
+                            size="small"
+                            helperText="Columns: admissionNo, name, rollNum, dateOfBirth, gender, guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote"
+                        />
+                        <Box>
+                            <Button
+                                variant="text"
+                                size="small"
+                                startIcon={<DownloadIcon />}
+                                onClick={downloadTemplate}
+                            >
+                                Download template CSV
+                            </Button>
+                        </Box>
+                        <Alert severity="info" sx={{ fontSize: '0.8rem' }}>
+                            Required columns: <strong>admissionNo</strong>, <strong>name</strong>.
+                            All other columns are optional. Students without a class are placed in the unassigned pool.
+                        </Alert>
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setImportDialog(false)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleImport}
+                        disabled={importing || !importFile}
+                        startIcon={importing ? undefined : <FileUploadIcon />}
+                    >
+                        {importing ? 'Importing...' : 'Import'}
                     </Button>
                 </DialogActions>
             </Dialog>

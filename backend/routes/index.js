@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { body, param, query } = require('express-validator');
 
 const { authenticate, authorize, ROLES, TEACHER_ROLES } = require('../middleware/auth');
-const { authLimiter, validate } = require('../middleware/security');
+const { authLimiter, validate, uploadSingle } = require('../middleware/security');
 
 const auth = require('../controllers/auth.controller');
 const users = require('../controllers/user.controller');
@@ -260,6 +260,14 @@ router.post(
     body('guardianEmail').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail(),
     validate,
     students.createStudent
+);
+
+router.post(
+    '/students/import',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
+    uploadSingle,
+    students.importStudents
 );
 
 router.patch(

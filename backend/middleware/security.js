@@ -1,5 +1,6 @@
 const rateLimit = require('express-rate-limit');
 const { validationResult } = require('express-validator');
+const multer = require('multer');
 const { BadRequestError } = require('../utils/errors');
 
 const parseOrigin = (origin) => {
@@ -67,4 +68,22 @@ const validate = (req, res, next) => {
     next(err);
 };
 
-module.exports = { apiLimiter, authLimiter, validate, isAllowedOrigin };
+/** In-memory upload handler for Excel files (no temp files written to disk). */
+const uploadSingle = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (req, file, cb) => {
+        const allowed = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+            'text/csv',
+        ];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new BadRequestError('Only .xlsx, .xls and .csv files are accepted'), false);
+        }
+    },
+}).single('file');
+
+module.exports = { apiLimiter, authLimiter, validate, isAllowedOrigin, uploadSingle };
