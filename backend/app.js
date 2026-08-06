@@ -52,6 +52,14 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }));
 
+app.get('/', (req, res) => {
+    res.json({
+        status: 'OK',
+        message: 'BIS NOC School Management System API (Supabase)',
+        timestamp: new Date().toISOString()
+    });
+});
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', env: env.nodeEnv, timestamp: new Date().toISOString() });
 });
