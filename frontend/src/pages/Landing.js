@@ -14,6 +14,10 @@ import { styled } from '@mui/material/styles';
 import LoginIcon from '@mui/icons-material/Login';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import SchoolIcon from '@mui/icons-material/School';
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 
@@ -50,10 +54,10 @@ const MorphButton = styled(Box)(({ theme }) => ({
 }));
 
 const floatingButtons = [
-    { label: 'Admin', href: '/login' },
-    { label: 'Teachers', href: '/login' },
-    { label: 'Clinic', href: '/login' },
-    { label: 'Store', href: '/login' },
+    { label: 'Admin', icon: AdminPanelSettingsIcon, href: '/login' },
+    { label: 'Teachers', icon: SchoolIcon, href: '/login' },
+    { label: 'Clinic', icon: LocalHospitalIcon, href: '/login' },
+    { label: 'Store', icon: StorefrontIcon, href: '/login' },
 ];
 
 export default function Landing() {
@@ -193,16 +197,19 @@ export default function Landing() {
                     mb: 4,
                 }}
             >
-                {floatingButtons.map((btn) => (
+                {floatingButtons.map((btn) => {
+                    const Icon = btn.icon;
+                    return (
                     <MorphButton
                         key={btn.label}
                         component={RouterLink}
                         to={btn.href}
                     >
-                        <LoginIcon sx={{ fontSize: 18, opacity: 0.8 }} />
+                        <Icon sx={{ fontSize: 18, opacity: 0.8 }} />
                         {btn.label}
                     </MorphButton>
-                ))}
+                    );
+                })}
             </Box>
 
             <Box
