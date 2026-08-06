@@ -10,11 +10,55 @@ import {
     FormControlLabel,
     useTheme,
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import LoginIcon from '@mui/icons-material/Login';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import SchoolIcon from '@mui/icons-material/School';
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
+
+const MorphButton = styled(Box)(({ theme }) => ({
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '12px 24px',
+    borderRadius: '16px',
+    fontWeight: 600,
+    fontSize: '14px',
+    cursor: 'pointer',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+    color: theme.palette.text.primary,
+    backgroundColor: theme.palette.mode === 'dark' 
+        ? 'rgba(15, 23, 42, 0.6)' 
+        : 'rgba(255, 255, 255, 0.7)',
+    '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+        backgroundColor: theme.palette.mode === 'dark' 
+            ? 'rgba(30, 41, 59, 0.7)' 
+            : 'rgba(248, 250, 252, 0.9)',
+    },
+    '&:active': {
+        transform: 'translateY(0)',
+    },
+}));
+
+const floatingButtons = [
+    { label: 'Admin', icon: AdminPanelSettingsIcon, href: '/login' },
+    { label: 'Teachers', icon: SchoolIcon, href: '/login' },
+    { label: 'Clinic', icon: LocalHospitalIcon, href: '/login' },
+    { label: 'Store', icon: StorefrontIcon, href: '/login' },
+];
 
 export default function Landing() {
     const { isAuthenticated } = useAuth();
@@ -141,6 +185,32 @@ export default function Landing() {
                     lessons and student records.
                 </Typography>
             </Container>
+
+            {/* Floating Quick Access Buttons */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: 2,
+                    flexWrap: 'wrap',
+                    px: 2,
+                    mb: 4,
+                }}
+            >
+                {floatingButtons.map((btn) => {
+                    const Icon = btn.icon;
+                    return (
+                    <MorphButton
+                        key={btn.label}
+                        component={RouterLink}
+                        to={btn.href}
+                    >
+                        <Icon sx={{ fontSize: 18, opacity: 0.8 }} />
+                        {btn.label}
+                    </MorphButton>
+                    );
+                })}
+            </Box>
 
             <Box
                 sx={{

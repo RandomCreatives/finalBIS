@@ -37,8 +37,11 @@ describe('Landing Page', () => {
         ).toBeInTheDocument();
     });
 
-    test('renders theme toggle switch', () => {
+    test('renders floating quick access buttons', () => {
         renderWithProviders(<Landing />);
-        expect(screen.getByLabelText('Toggle dark mode')).toBeInTheDocument();
+        expect(screen.getByText('Admin')).toBeInTheDocument();
+        expect(screen.getByText('Teachers')).toBeInTheDocument();
+        expect(screen.getByText('Clinic')).toBeInTheDocument();
+        expect(screen.getByText('Store')).toBeInTheDocument();
     });
 });
