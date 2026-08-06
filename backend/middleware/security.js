@@ -2,6 +2,37 @@ const rateLimit = require('express-rate-limit');
 const { validationResult } = require('express-validator');
 const { BadRequestError } = require('../utils/errors');
 
+const parseOrigin = (origin) => {
+    try {
+        return new URL(origin);
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * Browser origins are validated by hostname rather than substring matching.
+ * This prevents lookalike origins such as https://localhost.evil.example from
+ * slipping through while still supporting local development and Arena previews.
+ */
+const isAllowedOrigin = (origin, env) => {
+    if (!origin) return true;
+    if (env.corsOrigins.includes(origin)) return true;
+
+    const parsed = parseOrigin(origin);
+    if (!parsed) return false;
+
+    const hostname = parsed.hostname.toLowerCase();
+    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(hostname);
+    const isArenaPreview = hostname.endsWith('.e2b.app');
+
+    if (env.isProduction) {
+        return false;
+    }
+
+    return isLocalhost || isArenaPreview;
+};
+
 /**
  * Rate limiters. The auth limiter is deliberately strict and keyed on
  * IP + submitted email so one attacker cannot lock out a whole office,
@@ -36,4 +67,4 @@ const validate = (req, res, next) => {
     next(err);
 };
 
-module.exports = { apiLimiter, authLimiter, validate };
+module.exports = { apiLimiter, authLimiter, validate, isAllowedOrigin };

@@ -1,12 +1,19 @@
 import { Link as RouterLink } from 'react-router-dom';
 import {
-    Alert, Button, Card, CardContent, Chip, Divider, Grid, List, ListItem,
+    Alert, Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem,
     ListItemText, Stack, Typography,
 } from '@mui/material';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ClassIcon from '@mui/icons-material/Class';
 import BadgeIcon from '@mui/icons-material/Badge';
 import ForumIcon from '@mui/icons-material/Forum';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import SyncAltIcon from '@mui/icons-material/SyncAlt';
 import { dashboardApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -37,6 +44,172 @@ function StatCard({ icon, label, value, hint, color = 'primary.main' }) {
                 {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
             </CardContent>
         </Card>
+    );
+}
+
+
+const FLOW_ICONS = {
+    staffing: <AdminPanelSettingsIcon />,
+    attendance: <FactCheckIcon />,
+    planning: <AutoStoriesIcon />,
+    tasks: <TaskAltIcon />,
+    messages: <ForumIcon />,
+    notices: <CampaignIcon />,
+    clinic: <HealthAndSafetyIcon />,
+};
+
+const STATUS_META = {
+    healthy: { label: 'On track', color: 'success', bar: '#16a34a' },
+    attention: { label: 'Watch', color: 'warning', bar: '#d97706' },
+    critical: { label: 'Act now', color: 'error', bar: '#dc2626' },
+};
+
+function FlowCard({ item }) {
+    const meta = STATUS_META[item.status] || STATUS_META.attention;
+
+    return (
+        <Card
+            sx={{
+                height: '100%',
+                border: '1px solid rgba(148, 163, 184, 0.22)',
+                bgcolor: 'rgba(255,255,255,0.92)',
+                backdropFilter: 'blur(10px)',
+            }}
+        >
+            <CardContent sx={{ p: 2.5 }}>
+                <Stack spacing={1.75}>
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                        <Box
+                            sx={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: 2.5,
+                                display: 'grid',
+                                placeItems: 'center',
+                                bgcolor: 'rgba(30, 64, 175, 0.10)',
+                                color: 'primary.main',
+                                flexShrink: 0,
+                            }}
+                        >
+                            {FLOW_ICONS[item.id] || <SyncAltIcon />}
+                        </Box>
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
+                                <Typography variant="subtitle2" sx={{ fontWeight: 800 }} noWrap>
+                                    {item.title}
+                                </Typography>
+                                <Chip size="small" color={meta.color} label={meta.label} sx={{ fontWeight: 700 }} />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                                {item.source} → {item.destination}
+                            </Typography>
+                        </Box>
+                    </Stack>
+
+                    <Box>
+                        <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.75 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                                {item.metric}
+                            </Typography>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: meta.bar }}>
+                                {item.progress}%
+                            </Typography>
+                        </Stack>
+                        <LinearProgress
+                            variant="determinate"
+                            value={item.progress}
+                            sx={{
+                                height: 8,
+                                borderRadius: 999,
+                                bgcolor: 'rgba(148, 163, 184, 0.18)',
+                                '& .MuiLinearProgress-bar': { bgcolor: meta.bar, borderRadius: 999 },
+                            }}
+                        />
+                    </Box>
+
+                    <Typography variant="body2" color="text.secondary" sx={{ minHeight: 42 }}>
+                        {item.detail}
+                    </Typography>
+
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                            {item.nextAction}
+                        </Typography>
+                        <Button size="small" component={RouterLink} to={item.href} sx={{ fontWeight: 800 }}>
+                            Open
+                        </Button>
+                    </Stack>
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+}
+
+function DataFlowCommandCenter() {
+    const { data, loading, error } = useApi(() => dashboardApi.dataFlow(), []);
+
+    return (
+        <DataState loading={loading} error={error}>
+            {data && (
+                <Card
+                    sx={{
+                        mb: 3,
+                        overflow: 'hidden',
+                        border: 0,
+                        color: '#f8fafc',
+                        background:
+                            'radial-gradient(circle at top left, rgba(20, 184, 166, 0.38), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e3a8a 56%, #0f766e 100%)',
+                        boxShadow: '0 24px 60px rgba(15, 23, 42, 0.22)',
+                    }}
+                >
+                    <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+                        <Grid container spacing={3} alignItems="center" sx={{ mb: 2 }}>
+                            <Grid item xs={12} md={7}>
+                                <Chip
+                                    size="small"
+                                    label={data.role === 'admin' ? 'BRANCH OPERATIONS' : 'MY OPERATIONS FLOW'}
+                                    sx={{ bgcolor: 'rgba(255,255,255,0.14)', color: 'white', fontWeight: 800, mb: 1.5 }}
+                                />
+                                <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>
+                                    Teacher ↔ Admin data flow command center
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'rgba(248,250,252,0.78)', mt: 0.75, maxWidth: 720 }}>
+                                    A live operational map of attendance, planning reviews, tasks, messages, notices and safeguarding approvals.
+                                </Typography>
+                            </Grid>
+                            <Grid item xs={12} md={5}>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent={{ md: 'flex-end' }}>
+                                    <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.12)', minWidth: 130 }}>
+                                        <Typography variant="caption" sx={{ color: 'rgba(248,250,252,0.72)', fontWeight: 700 }}>
+                                            Flow health
+                                        </Typography>
+                                        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                                            {data.healthScore}%
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.12)', minWidth: 130 }}>
+                                        <Typography variant="caption" sx={{ color: 'rgba(248,250,252,0.72)', fontWeight: 700 }}>
+                                            Open items
+                                        </Typography>
+                                        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                                            {data.openItems}
+                                        </Typography>
+                                    </Box>
+                                </Stack>
+                            </Grid>
+                        </Grid>
+
+                        <Grid container spacing={2}>
+                            {(data.flows || []).map((item) => (
+                                <Grid item xs={12} sm={6} lg={4} xl={3} key={item.id}>
+                                    <FlowCard item={item} />
+                                </Grid>
+                            ))}
+                        </Grid>
+                    </CardContent>
+                </Card>
+            )}
+        </DataState>
     );
 }
 
@@ -322,6 +495,7 @@ export default function Dashboard() {
                 title={`${greeting()}, ${user?.name?.split(' ')[0] || 'there'}`}
                 subtitle={termLine || (isAdmin ? 'School overview.' : 'Your classes, schedule and work for today.')}
             />
+            <DataFlowCommandCenter />
             {isAdmin ? <AdminDashboard /> : <TeacherDashboard />}
         </>
     );
