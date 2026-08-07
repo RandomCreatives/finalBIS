@@ -18,6 +18,8 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SchoolIcon from '@mui/icons-material/School';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import LocalLibraryIcon from '@mui/icons-material/LocalLibrary';
+import StorageIcon from '@mui/icons-material/Storage';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 
@@ -58,6 +60,7 @@ const floatingButtons = [
     { label: 'Teachers', icon: SchoolIcon, href: '/login' },
     { label: 'Clinic', icon: LocalHospitalIcon, href: '/login' },
     { label: 'Store', icon: StorefrontIcon, href: '/login' },
+    { label: 'Library', icon: LocalLibraryIcon, href: '/login' },
 ];
 
 export default function Landing() {
@@ -210,6 +213,23 @@ export default function Landing() {
                     </MorphButton>
                     );
                 })}
+            </Box>
+
+            {/* Public Access Section */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: 2,
+                    flexWrap: 'wrap',
+                    px: 2,
+                    mb: 4,
+                }}
+            >
+                <MorphButton component={RouterLink} to="/data-center">
+                    <StorageIcon sx={{ fontSize: 18, opacity: 0.8 }} />
+                    Data Center (Public)
+                </MorphButton>
             </Box>
 
             <Box

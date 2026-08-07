@@ -23,6 +23,7 @@ const notices = require('../controllers/notice.controller');
 const threads = require('../controllers/thread.controller');
 const tasks = require('../controllers/task.controller');
 const dashboard = require('../controllers/dashboard.controller');
+const datacenter = require('../controllers/datacenter.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
 
@@ -661,5 +662,10 @@ router.delete('/tasks/:id', authenticate, uuid('id'), validate, tasks.deleteTask
 router.get('/dashboard/summary', authenticate, authorize(ROLES.ADMIN), dashboard.getAdminSummary);
 router.get('/dashboard/me', authenticate, dashboard.getMySummary);
 router.get('/dashboard/data-flow', authenticate, dashboard.getDataFlow);
+
+// =============================================================================
+// PUBLIC DATA CENTER
+// =============================================================================
+router.get('/datacenter/stats', datacenter.getStats);
 
 module.exports = router;
