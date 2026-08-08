@@ -23,6 +23,7 @@ import Assignments from './pages/Assignments';
 import Timetable from './pages/Timetable';
 import Calendar from './pages/Calendar';
 import Planning from './pages/Planning';
+import Settings from './pages/Settings';
 
 export default function App() {
     return (
@@ -43,6 +44,7 @@ export default function App() {
                             }
                         >
                             <Route index element={<Dashboard />} />
+                            <Route path="settings" element={<Settings />} />
                             <Route path="messages" element={<Messages />} />
                             <Route path="tasks" element={<Tasks />} />
                             <Route path="students" element={<Students />} />

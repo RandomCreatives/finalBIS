@@ -54,6 +54,14 @@ router.patch(
     auth.changePassword
 );
 
+router.patch(
+    '/auth/profile',
+    authenticate,
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    validate,
+    auth.updateProfile
+);
+
 // =============================================================================
 // STAFF ACCOUNTS  (admin only)
 // =============================================================================

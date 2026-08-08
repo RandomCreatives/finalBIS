@@ -49,16 +49,21 @@ export function AuthProvider({ children }) {
         setUser(null);
     }, []);
 
+    const updateUser = useCallback((updatedProfile) => {
+        setUser(updatedProfile);
+    }, []);
+
     const value = useMemo(
         () => ({
             user,
             loading,
             login,
             logout,
+            updateUser,
             isAdmin: user?.role === 'admin',
             isAuthenticated: Boolean(user),
         }),
-        [user, loading, login, logout]
+        [user, loading, login, logout, updateUser]
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

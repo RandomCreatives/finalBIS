@@ -22,6 +22,7 @@ import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import LogoutIcon from '@mui/icons-material/Logout';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
 import { threadApi } from '../api/endpoints';
 
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
     { label: 'Dashboard', to: '/app', icon: <DashboardIcon />, end: true },
     { label: 'Messages', to: '/app/messages', icon: <ForumIcon />, badge: 'messages' },
     { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon /> },
+    { label: 'Settings', to: '/app/settings', icon: <SettingsIcon /> },
     { divider: true, label: 'School' },
     { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
     { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
@@ -89,6 +91,11 @@ export default function AppLayout() {
     const handleLogout = () => {
         logout();
         navigate('/login', { replace: true });
+    };
+
+    const handleSettings = () => {
+        setAnchorEl(null);
+        navigate('/app/settings');
     };
 
     const drawer = (
@@ -189,6 +196,10 @@ export default function AppLayout() {
                             <Typography variant="caption" color="text.secondary">{user?.email}</Typography>
                         </MenuItem>
                         <Divider />
+                        <MenuItem onClick={handleSettings}>
+                            <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                            Settings
+                        </MenuItem>
                         <MenuItem onClick={handleLogout}>
                             <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
                             Sign out

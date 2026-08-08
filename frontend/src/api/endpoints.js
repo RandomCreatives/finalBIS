@@ -7,6 +7,8 @@ export const authApi = {
     me: () => client.get('/auth/me').then((r) => r.data.user),
     changePassword: (currentPassword, newPassword) =>
         client.patch('/auth/password', { currentPassword, newPassword }).then((r) => r.data),
+    updateProfile: (name) =>
+        client.patch('/auth/profile', { name }).then((r) => r.data),
 };
 
 export const dashboardApi = {

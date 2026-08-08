@@ -87,4 +87,20 @@ const changePassword = asyncHandler(async (req, res) => {
     res.json({ message: 'Password updated successfully' });
 });
 
-module.exports = { login, me, changePassword, publicUser, BCRYPT_ROUNDS };
+/** PATCH /api/auth/profile */
+const updateProfile = asyncHandler(async (req, res) => {
+    const { name } = req.body;
+
+    const { data, error } = await supabase
+        .from('users')
+        .update({ name })
+        .eq('id', req.user.id)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    res.json({ user: publicUser(data), message: 'Profile updated successfully' });
+});
+
+module.exports = { login, me, changePassword, updateProfile, publicUser, BCRYPT_ROUNDS };
