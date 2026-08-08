@@ -200,3 +200,7 @@ export const storeApi = {
     adminReview: (id, decision, note) =>
         client.post(`/store/requests/${id}/admin-review`, { decision, note }).then((r) => r.data.request),
 };
+
+export const datacenterApi = {
+    getStats: () => client.get('/datacenter/stats').then((r) => r.data),
+};

@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Fragment, useEffect, useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
     ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery,
-    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Alert, Button, CircularProgress
+    Alert, Button
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -26,7 +28,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
-import { threadApi, authApi } from '../api/endpoints';
+import { threadApi } from '../api/endpoints';
 
 const DRAWER_WIDTH = 248;
 
@@ -113,66 +115,6 @@ export default function AppLayout() {
     const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
     const [unread, setUnread] = useState(0);
-
-    // Gmail connection states
-    const [connectGmailOpen, setConnectGmailOpen] = useState(false);
-    const [gmailEmail, setGmailEmail] = useState('');
-    const [verificationCode, setVerificationCode] = useState('');
-    const [verifyStep, setVerifyStep] = useState(1);
-    const [modalError, setModalError] = useState('');
-    const [modalSuccess, setModalSuccess] = useState('');
-    const [modalSubmitting, setModalSubmitting] = useState(false);
-
-    const handleSendCode = async (e) => {
-        e.preventDefault();
-        setModalError('');
-        setModalSuccess('');
-
-        if (!gmailEmail || !gmailEmail.toLowerCase().endsWith('@gmail.com')) {
-            setModalError('Please enter a valid Gmail address ending in @gmail.com');
-            return;
-        }
-
-        setModalSubmitting(true);
-        try {
-            await authApi.sendVerificationCode(gmailEmail);
-            setVerifyStep(2);
-            setModalSuccess('Verification code sent successfully!');
-        } catch (err) {
-            setModalError(err.message || 'Failed to send verification code');
-        } finally {
-            setModalSubmitting(false);
-        }
-    };
-
-    const handleVerifyCode = async (e) => {
-        e.preventDefault();
-        setModalError('');
-        setModalSuccess('');
-
-        if (!verificationCode) {
-            setModalError('Verification code is required');
-            return;
-        }
-
-        setModalSubmitting(true);
-        try {
-            const data = await authApi.verifyCode(verificationCode);
-            updateUser(data.user);
-            setModalSuccess('Gmail connected and verified successfully!');
-            setTimeout(() => {
-                setConnectGmailOpen(false);
-                setVerifyStep(1);
-                setGmailEmail('');
-                setVerificationCode('');
-                setModalSuccess('');
-            }, 2000);
-        } catch (err) {
-            setModalError(err.message || 'Invalid or expired verification code');
-        } finally {
-            setModalSubmitting(false);
-        }
-    };
 
     // Poll the unread badge so a teacher notices an incoming message without
     // having to sit on the inbox.
@@ -385,7 +327,7 @@ export default function AppLayout() {
                                 color="inherit"
                                 variant="outlined"
                                 size="small"
-                                onClick={() => setConnectGmailOpen(true)}
+                                onClick={handleSettings}
                                 sx={{
                                     fontWeight: 700,
                                     textTransform: 'none',
@@ -401,112 +343,13 @@ export default function AppLayout() {
                                     }
                                 }}
                             >
-                                Link Working Gmail
+                                Link Gmail in Settings
                             </Button>
                         </Box>
                     </Alert>
                 )}
 
                 <Outlet />
-
-                {/* Dialog to connect and verify Gmail */}
-                <Dialog
-                    open={connectGmailOpen}
-                    onClose={() => !modalSubmitting && setConnectGmailOpen(false)}
-                    maxWidth="xs"
-                    fullWidth
-                    PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
-                >
-                    <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-                        Connect Working Gmail
-                    </DialogTitle>
-
-                    <DialogContent>
-                        <DialogContentText sx={{ mb: 3, fontSize: 14 }}>
-                            Enter your official school Gmail address. We will email you a one-time verification code to confirm ownership.
-                        </DialogContentText>
-
-                        {modalError && (
-                            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-                                {modalError}
-                            </Alert>
-                        )}
-
-                        {modalSuccess && (
-                            <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
-                                {modalSuccess}
-                            </Alert>
-                        )}
-
-                        {verifyStep === 1 ? (
-                            <Box component="form" onSubmit={handleSendCode}>
-                                <TextField
-                                    fullWidth
-                                    label="Gmail Address"
-                                    placeholder="your.name@gmail.com"
-                                    value={gmailEmail}
-                                    onChange={(e) => setGmailEmail(e.target.value)}
-                                    variant="outlined"
-                                    type="email"
-                                    required
-                                    disabled={modalSubmitting}
-                                    sx={{ mb: 2 }}
-                                />
-                                <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button
-                                        onClick={() => setConnectGmailOpen(false)}
-                                        disabled={modalSubmitting}
-                                        variant="text"
-                                        sx={{ textTransform: 'none' }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        disabled={modalSubmitting || !gmailEmail}
-                                        sx={{ textTransform: 'none', px: 3 }}
-                                    >
-                                        {modalSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Send Code'}
-                                    </Button>
-                                </DialogActions>
-                            </Box>
-                        ) : (
-                            <Box component="form" onSubmit={handleVerifyCode}>
-                                <TextField
-                                    fullWidth
-                                    label="6-Digit Verification Code"
-                                    placeholder="Enter code"
-                                    value={verificationCode}
-                                    onChange={(e) => setVerificationCode(e.target.value)}
-                                    variant="outlined"
-                                    required
-                                    disabled={modalSubmitting}
-                                    helperText="Codes expire after 10 minutes."
-                                    sx={{ mb: 2 }}
-                                />
-                                <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button
-                                        onClick={() => setVerifyStep(1)}
-                                        disabled={modalSubmitting}
-                                        variant="text"
-                                        sx={{ textTransform: 'none' }}
-                                    >
-                                        Back
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        disabled={modalSubmitting || !verificationCode}
-                                        sx={{ textTransform: 'none', px: 3 }}
-                                    >
-                                        {modalSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Verify & Connect'}
-                                    </Button>
-                                </DialogActions>
-                            </Box>
-                        )}
-                    </DialogContent>
-                </Dialog>
             </Box>
         </Box>
     );

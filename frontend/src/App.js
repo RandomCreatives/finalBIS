@@ -25,6 +25,7 @@ import Calendar from './pages/Calendar';
 import Planning from './pages/Planning';
 import Settings from './pages/Settings';
 import Store from './pages/Store';
+import DataCenter from './pages/DataCenter';
 
 export default function App() {
     return (
@@ -78,6 +79,7 @@ export default function App() {
                         </Route>
 
                         <Route path="/" element={<Landing />} />
+                        <Route path="/data-center" element={<DataCenter />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </AuthProvider>

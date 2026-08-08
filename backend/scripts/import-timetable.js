@@ -20,7 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { createClient } = require('@supabase/supabase-js');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -300,9 +300,22 @@ async function main() {
     });
 
     // ---- Parse format (CSV) + data (JSON) ----
-    const wb = XLSX.readFile(CSV);
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(fs.readFileSync(CSV));
+    const ws = wb.worksheets[0];
+    
+    // Convert to array format for compatibility
+    const rows = [];
+    const rowCount = ws.rowCount;
+    for (let rowNumber = 1; rowNumber <= rowCount; rowNumber++) {
+        const row = ws.getRow(rowNumber);
+        const rowArray = [];
+        const cellCount = row.cellCount;
+        for (let colNumber = 1; colNumber <= cellCount; colNumber++) {
+            rowArray[colNumber - 1] = row.getCell(colNumber).value;
+        }
+        rows.push(rowArray);
+    }
     const json = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
 
     const fmt = parseFormat(rows);
