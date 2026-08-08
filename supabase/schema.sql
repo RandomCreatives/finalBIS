@@ -128,18 +128,21 @@ $$;
 -- users — every human who can log in
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    school_id     UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
-    name          TEXT NOT NULL,
-    email         CITEXT NOT NULL UNIQUE,
-    phone         TEXT,
-    password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL CONSTRAINT users_role_check CHECK (role IN (
-                      'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager')),
-    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
-    last_login_at TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id          UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    name               TEXT NOT NULL,
+    email              CITEXT NOT NULL UNIQUE,
+    phone              TEXT,
+    password_hash      TEXT NOT NULL,
+    role               TEXT NOT NULL CONSTRAINT users_role_check CHECK (role IN (
+                       'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager')),
+    is_active          BOOLEAN NOT NULL DEFAULT TRUE,
+    is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+    pending_email      TEXT,
+    verification_code  TEXT,
+    last_login_at      TIMESTAMPTZ,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id, role);
@@ -824,7 +827,8 @@ BEGIN
         'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'attendance',
         'marksheets', 'library_loans', 'clinic_visits', 'schemes_of_work',
-        'scheme_weeks', 'lesson_plans', 'calendar_events', 'threads', 'tasks', 'notices'
+        'scheme_weeks', 'lesson_plans', 'calendar_events', 'threads', 'tasks', 'notices',
+        'store_requests'
     ] LOOP
         EXECUTE format('DROP TRIGGER IF EXISTS trg_%1$s_updated_at ON %1$s', t);
         EXECUTE format(
@@ -857,7 +861,8 @@ BEGIN
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'student_transfers',
         'attendance', 'marksheets', 'library_loans', 'clinic_visits',
         'schemes_of_work', 'scheme_weeks', 'lesson_plans', 'calendar_events',
-        'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts'
+        'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts',
+        'store_requests'
     ] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

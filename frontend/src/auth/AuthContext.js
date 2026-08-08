@@ -44,9 +44,20 @@ export function AuthProvider({ children }) {
         return profile;
     }, []);
 
+    const googleLogin = useCallback(async (email) => {
+        const { token, user: profile } = await authApi.googleLogin(email);
+        setToken(token);
+        setUser(profile);
+        return profile;
+    }, []);
+
     const logout = useCallback(() => {
         clearToken();
         setUser(null);
+    }, []);
+
+    const updateUser = useCallback((updatedProfile) => {
+        setUser(updatedProfile);
     }, []);
 
     const value = useMemo(
@@ -55,10 +66,12 @@ export function AuthProvider({ children }) {
             loading,
             login,
             logout,
+            updateUser,
+            googleLogin,
             isAdmin: user?.role === 'admin',
             isAuthenticated: Boolean(user),
         }),
-        [user, loading, login, logout]
+        [user, loading, login, logout, updateUser, googleLogin]
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

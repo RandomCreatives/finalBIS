@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
     ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery,
+    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Alert, Button, CircularProgress
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -23,8 +24,9 @@ import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import LogoutIcon from '@mui/icons-material/Logout';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
-import { threadApi } from '../api/endpoints';
+import { threadApi, authApi } from '../api/endpoints';
 
 const DRAWER_WIDTH = 248;
 
@@ -32,6 +34,7 @@ const NAV_ITEMS = [
     { label: 'Dashboard', to: '/app', icon: <DashboardIcon />, end: true },
     { label: 'Messages', to: '/app/messages', icon: <ForumIcon />, badge: 'messages' },
     { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon /> },
+    { label: 'Settings', to: '/app/settings', icon: <SettingsIcon /> },
     { divider: true, label: 'School' },
     { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
     { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
@@ -61,12 +64,78 @@ export default function AppLayout() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
 
-    const { user, logout, isAdmin } = useAuth();
+    const { user, logout, isAdmin, updateUser } = useAuth();
     const navigate = useNavigate();
     const theme = useTheme();
     const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
     const [unread, setUnread] = useState(0);
+
+    // Gmail connection states
+    const [connectGmailOpen, setConnectGmailOpen] = useState(false);
+    const [gmailEmail, setGmailEmail] = useState('');
+    const [verificationCode, setVerificationCode] = useState('');
+    const [verifyStep, setVerifyStep] = useState(1);
+    const [sentCode, setSentCode] = useState('');
+    const [modalError, setModalError] = useState('');
+    const [modalSuccess, setModalSuccess] = useState('');
+    const [modalSubmitting, setModalSubmitting] = useState(false);
+
+    const handleSendCode = async (e) => {
+        e.preventDefault();
+        setModalError('');
+        setModalSuccess('');
+
+        if (!gmailEmail || !gmailEmail.toLowerCase().endsWith('@gmail.com')) {
+            setModalError('Please enter a valid Gmail address ending in @gmail.com');
+            return;
+        }
+
+        setModalSubmitting(true);
+        try {
+            const data = await authApi.sendVerificationCode(gmailEmail);
+            setVerifyStep(2);
+            setModalSuccess('Verification code sent successfully!');
+            if (data.code) {
+                setSentCode(data.code);
+            }
+        } catch (err) {
+            setModalError(err.message || 'Failed to send verification code');
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
+
+    const handleVerifyCode = async (e) => {
+        e.preventDefault();
+        setModalError('');
+        setModalSuccess('');
+
+        if (!verificationCode) {
+            setModalError('Verification code is required');
+            return;
+        }
+
+        setModalSubmitting(true);
+        try {
+            const data = await authApi.verifyCode(verificationCode);
+            updateUser(data.user);
+            setModalSuccess('Gmail connected and verified successfully!');
+            setTimeout(() => {
+                setConnectGmailOpen(false);
+                // Reset state
+                setVerifyStep(1);
+                setGmailEmail('');
+                setVerificationCode('');
+                setSentCode('');
+                setModalSuccess('');
+            }, 2000);
+        } catch (err) {
+            setModalError(err.message || 'Invalid or expired verification code');
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
 
     const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
@@ -92,6 +161,11 @@ export default function AppLayout() {
     const handleLogout = () => {
         logout();
         navigate('/login', { replace: true });
+    };
+
+    const handleSettings = () => {
+        setAnchorEl(null);
+        navigate('/app/settings');
     };
 
     const drawer = (
@@ -192,6 +266,10 @@ export default function AppLayout() {
                             <Typography variant="caption" color="text.secondary">{user?.email}</Typography>
                         </MenuItem>
                         <Divider />
+                        <MenuItem onClick={handleSettings}>
+                            <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                            Settings
+                        </MenuItem>
                         <MenuItem onClick={handleLogout}>
                             <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
                             Sign out
@@ -227,7 +305,152 @@ export default function AppLayout() {
                     mt: 8,
                 }}
             >
+                {user && !user.isEmailVerified && (
+                    <Alert
+                        severity="warning"
+                        variant="filled"
+                        sx={{
+                            mb: 3,
+                            borderRadius: 3,
+                            boxShadow: '0 4px 20px rgba(245, 158, 11, 0.15)',
+                            '& .MuiAlert-message': { width: '100%' }
+                        }}
+                    >
+                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                    Gmail Connection Required
+                                </Typography>
+                                <Typography variant="body2" sx={{ fontSize: 13, opacity: 0.9 }}>
+                                    You are currently using temporary default details. Please link and verify your working Gmail account to secure your portal access.
+                                </Typography>
+                            </Box>
+                            <Button
+                                color="inherit"
+                                variant="outlined"
+                                size="small"
+                                onClick={() => setConnectGmailOpen(true)}
+                                sx={{
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    px: 2.5,
+                                    py: 0.5,
+                                    borderRadius: 2,
+                                    borderColor: 'rgba(255,255,255,0.5)',
+                                    alignSelf: { xs: 'flex-start', sm: 'center' },
+                                    whiteSpace: 'nowrap',
+                                    '&:hover': {
+                                        borderColor: '#ffffff',
+                                        backgroundColor: 'rgba(255,255,255,0.08)'
+                                    }
+                                }}
+                            >
+                                Link Working Gmail
+                            </Button>
+                        </Box>
+                    </Alert>
+                )}
+
                 <Outlet />
+
+                {/* Dialog to connect and verify Gmail */}
+                <Dialog 
+                    open={connectGmailOpen} 
+                    onClose={() => !modalSubmitting && setConnectGmailOpen(false)}
+                    maxWidth="xs"
+                    fullWidth
+                    PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+                >
+                    <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+                        Connect Working Gmail
+                    </DialogTitle>
+                    
+                    <DialogContent>
+                        <DialogContentText sx={{ mb: 3, fontSize: 14 }}>
+                            Enter your official school Google / Gmail address. We will send you a mock verification code to verify ownership.
+                        </DialogContentText>
+
+                        {modalError && (
+                            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                                {modalError}
+                            </Alert>
+                        )}
+
+                        {modalSuccess && (
+                            <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
+                                {modalSuccess}
+                            </Alert>
+                        )}
+
+                        {verifyStep === 1 ? (
+                            <Box component="form" onSubmit={handleSendCode}>
+                                <TextField
+                                    fullWidth
+                                    label="Gmail Address"
+                                    placeholder="your.name@gmail.com"
+                                    value={gmailEmail}
+                                    onChange={(e) => setGmailEmail(e.target.value)}
+                                    variant="outlined"
+                                    type="email"
+                                    required
+                                    disabled={modalSubmitting}
+                                    sx={{ mb: 2 }}
+                                />
+                                <DialogActions sx={{ px: 0, pt: 1 }}>
+                                    <Button 
+                                        onClick={() => setConnectGmailOpen(false)} 
+                                        disabled={modalSubmitting}
+                                        variant="text"
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        variant="contained"
+                                        disabled={modalSubmitting || !gmailEmail}
+                                        sx={{ textTransform: 'none', px: 3 }}
+                                    >
+                                        {modalSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Send Code'}
+                                    </Button>
+                                </DialogActions>
+                            </Box>
+                        ) : (
+                            <Box component="form" onSubmit={handleVerifyCode}>
+                                <TextField
+                                    fullWidth
+                                    label="6-Digit Verification Code"
+                                    placeholder="Enter code"
+                                    value={verificationCode}
+                                    onChange={(e) => setVerificationCode(e.target.value)}
+                                    variant="outlined"
+                                    required
+                                    disabled={modalSubmitting}
+                                    helperText={sentCode ? `Tip: For testing, enter the mock code ${sentCode} or use standard bypass 123456` : 'Enter the code sent to your email.'}
+                                    sx={{ mb: 2 }}
+                                />
+                                <DialogActions sx={{ px: 0, pt: 1 }}>
+                                    <Button 
+                                        onClick={() => setVerifyStep(1)} 
+                                        disabled={modalSubmitting}
+                                        variant="text"
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        Back
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        variant="contained"
+                                        disabled={modalSubmitting || !verificationCode}
+                                        sx={{ textTransform: 'none', px: 3 }}
+                                    >
+                                        {modalSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Verify & Connect'}
+                                    </Button>
+                                </DialogActions>
+                            </Box>
+                        )}
+                    </DialogContent>
+                </Dialog>
             </Box>
         </Box>
     );
