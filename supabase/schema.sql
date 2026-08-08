@@ -827,7 +827,8 @@ BEGIN
         'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'attendance',
         'marksheets', 'library_loans', 'clinic_visits', 'schemes_of_work',
-        'scheme_weeks', 'lesson_plans', 'calendar_events', 'threads', 'tasks', 'notices'
+        'scheme_weeks', 'lesson_plans', 'calendar_events', 'threads', 'tasks', 'notices',
+        'store_requests'
     ] LOOP
         EXECUTE format('DROP TRIGGER IF EXISTS trg_%1$s_updated_at ON %1$s', t);
         EXECUTE format(
@@ -860,7 +861,8 @@ BEGIN
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'student_transfers',
         'attendance', 'marksheets', 'library_loans', 'clinic_visits',
         'schemes_of_work', 'scheme_weeks', 'lesson_plans', 'calendar_events',
-        'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts'
+        'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts',
+        'store_requests'
     ] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
