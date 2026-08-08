@@ -79,11 +79,23 @@ router.post(
     auth.verifyCode
 );
 
+// Passwordless Gmail sign-in — step one requests a code, step two swaps it
+// for a session. Rate-limited like the password login.
 router.post(
-    '/auth/google-login',
+    '/auth/gmail/request',
+    authLimiter,
     body('email').isEmail().normalizeEmail().withMessage('A valid Gmail is required'),
     validate,
-    auth.googleLogin
+    auth.gmailRequestCode
+);
+
+router.post(
+    '/auth/gmail/verify',
+    authLimiter,
+    body('email').isEmail().normalizeEmail().withMessage('A valid Gmail is required'),
+    body('code').isString().notEmpty().withMessage('Verification code is required'),
+    validate,
+    auth.gmailVerifyCode
 );
 
 // =============================================================================

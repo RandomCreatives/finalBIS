@@ -13,8 +13,10 @@ export const authApi = {
         client.post('/auth/send-verification-code', { email }).then((r) => r.data),
     verifyCode: (code) =>
         client.post('/auth/verify-code', { code }).then((r) => r.data),
-    googleLogin: (email) =>
-        client.post('/auth/google-login', { email }).then((r) => r.data),
+    gmailRequest: (email) =>
+        client.post('/auth/gmail/request', { email }).then((r) => r.data),
+    gmailVerify: (email, code) =>
+        client.post('/auth/gmail/verify', { email, code }).then((r) => r.data),
 };
 
 export const dashboardApi = {

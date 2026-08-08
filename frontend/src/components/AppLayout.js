@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
@@ -17,7 +17,7 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import LocalLibraryIcon from '@mui/icons-material/LocalLibrary';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
-import CampaignIcon from '@mui/icons-material/Campaign';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import BadgeIcon from '@mui/icons-material/Badge';
 import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
@@ -30,26 +30,37 @@ import { threadApi, authApi } from '../api/endpoints';
 
 const DRAWER_WIDTH = 248;
 
-const NAV_ITEMS = [
-    { label: 'Dashboard', to: '/app', icon: <DashboardIcon />, end: true },
-    { label: 'Messages', to: '/app/messages', icon: <ForumIcon />, badge: 'messages' },
-    { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon /> },
-    { label: 'Settings', to: '/app/settings', icon: <SettingsIcon /> },
-    { divider: true, label: 'School' },
-    { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
-    { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
-    { label: 'Calendar', to: '/app/calendar', icon: <EventNoteIcon /> },
-    { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon /> },
-    { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon /> },
-    { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
-    { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon /> },
-    { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
-    { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
-    { label: 'Notices', to: '/app/notices', icon: <CampaignIcon /> },
-    { divider: true, label: 'Administration', adminOnly: true },
-    { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon />, adminOnly: true },
-    { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon />, adminOnly: true },
-    { label: 'Staff', to: '/app/staff', icon: <BadgeIcon />, adminOnly: true },
+const DASHBOARD_ITEM = { label: 'Dashboard', to: '/app', icon: <DashboardIcon />, end: true };
+
+const NAV_SECTIONS = [
+    {
+        label: 'Academic',
+        items: [
+            { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon /> },
+            { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon /> },
+            { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon /> },
+            { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon /> },
+        ],
+    },
+    {
+        label: 'Classroom',
+        items: [
+            { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
+            { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
+            { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
+            { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
+            { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
+        ],
+    },
+    {
+        label: 'Administration',
+        adminOnly: true,
+        items: [
+            { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon /> },
+            { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon /> },
+            { label: 'Staff', to: '/app/staff', icon: <BadgeIcon /> },
+        ],
+    },
 ];
 
 const ROLE_LABELS = {
@@ -59,6 +70,38 @@ const ROLE_LABELS = {
     subject_teacher: 'Subject Teacher',
     store_manager: 'Store Manager',
 };
+
+function NavButton({ item, onClick }) {
+    return (
+        <ListItemButton
+            component={NavLink}
+            to={item.to}
+            end={item.end}
+            onClick={onClick}
+            sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                '&.active': {
+                    bgcolor: 'primary.main',
+                    color: 'common.white',
+                    '& .MuiListItemIcon-root': { color: 'common.white' },
+                    '&:hover': { bgcolor: 'primary.dark' },
+                },
+            }}
+        >
+            <ListItemIcon sx={{ minWidth: 40 }}>
+                {item.badge === 'messages' ? (
+                    <Badge color="error" badgeContent={item.unread} invisible={!item.unread}>
+                        {item.icon}
+                    </Badge>
+                ) : (
+                    item.icon
+                )}
+            </ListItemIcon>
+            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 14.5 }} />
+        </ListItemButton>
+    );
+}
 
 export default function AppLayout() {
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -76,7 +119,6 @@ export default function AppLayout() {
     const [gmailEmail, setGmailEmail] = useState('');
     const [verificationCode, setVerificationCode] = useState('');
     const [verifyStep, setVerifyStep] = useState(1);
-    const [sentCode, setSentCode] = useState('');
     const [modalError, setModalError] = useState('');
     const [modalSuccess, setModalSuccess] = useState('');
     const [modalSubmitting, setModalSubmitting] = useState(false);
@@ -93,12 +135,9 @@ export default function AppLayout() {
 
         setModalSubmitting(true);
         try {
-            const data = await authApi.sendVerificationCode(gmailEmail);
+            await authApi.sendVerificationCode(gmailEmail);
             setVerifyStep(2);
             setModalSuccess('Verification code sent successfully!');
-            if (data.code) {
-                setSentCode(data.code);
-            }
         } catch (err) {
             setModalError(err.message || 'Failed to send verification code');
         } finally {
@@ -123,11 +162,9 @@ export default function AppLayout() {
             setModalSuccess('Gmail connected and verified successfully!');
             setTimeout(() => {
                 setConnectGmailOpen(false);
-                // Reset state
                 setVerifyStep(1);
                 setGmailEmail('');
                 setVerificationCode('');
-                setSentCode('');
                 setModalSuccess('');
             }, 2000);
         } catch (err) {
@@ -136,8 +173,6 @@ export default function AppLayout() {
             setModalSubmitting(false);
         }
     };
-
-    const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
     // Poll the unread badge so a teacher notices an incoming message without
     // having to sit on the inbox.
@@ -168,6 +203,17 @@ export default function AppLayout() {
         navigate('/app/settings');
     };
 
+    const closeDrawer = () => setMobileOpen(false);
+
+    const sections = NAV_SECTIONS
+        .filter((s) => !s.adminOnly || isAdmin)
+        .map((s) => ({
+            ...s,
+            items: s.items.map((item) =>
+                item.badge === 'messages' ? { ...item, unread } : item
+            ),
+        }));
+
     const drawer = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Toolbar sx={{ px: 2 }}>
@@ -176,47 +222,36 @@ export default function AppLayout() {
                 </Typography>
             </Toolbar>
             <Divider />
-            <List sx={{ px: 1, py: 1.5, flexGrow: 1 }}>
-                {items.map((item, index) =>
-                    item.divider ? (
+            <List sx={{ px: 1, py: 1, flexGrow: 1, overflowY: 'auto' }}>
+                <NavButton item={DASHBOARD_ITEM} onClick={closeDrawer} />
+                {sections.map((section) => (
+                    <Fragment key={section.label}>
                         <Typography
-                            key={`section-${index}`}
                             variant="overline"
                             sx={{ px: 2, pt: 2, pb: 0.5, display: 'block', color: 'text.disabled', fontSize: 11 }}
                         >
-                            {item.label}
+                            {section.label}
                         </Typography>
-                    ) : (
-                        <ListItemButton
-                            key={item.to}
-                            component={NavLink}
-                            to={item.to}
-                            end={item.end}
-                            onClick={() => setMobileOpen(false)}
-                            sx={{
-                                borderRadius: 2,
-                                mb: 0.5,
-                                '&.active': {
-                                    bgcolor: 'primary.main',
-                                    color: 'common.white',
-                                    '& .MuiListItemIcon-root': { color: 'common.white' },
-                                    '&:hover': { bgcolor: 'primary.dark' },
-                                },
-                            }}
-                        >
-                            <ListItemIcon sx={{ minWidth: 40 }}>
-                                {item.badge === 'messages' ? (
-                                    <Badge color="error" badgeContent={unread} invisible={!unread}>
-                                        {item.icon}
-                                    </Badge>
-                                ) : (
-                                    item.icon
-                                )}
-                            </ListItemIcon>
-                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 14.5 }} />
-                        </ListItemButton>
-                    )
-                )}
+                        {section.items.map((item) => (
+                            <NavButton key={item.to} item={item} onClick={closeDrawer} />
+                        ))}
+                    </Fragment>
+                ))}
+            </List>
+            <Divider />
+            <List sx={{ px: 1, pb: 1.5 }}>
+                <ListItemButton onClick={handleSettings} sx={{ borderRadius: 2, mb: 0.5 }}>
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                        <SettingsIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Settings" primaryTypographyProps={{ fontSize: 14.5 }} />
+                </ListItemButton>
+                <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2 }}>
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                        <LogoutIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Sign out" primaryTypographyProps={{ fontSize: 14.5 }} />
+                </ListItemButton>
             </List>
         </Box>
     );
@@ -246,6 +281,36 @@ export default function AppLayout() {
 
                     <Box sx={{ flexGrow: 1 }} />
 
+                    {/* Quick access: calendar, messages, notifications */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
+                        <IconButton
+                            component={NavLink}
+                            to="/app/calendar"
+                            sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
+                            aria-label="Calendar"
+                        >
+                            <EventNoteIcon />
+                        </IconButton>
+                        <IconButton
+                            component={NavLink}
+                            to="/app/messages"
+                            sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
+                            aria-label="Messages"
+                        >
+                            <Badge color="error" badgeContent={unread} invisible={!unread}>
+                                <ForumIcon />
+                            </Badge>
+                        </IconButton>
+                        <IconButton
+                            component={NavLink}
+                            to="/app/notices"
+                            sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
+                            aria-label="Notifications"
+                        >
+                            <NotificationsIcon />
+                        </IconButton>
+                    </Box>
+
                     <Box sx={{ textAlign: 'right', mr: 1.5, display: { xs: 'none', sm: 'block' } }}>
                         <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                             {user?.name}
@@ -264,15 +329,6 @@ export default function AppLayout() {
                     <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
                         <MenuItem disabled sx={{ opacity: '1 !important' }}>
                             <Typography variant="caption" color="text.secondary">{user?.email}</Typography>
-                        </MenuItem>
-                        <Divider />
-                        <MenuItem onClick={handleSettings}>
-                            <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-                            Settings
-                        </MenuItem>
-                        <MenuItem onClick={handleLogout}>
-                            <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
-                            Sign out
                         </MenuItem>
                     </Menu>
                 </Toolbar>
@@ -354,8 +410,8 @@ export default function AppLayout() {
                 <Outlet />
 
                 {/* Dialog to connect and verify Gmail */}
-                <Dialog 
-                    open={connectGmailOpen} 
+                <Dialog
+                    open={connectGmailOpen}
                     onClose={() => !modalSubmitting && setConnectGmailOpen(false)}
                     maxWidth="xs"
                     fullWidth
@@ -364,10 +420,10 @@ export default function AppLayout() {
                     <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
                         Connect Working Gmail
                     </DialogTitle>
-                    
+
                     <DialogContent>
                         <DialogContentText sx={{ mb: 3, fontSize: 14 }}>
-                            Enter your official school Google / Gmail address. We will send you a mock verification code to verify ownership.
+                            Enter your official school Gmail address. We will email you a one-time verification code to confirm ownership.
                         </DialogContentText>
 
                         {modalError && (
@@ -397,8 +453,8 @@ export default function AppLayout() {
                                     sx={{ mb: 2 }}
                                 />
                                 <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button 
-                                        onClick={() => setConnectGmailOpen(false)} 
+                                    <Button
+                                        onClick={() => setConnectGmailOpen(false)}
                                         disabled={modalSubmitting}
                                         variant="text"
                                         sx={{ textTransform: 'none' }}
@@ -426,12 +482,12 @@ export default function AppLayout() {
                                     variant="outlined"
                                     required
                                     disabled={modalSubmitting}
-                                    helperText={sentCode ? `Tip: For testing, enter the mock code ${sentCode} or use standard bypass 123456` : 'Enter the code sent to your email.'}
+                                    helperText="Codes expire after 10 minutes."
                                     sx={{ mb: 2 }}
                                 />
                                 <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button 
-                                        onClick={() => setVerifyStep(1)} 
+                                    <Button
+                                        onClick={() => setVerifyStep(1)}
                                         disabled={modalSubmitting}
                                         variant="text"
                                         sx={{ textTransform: 'none' }}

@@ -41,6 +41,17 @@ const env = {
         .split(',')
         .map((o) => o.trim())
         .filter(Boolean),
+
+    // Optional SMTP for sending verification codes and passwordless sign-in
+    // emails. Leave blank in development to fall back to the server log.
+    smtp: {
+        host: process.env.SMTP_HOST || '',
+        port: parseInt(process.env.SMTP_PORT, 10) || 587,
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || '',
+        from: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@bisnoc.school.et',
+    },
 };
 
 env.isProduction = env.nodeEnv === 'production';

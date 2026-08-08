@@ -3,8 +3,29 @@ const env = require('../config/env');
 const supabase = require('../config/supabase');
 const { signToken } = require('../middleware/auth');
 const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, asyncHandler } = require('../utils/errors');
+const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
 
 const BCRYPT_ROUNDS = 12;
+const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+/** Deliver a 6-digit code to the given address. Returns true if SMTP sent it. */
+const deliverCode = async (to, code, purpose) => {
+    const subject = purpose === 'login' ? 'Your sign-in code' : 'Verify your Gmail address';
+    const text =
+        purpose === 'login'
+            ? `Your BIS NOC sign-in code is ${code}. It expires in 10 minutes.`
+            : `Your BIS NOC verification code is ${code}. It expires in 10 minutes.`;
+    const sent = await sendMail({
+        to,
+        subject,
+        text,
+        html: `<p>Your BIS NOC ${purpose === 'login' ? 'sign-in code' : 'verification code'} is:</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>It expires in 10 minutes.</p>`,
+    });
+    if (!sent) {
+        console.log(`[email][dev] ${purpose} code for ${to}: ${code}`);
+    }
+    return sent;
+};
 
 /** Shape a user row for the client. Never returns password_hash. */
 const publicUser = (u) => ({
@@ -126,21 +147,26 @@ const sendVerificationCode = asyncHandler(async (req, res) => {
         throw new ConflictError('This Gmail address is already linked to another account');
     }
 
-    // Generate a 6-digit code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = generateCode();
 
     const { error: updateError } = await supabase
         .from('users')
-        .update({ pending_email: email.toLowerCase(), verification_code: code })
+        .update({
+            pending_email: email.toLowerCase(),
+            verification_code: code,
+            verification_code_expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+        })
         .eq('id', req.user.id);
 
     if (updateError) throw updateError;
 
-    console.log(`[verification] Verification code for ${req.user.email} (${email}): ${code}`);
+    const sent = await deliverCode(email.toLowerCase(), code, 'verify');
 
-    res.json({ 
+    res.json({
         message: 'Verification code sent successfully',
-        code: env.nodeEnv === 'production' ? undefined : code 
+        // Only surfaced in development (where SMTP is usually unset); the
+        // code also appears in the server log there.
+        code: !sent && env.nodeEnv !== 'production' ? code : undefined,
     });
 });
 
@@ -159,19 +185,21 @@ const verifyCode = asyncHandler(async (req, res) => {
     if (lookupError) throw lookupError;
     if (!user) throw new NotFoundError('User not found');
 
-    const isMatch = user.verification_code === code || code === '123456';
-
-    if (!isMatch) {
+    if (!user.verification_code || user.verification_code !== code) {
         throw new BadRequestError('Invalid verification code');
+    }
+    if (user.verification_code_expires_at && new Date(user.verification_code_expires_at) < new Date()) {
+        throw new BadRequestError('Verification code has expired. Request a new one');
     }
 
     const { data: updatedUser, error: updateError } = await supabase
         .from('users')
-        .update({ 
-            email: user.pending_email, 
+        .update({
+            email: user.pending_email,
             is_email_verified: true,
             pending_email: null,
-            verification_code: null
+            verification_code: null,
+            verification_code_expires_at: null,
         })
         .eq('id', req.user.id)
         .select()
@@ -179,46 +207,110 @@ const verifyCode = asyncHandler(async (req, res) => {
 
     if (updateError) throw updateError;
 
-    res.json({ 
-        user: publicUser(updatedUser), 
-        message: 'Gmail account connected and verified successfully!' 
+    res.json({
+        user: publicUser(updatedUser),
+        message: 'Gmail account connected and verified successfully!',
     });
 });
 
-/** POST /api/auth/google-login */
-const googleLogin = asyncHandler(async (req, res) => {
-    const { email } = req.body;
+/**
+ * POST /api/auth/gmail/request
+ *
+ * Step one of the passwordless sign-in: a verified Gmail address requests a
+ * code. One is emailed (or logged, in dev) and stored against the account for
+ * 10 minutes. No session is issued from this call alone.
+ */
+const gmailRequestCode = asyncHandler(async (req, res) => {
+    const email = (req.body.email || '').toLowerCase().trim();
 
-    if (!email || !email.toLowerCase().endsWith('@gmail.com')) {
+    if (!email || !email.endsWith('@gmail.com')) {
         throw new BadRequestError('A valid Gmail address (@gmail.com) is required');
     }
 
     const { data: user, error } = await supabase
         .from('users')
         .select('*')
-        .eq('email', email.toLowerCase())
+        .eq('email', email)
         .maybeSingle();
 
     if (error) throw error;
 
     if (!user) {
-        throw new UnauthorizedError('This Gmail address is not registered. Please log in using your temporary details first, then link your Gmail.');
+        throw new UnauthorizedError('This Gmail address is not registered. Sign in with your password and link it from Settings first.');
     }
-
     if (!user.is_email_verified) {
-        throw new UnauthorizedError('This Gmail is registered but has not been verified. Please sign in with your password to verify it.');
+        throw new UnauthorizedError('This Gmail address has not been verified yet. Sign in with your password and verify it in Settings.');
+    }
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
     }
 
+    const code = generateCode();
+    await supabase
+        .from('users')
+        .update({
+            login_code: code,
+            login_code_expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+        })
+        .eq('id', user.id);
+
+    const sent = await deliverCode(email, code, 'login');
+
+    res.json({
+        message: 'Sign-in code sent successfully',
+        email,
+        // Dev-only convenience; in production the code only arrives by email.
+        code: !sent && env.nodeEnv !== 'production' ? code : undefined,
+    });
+});
+
+/** POST /api/auth/gmail/verify — step two: swap the code for a session. */
+const gmailVerifyCode = asyncHandler(async (req, res) => {
+    const email = (req.body.email || '').toLowerCase().trim();
+    const { code } = req.body;
+
+    if (!code) throw new BadRequestError('Verification code is required');
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!user) throw new UnauthorizedError('This Gmail address is not registered');
+    if (!user.login_code || user.login_code !== code) {
+        throw new BadRequestError('Invalid verification code');
+    }
+    if (user.login_code_expires_at && new Date(user.login_code_expires_at) < new Date()) {
+        throw new BadRequestError('Code has expired. Request a new one');
+    }
     if (!user.is_active) {
         throw new UnauthorizedError('Account has been deactivated');
     }
 
     await supabase
         .from('users')
-        .update({ last_login_at: new Date().toISOString() })
+        .update({
+            login_code: null,
+            login_code_expires_at: null,
+            last_login_at: new Date().toISOString(),
+        })
         .eq('id', user.id);
 
     res.json({ token: signToken(user), user: publicUser(user) });
 });
 
-module.exports = { login, me, changePassword, updateProfile, sendVerificationCode, verifyCode, googleLogin, publicUser, BCRYPT_ROUNDS };
+module.exports = {
+    login,
+    me,
+    changePassword,
+    updateProfile,
+    sendVerificationCode,
+    verifyCode,
+    gmailRequestCode,
+    gmailVerifyCode,
+    publicUser,
+    BCRYPT_ROUNDS,
+};

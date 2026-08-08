@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import { useAuth } from '../auth/AuthContext';
+import { authApi } from '../api/endpoints';
 
 const GoogleIcon = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ marginRight: 10 }}>
@@ -29,13 +30,15 @@ export default function Login() {
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    // Google Sign-In States
+    // Google Sign-In States (passwordless email code)
     const [googleLoginOpen, setGoogleLoginOpen] = useState(false);
     const [googleEmail, setGoogleLoginEmail] = useState('');
+    const [googleStep, setGoogleStep] = useState(1);
+    const [googleCode, setGoogleCode] = useState('');
     const [googleError, setGoogleLoginError] = useState('');
     const [googleSubmitting, setGoogleLoginSubmitting] = useState(false);
 
-    const { login, googleLogin } = useAuth();
+    const { login, gmailLogin } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [params] = useSearchParams();
@@ -50,16 +53,30 @@ export default function Login() {
             ? requestedDestination
             : '/app';
 
-    const handleGoogleLoginSubmit = async (event) => {
+    const handleGmailRequest = async (event) => {
         event.preventDefault();
         setGoogleLoginError('');
         setGoogleLoginSubmitting(true);
         try {
-            await googleLogin(googleEmail);
+            await authApi.gmailRequest(googleEmail);
+            setGoogleStep(2);
+        } catch (err) {
+            setGoogleLoginError(err.message || 'Failed to send sign-in code');
+        } finally {
+            setGoogleLoginSubmitting(false);
+        }
+    };
+
+    const handleGmailVerify = async (event) => {
+        event.preventDefault();
+        setGoogleLoginError('');
+        setGoogleLoginSubmitting(true);
+        try {
+            await gmailLogin(googleEmail, googleCode);
             setGoogleLoginOpen(false);
             navigate(destination, { replace: true });
         } catch (err) {
-            setGoogleLoginError(err.message || 'Failed to sign in with Google');
+            setGoogleLoginError(err.message || 'Invalid or expired code');
         } finally {
             setGoogleLoginSubmitting(false);
         }
@@ -170,7 +187,7 @@ export default function Login() {
                         </Stack>
                     </Box>
 
-                    {/* Dialog to simulate Google Gmail OAuth Sign-In */}
+                    {/* Dialog: passwordless Gmail sign-in */}
                     <Dialog
                         open={googleLoginOpen}
                         onClose={() => !googleSubmitting && setGoogleLoginOpen(false)}
@@ -181,10 +198,12 @@ export default function Login() {
                         <DialogTitle sx={{ fontWeight: 800, pb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <GoogleIcon /> Sign in with Gmail
                         </DialogTitle>
-                        
+
                         <DialogContent>
                             <DialogContentText sx={{ mb: 3, fontSize: 14 }}>
-                                If you have already linked and verified your school account with your Gmail address, you can sign in directly below without a password.
+                                {googleStep === 1
+                                    ? 'Enter your linked, verified Gmail address. We will email you a one-time sign-in code.'
+                                    : `A 6-digit sign-in code was emailed to ${googleEmail}. Enter it below.`}
                             </DialogContentText>
 
                             {googleError && (
@@ -193,38 +212,73 @@ export default function Login() {
                                 </Alert>
                             )}
 
-                            <Box component="form" onSubmit={handleGoogleLoginSubmit}>
-                                <TextField
-                                    fullWidth
-                                    label="Gmail Address"
-                                    placeholder="your.name@gmail.com"
-                                    value={googleEmail}
-                                    onChange={(e) => setGoogleLoginEmail(e.target.value)}
-                                    variant="outlined"
-                                    type="email"
-                                    required
-                                    disabled={googleSubmitting}
-                                    sx={{ mb: 2 }}
-                                />
-                                <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button 
-                                        onClick={() => setGoogleLoginOpen(false)} 
+                            {googleStep === 1 ? (
+                                <Box component="form" onSubmit={handleGmailRequest}>
+                                    <TextField
+                                        fullWidth
+                                        label="Gmail Address"
+                                        placeholder="your.name@gmail.com"
+                                        value={googleEmail}
+                                        onChange={(e) => setGoogleLoginEmail(e.target.value)}
+                                        variant="outlined"
+                                        type="email"
+                                        required
                                         disabled={googleSubmitting}
-                                        variant="text"
-                                        sx={{ textTransform: 'none' }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        disabled={googleSubmitting || !googleEmail}
-                                        sx={{ textTransform: 'none', px: 3 }}
-                                    >
-                                        {googleSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Sign In'}
-                                    </Button>
-                                </DialogActions>
-                            </Box>
+                                        sx={{ mb: 2 }}
+                                    />
+                                    <DialogActions sx={{ px: 0, pt: 1 }}>
+                                        <Button
+                                            onClick={() => setGoogleLoginOpen(false)}
+                                            disabled={googleSubmitting}
+                                            variant="text"
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            variant="contained"
+                                            disabled={googleSubmitting || !googleEmail}
+                                            sx={{ textTransform: 'none', px: 3 }}
+                                        >
+                                            {googleSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Send code'}
+                                        </Button>
+                                    </DialogActions>
+                                </Box>
+                            ) : (
+                                <Box component="form" onSubmit={handleGmailVerify}>
+                                    <TextField
+                                        fullWidth
+                                        label="6-Digit Sign-In Code"
+                                        placeholder="Enter code"
+                                        value={googleCode}
+                                        onChange={(e) => setGoogleCode(e.target.value)}
+                                        variant="outlined"
+                                        required
+                                        disabled={googleSubmitting}
+                                        helperText="Codes expire after 10 minutes."
+                                        sx={{ mb: 2 }}
+                                    />
+                                    <DialogActions sx={{ px: 0, pt: 1 }}>
+                                        <Button
+                                            onClick={() => { setGoogleStep(1); setGoogleCode(''); }}
+                                            disabled={googleSubmitting}
+                                            variant="text"
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            Back
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            variant="contained"
+                                            disabled={googleSubmitting || !googleCode}
+                                            sx={{ textTransform: 'none', px: 3 }}
+                                        >
+                                            {googleSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Sign In'}
+                                        </Button>
+                                    </DialogActions>
+                                </Box>
+                            )}
                         </DialogContent>
                     </Dialog>
 

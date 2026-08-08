@@ -140,6 +140,9 @@ CREATE TABLE IF NOT EXISTS users (
     is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
     pending_email      TEXT,
     verification_code  TEXT,
+    verification_code_expires_at TIMESTAMPTZ,
+    login_code         TEXT,
+    login_code_expires_at TIMESTAMPTZ,
     last_login_at      TIMESTAMPTZ,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
