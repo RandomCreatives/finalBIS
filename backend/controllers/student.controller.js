@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 
-const ExcelJS = require('exceljs');
+const XLSX = require('xlsx');
 
 const SELECT = `
     id, admission_no, name, roll_num, date_of_birth, gender,
@@ -256,26 +256,10 @@ const importStudents = asyncHandler(async (req, res) => {
         throw new BadRequestError('No file uploaded');
     }
 
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
-    const worksheet = workbook.worksheets[0];
-    const rows = [];
-    
-    // Convert ExcelJS worksheet to array of objects
-    const headers = [];
-    worksheet.getRow(1).eachCell((cell, colNumber) => {
-        headers[colNumber - 1] = cell.value;
-    });
-    
-    for (let rowNumber = 2; worksheet.getRow(rowNumber).cellCount > 0; rowNumber++) {
-        const row = worksheet.getRow(rowNumber);
-        const rowObj = {};
-        headers.forEach((header, colIndex) => {
-            const cell = row.getCell(colIndex + 1);
-            rowObj[header] = cell.value;
-        });
-        rows.push(rowObj);
-    }
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet);
 
     if (!rows || rows.length === 0) {
         throw new BadRequestError('Excel file contains no data');

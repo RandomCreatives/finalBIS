@@ -25,20 +25,44 @@ function check(description, test, severity = 'warning') {
         const result = test();
         if (result) {
             results.passed.push(description);
-            console.log(`✅ PASS: ${description}`);
+            console.log(`\u2705 PASS: ${description}`);
         } else {
             results.warnings.push({ description, severity });
-            console.log(`⚠️  ${severity.toUpperCase().padEnd(6)}: ${description}`);
+            console.log(`\u26A0\uFE0F  ${severity.toUpperCase().padEnd(6)}: ${description}`);
         }
     } catch (err) {
         results.errors.push({ description, error: err.message, severity });
-        console.log(`❌ ERROR: ${description}`);
+        console.log(`\u274C ERROR: ${description}`);
         console.log(`   ${err.message}`);
     }
 }
 
+/** Reads the given repo-relative file as UTF-8, or null if missing. */
+function readFile(relPath) {
+    const abs = path.join(__dirname, '..', relPath);
+    return fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null;
+}
+
+/** Combines schema.sql + functions.sql + all migration files. */
+function combinedSchema() {
+    const parts = [];
+    for (const rel of ['supabase/schema.sql', 'supabase/functions.sql']) {
+        const content = readFile(rel);
+        if (content) parts.push(content);
+    }
+    const migrationsDir = path.join(__dirname, '..', 'supabase', 'migrations');
+    if (fs.existsSync(migrationsDir)) {
+        for (const file of fs.readdirSync(migrationsDir)) {
+            if (file.endsWith('.sql')) {
+                parts.push(fs.readFileSync(path.join(migrationsDir, file), 'utf8'));
+            }
+        }
+    }
+    return parts.join('\n');
+}
+
 // Check 1: Environment variables
-console.log('\n📋 Environment Configuration');
+console.log('\n\uD83D\uDCCB Environment Configuration');
 console.log('-'.repeat(80));
 
 check(
@@ -56,22 +80,30 @@ check(
 check(
     'No .env files committed (security risk)',
     () => {
-        const backendEnv = path.join(__dirname, '../backend/.env');
-        const frontendEnv = path.join(__dirname, '../frontend/.env');
-        return !fs.existsSync(backendEnv) && !fs.existsSync(frontendEnv);
+        // Checks git tracking, not mere file existence: a local .env is
+        // expected in development, but committing it is the security risk.
+        try {
+            const tracked = execSync('git ls-files -- backend/.env frontend/.env', {
+                cwd: path.join(__dirname, '..'),
+                encoding: 'utf8',
+            }).trim();
+            return tracked === '';
+        } catch {
+            return false;
+        }
     },
     'error'
 );
 
 // Check 2: Security headers
-console.log('\n🔒 Security Headers');
+console.log('\n\uD83D\uDD12 Security Headers');
 console.log('-'.repeat(80));
 
 check(
     'Helmet middleware configured',
     () => {
-        const appJs = fs.readFileSync(path.join(__dirname, '../backend/app.js'), 'utf8');
-        return appJs.includes('helmet') && appJs.includes('app.use(helmet');
+        const appJs = readFile('backend/app.js');
+        return appJs && appJs.includes('helmet') && appJs.includes('app.use(helmet');
     },
     'error'
 );
@@ -79,8 +111,8 @@ check(
 check(
     'CORS configured with origin validation',
     () => {
-        const appJs = fs.readFileSync(path.join(__dirname, '../backend/app.js'), 'utf8');
-        return appJs.includes('cors') && appJs.includes('isAllowedOrigin');
+        const appJs = readFile('backend/app.js');
+        return appJs && appJs.includes('cors') && appJs.includes('isAllowedOrigin');
     },
     'error'
 );
@@ -88,8 +120,8 @@ check(
 check(
     'X-Powered-By disabled',
     () => {
-        const appJs = fs.readFileSync(path.join(__dirname, '../backend/app.js'), 'utf8');
-        return appJs.includes('x-powered-by') && appJs.includes('disable');
+        const appJs = readFile('backend/app.js');
+        return appJs && appJs.includes('x-powered-by') && appJs.includes('disable');
     },
     'warning'
 );
@@ -97,21 +129,21 @@ check(
 check(
     'Trust proxy enabled for rate limiting',
     () => {
-        const appJs = fs.readFileSync(path.join(__dirname, '../backend/app.js'), 'utf8');
-        return appJs.includes("trust proxy");
+        const appJs = readFile('backend/app.js');
+        return appJs && appJs.includes('trust proxy');
     },
     'warning'
 );
 
 // Check 3: Authentication
-console.log('\n🔐 Authentication Security');
+console.log('\n\uD83D\uDD10 Authentication Security');
 console.log('-'.repeat(80));
 
 check(
     'JWT secret validation exists',
     () => {
-        const envJs = fs.readFileSync(path.join(__dirname, '../backend/config/env.js'), 'utf8');
-        return envJs.includes('JWT_SECRET') && envJs.includes('length < 32');
+        const envJs = readFile('backend/config/env.js');
+        return envJs && envJs.includes('JWT_SECRET') && envJs.includes('length < 32');
     },
     'error'
 );
@@ -119,8 +151,8 @@ check(
 check(
     'Bcrypt used for password hashing',
     () => {
-        const authController = fs.readFileSync(path.join(__dirname, '../backend/controllers/auth.controller.js'), 'utf8');
-        return authController.includes('bcrypt') && authController.includes('BCRYPT_ROUNDS');
+        const authController = readFile('backend/controllers/auth.controller.js');
+        return authController && authController.includes('bcrypt') && authController.includes('BCRYPT_ROUNDS');
     },
     'error'
 );
@@ -128,8 +160,8 @@ check(
 check(
     'Timing-safe password comparison',
     () => {
-        const authController = fs.readFileSync(path.join(__dirname, '../backend/controllers/auth.controller.js'), 'utf8');
-        return authController.includes('bcrypt.compare');
+        const authController = readFile('backend/controllers/auth.controller.js');
+        return authController && authController.includes('bcrypt.compare');
     },
     'error'
 );
@@ -137,21 +169,21 @@ check(
 check(
     'Session validation on every request',
     () => {
-        const authJs = fs.readFileSync(path.join(__dirname, '../backend/middleware/auth.js'), 'utf8');
-        return authJs.includes('supabase') && authJs.includes('is_active');
+        const authJs = readFile('backend/middleware/auth.js');
+        return authJs && authJs.includes('supabase') && authJs.includes('is_active');
     },
     'error'
 );
 
 // Check 4: Rate limiting
-console.log('\n⚡ Rate Limiting');
+console.log('\n\u26A1 Rate Limiting');
 console.log('-'.repeat(80));
 
 check(
     'Auth rate limiter configured',
     () => {
-        const securityJs = fs.readFileSync(path.join(__dirname, '../backend/middleware/security.js'), 'utf8');
-        return securityJs.includes('authLimiter') && securityJs.includes('windowMs: 15 * 60 * 1000');
+        const securityJs = readFile('backend/middleware/security.js');
+        return securityJs && securityJs.includes('authLimiter') && securityJs.includes('windowMs: 15 * 60 * 1000');
     },
     'error'
 );
@@ -159,8 +191,8 @@ check(
 check(
     'API rate limiter configured',
     () => {
-        const securityJs = fs.readFileSync(path.join(__dirname, '../backend/middleware/security.js'), 'utf8');
-        return securityJs.includes('apiLimiter') && securityJs.includes('max: 300');
+        const securityJs = readFile('backend/middleware/security.js');
+        return securityJs && securityJs.includes('apiLimiter') && securityJs.includes('max: 300');
     },
     'warning'
 );
@@ -168,22 +200,22 @@ check(
 check(
     'Failed auth attempts only count toward limit',
     () => {
-        const securityJs = fs.readFileSync(path.join(__dirname, '../backend/middleware/security.js'), 'utf8');
-        return securityJs.includes('skipSuccessfulRequests: true');
+        const securityJs = readFile('backend/middleware/security.js');
+        return securityJs && securityJs.includes('skipSuccessfulRequests: true');
     },
     'warning'
 );
 
 // Check 5: Database security
-console.log('\n🗃️ Database Security');
+console.log('\n\uD83D\uDDC3\uFE0F Database Security');
 console.log('-'.repeat(80));
 
 check(
     'RLS enabled on all tables',
     () => {
-        const schemaSql = fs.readFileSync(path.join(__dirname, '../supabase/schema.sql'), 'utf8');
-        return schemaSql.includes('ENABLE ROW LEVEL SECURITY') && 
-               schemaSql.includes('FORCE ROW LEVEL SECURITY');
+        const sql = combinedSchema();
+        return sql.includes('ENABLE ROW LEVEL SECURITY') &&
+               sql.includes('FORCE ROW LEVEL SECURITY');
     },
     'error'
 );
@@ -191,8 +223,8 @@ check(
 check(
     'No permissive policies (anon can read nothing)',
     () => {
-        const schemaSql = fs.readFileSync(path.join(__dirname, '../supabase/schema.sql'), 'utf8');
-        return schemaSql.includes('REVOKE ALL ON') && schemaSql.includes('FROM anon, authenticated');
+        const sql = combinedSchema();
+        return sql.includes('REVOKE ALL ON') && sql.includes('FROM anon, authenticated');
     },
     'error'
 );
@@ -200,21 +232,21 @@ check(
 check(
     'Service role key used (not anon)',
     () => {
-        const supabaseJs = fs.readFileSync(path.join(__dirname, '../backend/config/supabase.js'), 'utf8');
-        return supabaseJs.includes('supabaseServiceKey') || supabaseJs.includes('SUPABASE_SERVICE_KEY');
+        const supabaseJs = readFile('backend/config/supabase.js');
+        return supabaseJs && (supabaseJs.includes('supabaseServiceKey') || supabaseJs.includes('SUPABASE_SERVICE_KEY'));
     },
     'error'
 );
 
 // Check 6: Input validation
-console.log('\n📝 Input Validation');
+console.log('\n\uD83D\uDCDD Input Validation');
 console.log('-'.repeat(80));
 
 check(
     'Express validator used',
     () => {
-        const routesJs = fs.readFileSync(path.join(__dirname, '../backend/routes/index.js'), 'utf8');
-        return routesJs.includes('express-validator') && routesJs.includes('body(');
+        const routesJs = readFile('backend/routes/index.js');
+        return routesJs && routesJs.includes('express-validator') && routesJs.includes('body(');
     },
     'error'
 );
@@ -222,21 +254,21 @@ check(
 check(
     'Validation middleware exists',
     () => {
-        const securityJs = fs.readFileSync(path.join(__dirname, '../backend/middleware/security.js'), 'utf8');
-        return securityJs.includes('validate') && securityJs.includes('validationResult');
+        const securityJs = readFile('backend/middleware/security.js');
+        return securityJs && securityJs.includes('validate') && securityJs.includes('validationResult');
     },
     'error'
 );
 
 // Check 7: Error handling
-console.log('\n⚠️ Error Handling');
+console.log('\n\u26A0\uFE0F Error Handling');
 console.log('-'.repeat(80));
 
 check(
     'Error handling middleware exists',
     () => {
-        const appJs = fs.readFileSync(path.join(__dirname, '../backend/app.js'), 'utf8');
-        return appJs.includes('errorHandler') && appJs.includes('notFound');
+        const appJs = readFile('backend/app.js');
+        return appJs && appJs.includes('errorHandler') && appJs.includes('notFound');
     },
     'error'
 );
@@ -244,22 +276,22 @@ check(
 check(
     'Async handler wrapper used',
     () => {
-        const errorsJs = fs.readFileSync(path.join(__dirname, '../backend/utils/errors.js'), 'utf8');
-        return errorsJs.includes('asyncHandler');
+        const errorsJs = readFile('backend/utils/errors.js');
+        return errorsJs && errorsJs.includes('asyncHandler');
     },
     'warning'
 );
 
 // Check 8: Tests
-console.log('\n🧪 Testing');
+console.log('\n\uD83E\uDDEA Testing');
 console.log('-'.repeat(80));
 
 check(
     'Backend test files exist',
     () => {
         const testDir = path.join(__dirname, '../backend/tests');
-        const files = fs.readdirSync(testDir);
-        return files.length > 0 && files.some(f => f.endsWith('.test.js'));
+        if (!fs.existsSync(testDir)) return false;
+        return fs.readdirSync(testDir).some((f) => f.endsWith('.test.js'));
     },
     'error'
 );
@@ -268,17 +300,14 @@ check(
     'Database test files exist',
     () => {
         const testDir = path.join(__dirname, '../backend/tests/db');
-        if (fs.existsSync(testDir)) {
-            const files = fs.readdirSync(testDir);
-            return files.some(f => f.endsWith('.db.test.js'));
-        }
-        return false;
+        if (!fs.existsSync(testDir)) return false;
+        return fs.readdirSync(testDir).some((f) => f.endsWith('.db.test.js'));
     },
     'warning'
 );
 
 // Check 9: CI/CD
-console.log('\n🚀 CI/CD');
+console.log('\n\uD83D\uDE80 CI/CD');
 console.log('-'.repeat(80));
 
 check(
@@ -291,53 +320,54 @@ check(
     'GitHub Actions workflow configured',
     () => {
         const workflowDir = path.join(__dirname, '../.github/workflows');
-        if (fs.existsSync(workflowDir)) {
-            const files = fs.readdirSync(workflowDir);
-            return files.some(f => f.includes('ci') || f.includes('test'));
-        }
-        return false;
+        if (!fs.existsSync(workflowDir)) return false;
+        return fs.readdirSync(workflowDir).some((f) => f.includes('ci') || f.includes('test'));
     },
     'warning'
 );
 
 // Check 10: Dependencies
-console.log('\n📦 Dependencies');
+console.log('\n\uD83D\uDCE6 Dependencies');
 console.log('-'.repeat(80));
 
-try {
-    console.log('\nBackend dependencies:');
-    execSync('cd backend && npm ls --depth=0 2>/dev/null | head -20', { encoding: 'utf8' });
-    
-    console.log('\nFrontend dependencies:');
-    execSync('cd frontend && npm ls --depth=0 2>/dev/null | head -20', { encoding: 'utf8' });
-} catch (err) {
-    console.log('⚠️  Could not list dependencies (npm not available or no node_modules)');
+for (const dir of ['backend', 'frontend']) {
+    try {
+        const cwd = path.join(__dirname, '..', dir);
+        console.log(`\n${dir} dependencies:`);
+        console.log(execSync('npm ls --depth=0', { cwd, encoding: 'utf8' }));
+    } catch (err) {
+        const lines = String(err.stdout || '').trim().split('\n');
+        lines.forEach((l) => console.log(l));
+        const linesErr = String(err.stderr || '').trim().split('\n');
+        linesErr.forEach((l) => console.log(l));
+        console.log(`\u26A0\uFE0F  ${dir}: npm ls reported problems (broken/missing deps)`);
+    }
 }
 
 // Summary
 console.log('\n' + '='.repeat(80));
 console.log('SUMMARY');
 console.log('='.repeat(80));
-console.log(`✅ Passed: ${results.passed.length}`);
-console.log(`⚠️  Warnings: ${results.warnings.length}`);
-console.log(`❌ Errors: ${results.errors.length}`);
+console.log(`\u2705 Passed: ${results.passed.length}`);
+console.log(`\u26A0\uFE0F  Warnings: ${results.warnings.length}`);
+console.log(`\u274C Errors: ${results.errors.length}`);
 console.log();
 
 if (results.errors.length > 0) {
-    console.log('🔴 CRITICAL ISSUES (must fix):');
-    results.errors.forEach(e => console.log(`  - ${e.description}`));
+    console.log('\uD83D\uDD34 CRITICAL ISSUES (must fix):');
+    results.errors.forEach((e) => console.log(`  - ${e.description}`));
     console.log();
 }
 
 if (results.warnings.length > 0) {
-    console.log('🟡 WARNINGS (should fix):');
-    results.warnings.forEach(w => console.log(`  - ${w.description}`));
+    console.log('\uD83D\uDFE1 WARNINGS (should fix):');
+    results.warnings.forEach((w) => console.log(`  - ${w.description}`));
     console.log();
 }
 
 if (results.passed.length > 0) {
-    console.log('✅ GOOD PRACTICES:');
-    results.passed.forEach(p => console.log(`  - ${p}`));
+    console.log('\u2705 GOOD PRACTICES:');
+    results.passed.forEach((p) => console.log(`  - ${p}`));
     console.log();
 }
 

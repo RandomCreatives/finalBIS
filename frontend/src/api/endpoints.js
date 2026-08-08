@@ -25,6 +25,11 @@ export const dashboardApi = {
     dataFlow: () => client.get('/dashboard/data-flow').then((r) => r.data),
 };
 
+export const datacenterApi = {
+    stats: () => client.get('/datacenter/stats').then((r) => r.data),
+    academic: () => client.get('/datacenter/academic').then((r) => r.data),
+};
+
 export const academicYearApi = {
     list: () => client.get('/academic-years').then((r) => r.data.academicYears),
     create: (payload) => client.post('/academic-years', payload).then((r) => r.data.academicYear),
@@ -168,7 +173,6 @@ export const libraryApi = {
     summary: () => client.get('/library/summary').then((r) => r.data),
     issue: (payload) => client.post('/library/loans', payload).then((r) => r.data.loan),
     returnBook: (id) => client.post(`/library/loans/${id}/return`).then((r) => r.data),
-    payFine: (id) => client.post(`/library/loans/${id}/pay-fine`).then((r) => r.data),
 };
 
 export const clinicApi = {
@@ -199,8 +203,4 @@ export const storeApi = {
         client.post(`/store/requests/${id}/store-review`, { decision, note }).then((r) => r.data.request),
     adminReview: (id, decision, note) =>
         client.post(`/store/requests/${id}/admin-review`, { decision, note }).then((r) => r.data.request),
-};
-
-export const datacenterApi = {
-    getStats: () => client.get('/datacenter/stats').then((r) => r.data),
 };

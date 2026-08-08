@@ -480,16 +480,14 @@ describe('library', () => {
         loanId = loan[0].id;
     });
 
-    test('returning late charges 5 ETB per day', async () => {
+    test('returning late records the late days with no charge', async () => {
         const { rows } = await t.query(`SELECT return_library_loan($1, $2) AS result`,
             [loanId, ids.schoolId]);
 
         assert.equal(rows[0].result.days_late, 3);
-        assert.equal(Number(rows[0].result.fine_amount), 15);
-        assert.equal(rows[0].result.fine_paid, false);
     });
 
-    test('returning on time charges nothing and settles the loan', async () => {
+    test('returning on time settles the loan', async () => {
         const { rows: [fresh] } = await t.query(
             `INSERT INTO library_loans (school_id, student_id, book_title, due_on)
              VALUES ($1, $2, 'On Time', CURRENT_DATE + 5) RETURNING id`,
@@ -499,8 +497,8 @@ describe('library', () => {
         const { rows } = await t.query(`SELECT return_library_loan($1, $2) AS result`,
             [fresh.id, ids.schoolId]);
 
-        assert.equal(Number(rows[0].result.fine_amount), 0);
-        assert.equal(rows[0].result.fine_paid, true);
+        assert.equal(rows[0].result.days_late, 0);
+        assert.equal(rows[0].result.status, 'returned');
     });
 
     test('a book cannot be returned twice', async () => {

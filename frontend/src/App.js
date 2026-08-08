@@ -7,6 +7,7 @@ import RequireAuth from './auth/RequireAuth';
 import AppLayout from './components/AppLayout';
 
 import Landing from './pages/Landing';
+import DataCenter from './pages/DataCenter';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -25,7 +26,6 @@ import Calendar from './pages/Calendar';
 import Planning from './pages/Planning';
 import Settings from './pages/Settings';
 import Store from './pages/Store';
-import DataCenter from './pages/DataCenter';
 
 export default function App() {
     return (

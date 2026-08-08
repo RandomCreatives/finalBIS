@@ -404,7 +404,6 @@ router.post(
 );
 
 router.post('/library/loans/:id/return', authenticate, authorize(...PASTORAL), uuid('id'), validate, library.returnBook);
-router.post('/library/loans/:id/pay-fine', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, library.payFine);
 
 // =============================================================================
 // CLINIC
@@ -774,5 +773,6 @@ router.get('/dashboard/data-flow', authenticate, dashboard.getDataFlow);
 // PUBLIC DATA CENTER
 // =============================================================================
 router.get('/datacenter/stats', datacenter.getStats);
+router.get('/datacenter/academic', datacenter.getAcademic);
 
 module.exports = router;

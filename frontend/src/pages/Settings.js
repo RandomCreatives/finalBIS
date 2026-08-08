@@ -15,10 +15,6 @@ import {
     Stack,
     Switch,
     FormControlLabel,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import LockIcon from '@mui/icons-material/Lock';
@@ -28,8 +24,6 @@ import SaveIcon from '@mui/icons-material/Save';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
-import VerifiedIcon from '@mui/icons-material/Verified';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 import { authApi } from '../api/endpoints';
@@ -62,15 +56,6 @@ export default function Settings() {
     const [passwordSuccess, setPasswordSuccess] = useState('');
     const [passwordError, setPasswordError] = useState('');
     const [updatingPassword, setUpdatingPassword] = useState(false);
-
-    // Gmail verification state
-    const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
-    const [verificationStep, setVerificationStep] = useState(1);
-    const [gmailAddress, setGmailAddress] = useState('');
-    const [verificationCode, setVerificationCode] = useState('');
-    const [verificationError, setVerificationError] = useState('');
-    const [verificationSuccess, setVerificationSuccess] = useState('');
-    const [verificationLoading, setVerificationLoading] = useState(false);
 
     // Handle Profile Update
     const handleProfileSubmit = async (e) => {
@@ -130,40 +115,6 @@ export default function Settings() {
         }
     };
 
-    // Handle Gmail verification
-    const handleRequestVerificationCode = async () => {
-        setVerificationError('');
-        setVerificationSuccess('');
-        setVerificationLoading(true);
-        try {
-            await authApi.sendVerificationCode(gmailAddress);
-            setVerificationStep(2);
-            setVerificationSuccess('Verification code sent! Check your Gmail inbox.');
-        } catch (err) {
-            setVerificationError(err.message || 'Failed to send verification code');
-        } finally {
-            setVerificationLoading(false);
-        }
-    };
-
-    const handleVerifyCode = async () => {
-        setVerificationError('');
-        setVerificationLoading(true);
-        try {
-            const result = await authApi.verifyCode(verificationCode);
-            updateUser(result.user);
-            setVerificationSuccess('Gmail address verified successfully!');
-            setVerificationDialogOpen(false);
-            setGmailAddress('');
-            setVerificationCode('');
-            setVerificationStep(1);
-        } catch (err) {
-            setVerificationError(err.message || 'Invalid verification code');
-        } finally {
-            setVerificationLoading(false);
-        }
-    };
-
     return (
         <Box sx={{ maxWidth: 1000, mx: 'auto', p: 1 }}>
             {/* Header */}
@@ -204,7 +155,7 @@ export default function Settings() {
                                     {user?.email}
                                 </Typography>
 
-                                <Box sx={{ mt: 3, display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <Box sx={{ mt: 3, display: 'inline-flex', gap: 1 }}>
                                     <Box
                                         sx={{
                                             px: 1.5,
@@ -220,38 +171,6 @@ export default function Settings() {
                                     >
                                         Active
                                     </Box>
-                                    {user?.isEmailVerified && (
-                                        <Box
-                                            sx={{
-                                                px: 1.5,
-                                                py: 0.5,
-                                                borderRadius: 1,
-                                                fontSize: 12,
-                                                fontWeight: 700,
-                                                bgcolor: 'info.light',
-                                                color: 'info.contrastText',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 0.5,
-                                            }}
-                                        >
-                                            <VerifiedIcon sx={{ fontSize: 14 }} />
-                                            Gmail Verified
-                                        </Box>
-                                    )}
-                                </Box>
-
-                                <Box sx={{ mt: 2 }}>
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<VerifiedUserIcon />}
-                                        onClick={() => setVerificationDialogOpen(true)}
-                                        disabled={user?.isEmailVerified}
-                                        fullWidth
-                                        sx={{ textTransform: 'none', fontWeight: 600 }}
-                                    >
-                                        {user?.isEmailVerified ? 'Gmail Already Verified' : 'Link Gmail Account'}
-                                    </Button>
                                 </Box>
                             </CardContent>
                         </Card>
@@ -456,110 +375,6 @@ export default function Settings() {
                     </Stack>
                 </Grid>
             </Grid>
-
-            {/* Gmail Verification Dialog */}
-            <Dialog
-                open={verificationDialogOpen}
-                onClose={() => !verificationLoading && setVerificationDialogOpen(false)}
-                maxWidth="xs"
-                fullWidth
-            >
-                <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <VerifiedUserIcon color="primary" />
-                    Link Gmail Account
-                </DialogTitle>
-                <DialogContent>
-                    {verificationError && (
-                        <Alert severity="error" sx={{ mb: 2, borderRadius: 1 }}>
-                            {verificationError}
-                        </Alert>
-                    )}
-                    {verificationSuccess && (
-                        <Alert severity="success" sx={{ mb: 2, borderRadius: 1 }}>
-                            {verificationSuccess}
-                        </Alert>
-                    )}
-
-                    {verificationStep === 1 ? (
-                        <>
-                            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                                Enter your Gmail address to receive a verification code. This will be used for passwordless sign-in.
-                            </Typography>
-                            <TextField
-                                fullWidth
-                                label="Gmail Address"
-                                placeholder="your.name@gmail.com"
-                                value={gmailAddress}
-                                onChange={(e) => setGmailAddress(e.target.value)}
-                                variant="outlined"
-                                type="email"
-                                required
-                                disabled={verificationLoading}
-                                sx={{ mb: 2 }}
-                            />
-                            <DialogActions sx={{ px: 0, pt: 1 }}>
-                                <Button
-                                    onClick={() => setVerificationDialogOpen(false)}
-                                    disabled={verificationLoading}
-                                    variant="text"
-                                    sx={{ textTransform: 'none' }}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={handleRequestVerificationCode}
-                                    variant="contained"
-                                    disabled={verificationLoading || !gmailAddress || !gmailAddress.endsWith('@gmail.com')}
-                                    sx={{ textTransform: 'none', px: 3 }}
-                                >
-                                    {verificationLoading ? 'Sending...' : 'Send Code'}
-                                </Button>
-                            </DialogActions>
-                        </>
-                    ) : (
-                        <>
-                            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                                A 6-digit verification code has been sent to {gmailAddress}. Enter it below.
-                            </Typography>
-                            <TextField
-                                fullWidth
-                                label="6-Digit Verification Code"
-                                placeholder="Enter code"
-                                value={verificationCode}
-                                onChange={(e) => setVerificationCode(e.target.value)}
-                                variant="outlined"
-                                required
-                                disabled={verificationLoading}
-                                helperText="Codes expire after 10 minutes."
-                                sx={{ mb: 2 }}
-                            />
-                            <DialogActions sx={{ px: 0, pt: 1 }}>
-                                <Button
-                                    onClick={() => {
-                                        setVerificationStep(1);
-                                        setVerificationCode('');
-                                        setVerificationError('');
-                                        setVerificationSuccess('');
-                                    }}
-                                    disabled={verificationLoading}
-                                    variant="text"
-                                    sx={{ textTransform: 'none' }}
-                                >
-                                    Back
-                                </Button>
-                                <Button
-                                    onClick={handleVerifyCode}
-                                    variant="contained"
-                                    disabled={verificationLoading || !verificationCode}
-                                    sx={{ textTransform: 'none', px: 3 }}
-                                >
-                                    {verificationLoading ? 'Verifying...' : 'Verify'}
-                                </Button>
-                            </DialogActions>
-                        </>
-                    )}
-                </DialogContent>
-            </Dialog>
         </Box>
     );
 }

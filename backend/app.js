@@ -33,22 +33,38 @@ app.use(helmet({
 }));
 
 /**
- * CORS: strict allow-list. An unknown origin is rejected outright — the
- * previous implementation logged a rejection and then allowed it anyway.
+ * CORS: strict allow-list, but always permit same-origin requests.
+ *
+ * On Vercel the static site and the API share one domain, yet browsers still
+ * send an `Origin` header on same-origin POST/fetch calls. In production the
+ * allow-list check alone would reject those and break the deployed app, so we
+ * first allow any request whose Origin matches this server's own host.
  */
-app.use(
+app.use((req, res, next) => {
     cors({
         origin(origin, callback) {
             // Same-origin/curl requests carry no Origin header.
             if (!origin) return callback(null, true);
+
+            // Same-origin: the Origin matches this request's own host.
+            try {
+                const reqHost = req.headers.host; // e.g. app.vercel.app
+                const originUrl = new URL(origin);
+                if (reqHost && originUrl.host.toLowerCase() === reqHost.toLowerCase()) {
+                    return callback(null, true);
+                }
+            } catch {
+                /* fall through to the allow-list */
+            }
+
             if (isAllowedOrigin(origin, env)) {
                 return callback(null, true);
             }
             callback(new Error(`Origin ${origin} is not permitted by CORS`));
         },
         credentials: true,
-    })
-);
+    })(req, res, next);
+});
 
 app.use(express.json({ limit: '1mb' }));
 

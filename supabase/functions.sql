@@ -67,8 +67,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- return_library_loan
--- Marks a loan returned and computes the overdue fine using the DB clock.
--- Fine rate: 5 ETB per calendar day late.
+-- Marks a loan returned. Borrowing is free of charge, so no fine is computed.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION return_library_loan(
     p_loan_id   UUID,
@@ -83,7 +82,6 @@ DECLARE
     v_due_on DATE;
     v_status TEXT;
     v_days   INTEGER;
-    v_fine   NUMERIC(8,2);
     v_result JSON;
 BEGIN
     SELECT due_on, status INTO v_due_on, v_status
@@ -95,16 +93,14 @@ BEGIN
     IF v_status = 'returned' THEN RAISE EXCEPTION 'ALREADY_RETURNED'; END IF;
 
     v_days := GREATEST(0, CURRENT_DATE - v_due_on);
-    v_fine := v_days * 5;
 
     UPDATE library_loans
-    SET returned_on = CURRENT_DATE, status = 'returned',
-        fine_amount = v_fine, fine_paid = (v_fine = 0)
+    SET returned_on = CURRENT_DATE, status = 'returned'
     WHERE id = p_loan_id;
 
     SELECT json_build_object(
         'id', id, 'status', status, 'returned_on', returned_on,
-        'days_late', v_days, 'fine_amount', fine_amount, 'fine_paid', fine_paid
+        'days_late', v_days
     ) INTO v_result FROM library_loans WHERE id = p_loan_id;
 
     RETURN v_result;
