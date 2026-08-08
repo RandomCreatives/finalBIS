@@ -508,8 +508,6 @@ CREATE TABLE IF NOT EXISTS library_loans (
     due_on      DATE NOT NULL,
     returned_on DATE,
     status      TEXT NOT NULL DEFAULT 'borrowed' CHECK (status IN ('borrowed', 'returned')),
-    fine_amount NUMERIC(8, 2) NOT NULL DEFAULT 0 CHECK (fine_amount >= 0),
-    fine_paid   BOOLEAN NOT NULL DEFAULT FALSE,
     issued_by   UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

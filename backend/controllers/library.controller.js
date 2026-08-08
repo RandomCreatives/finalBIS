@@ -5,7 +5,7 @@ const MAX_ACTIVE_LOANS = 3;
 
 const SELECT = `
     id, book_title, book_author, book_isbn, borrowed_on, due_on, returned_on,
-    status, fine_amount, fine_paid,
+    status,
     student:students(id, name, admission_no, class_id)
 `;
 
@@ -18,8 +18,6 @@ const shape = (l) => ({
     dueOn: l.due_on,
     returnedOn: l.returned_on,
     status: l.status,
-    fineAmount: Number(l.fine_amount),
-    finePaid: l.fine_paid,
     // Derived on read so it is never stale.
     isOverdue: l.status === 'borrowed' && l.due_on < new Date().toISOString().slice(0, 10),
     student: l.student,
@@ -83,8 +81,8 @@ const returnBook = asyncHandler(async (req, res) => {
     }
 
     res.json({
-        message: data.fine_amount > 0
-            ? `Returned ${data.days_late} day(s) late — fine of ${data.fine_amount} ETB applied`
+        message: data.days_late > 0
+            ? `Returned ${data.days_late} day(s) late`
             : 'Book returned on time',
         loan: data,
     });
@@ -113,37 +111,11 @@ const listLoans = asyncHandler(async (req, res) => {
     res.json({ loans: data.map(shape) });
 });
 
-/** POST /api/library/loans/:id/pay-fine */
-const payFine = asyncHandler(async (req, res) => {
-    const { data: loan, error: lookupError } = await supabase
-        .from('library_loans')
-        .select('fine_amount, fine_paid')
-        .eq('id', req.params.id)
-        .eq('school_id', req.user.school_id)
-        .maybeSingle();
-
-    if (lookupError) throw lookupError;
-    if (!loan) throw new NotFoundError('Loan not found');
-    if (Number(loan.fine_amount) === 0) throw new ConflictError('No fine is outstanding on this loan');
-    if (loan.fine_paid) throw new ConflictError('Fine has already been paid');
-
-    const { data, error } = await supabase
-        .from('library_loans')
-        .update({ fine_paid: true })
-        .eq('id', req.params.id)
-        .select(SELECT)
-        .single();
-
-    if (error) throw error;
-
-    res.json({ message: 'Fine recorded as paid', loan: shape(data) });
-});
-
 /** GET /api/library/summary */
 const getLibrarySummary = asyncHandler(async (req, res) => {
     const { data, error } = await supabase
         .from('library_loans')
-        .select('status, due_on, fine_amount, fine_paid')
+        .select('status, due_on')
         .eq('school_id', req.user.school_id);
 
     if (error) throw error;
@@ -154,10 +126,7 @@ const getLibrarySummary = asyncHandler(async (req, res) => {
         totalLoans: data.length,
         onLoan: data.filter((l) => l.status === 'borrowed').length,
         overdue: data.filter((l) => l.status === 'borrowed' && l.due_on < today).length,
-        unpaidFines: data
-            .filter((l) => !l.fine_paid)
-            .reduce((sum, l) => sum + Number(l.fine_amount), 0),
     });
 });
 
-module.exports = { issueBook, returnBook, listLoans, payFine, getLibrarySummary };
+module.exports = { issueBook, returnBook, listLoans, getLibrarySummary };

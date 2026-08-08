@@ -20,7 +20,6 @@ const inTwoWeeks = () => {
 export default function Library() {
     const { user } = useAuth();
     const canIssue = ['admin', 'main_teacher', 'assistant_teacher'].includes(user?.role);
-    const canWaive = ['admin', 'main_teacher'].includes(user?.role);
 
     const [tab, setTab] = useState(0);
     const [dialog, setDialog] = useState(null);
@@ -67,23 +66,13 @@ export default function Library() {
         }
     };
 
-    const handlePayFine = async (loan) => {
-        try {
-            await libraryApi.payFine(loan.id);
-            setToast('Fine recorded as paid');
-            refresh();
-        } catch (err) {
-            setToast(err.message);
-        }
-    };
-
     const rows = loans.data || [];
 
     return (
         <>
             <PageHeader
                 title="Library"
-                subtitle="Book loans, returns and overdue fines (5 ETB per day)."
+                subtitle="Book loans and returns — borrowing is free for all."
                 action={canIssue && (
                     <Button
                         variant="contained" startIcon={<AddIcon />}
@@ -102,7 +91,6 @@ export default function Library() {
                     {[
                         { label: 'On loan', value: summary.data.onLoan },
                         { label: 'Overdue', value: summary.data.overdue, warn: summary.data.overdue > 0 },
-                        { label: 'Unpaid fines', value: `${summary.data.unpaidFines} ETB`, warn: summary.data.unpaidFines > 0 },
                         { label: 'Total loans', value: summary.data.totalLoans },
                     ].map((s) => (
                         <Grid item xs={6} md={3} key={s.label}>
@@ -141,7 +129,6 @@ export default function Library() {
                                 <TableCell>Student</TableCell>
                                 <TableCell>Due</TableCell>
                                 <TableCell>Status</TableCell>
-                                <TableCell align="right">Fine</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
@@ -166,19 +153,9 @@ export default function Library() {
                                         )}
                                     </TableCell>
                                     <TableCell align="right">
-                                        {loan.fineAmount > 0
-                                            ? `${loan.fineAmount} ETB${loan.finePaid ? ' (paid)' : ''}`
-                                            : '—'}
-                                    </TableCell>
-                                    <TableCell align="right">
                                         <Stack direction="row" spacing={1} justifyContent="flex-end">
                                             {loan.status === 'borrowed' && canIssue && (
                                                 <Button size="small" onClick={() => handleReturn(loan)}>Return</Button>
-                                            )}
-                                            {loan.fineAmount > 0 && !loan.finePaid && canWaive && (
-                                                <Button size="small" color="warning" onClick={() => handlePayFine(loan)}>
-                                                    Mark paid
-                                                </Button>
                                             )}
                                         </Stack>
                                     </TableCell>

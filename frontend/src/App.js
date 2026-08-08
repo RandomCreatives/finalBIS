@@ -7,6 +7,7 @@ import RequireAuth from './auth/RequireAuth';
 import AppLayout from './components/AppLayout';
 
 import Landing from './pages/Landing';
+import DataCenter from './pages/DataCenter';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -78,6 +79,7 @@ export default function App() {
                         </Route>
 
                         <Route path="/" element={<Landing />} />
+                        <Route path="/data-center" element={<DataCenter />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </AuthProvider>
