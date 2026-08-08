@@ -186,3 +186,15 @@ export const noticeApi = {
     update: (id, payload) => client.patch(`/notices/${id}`, payload).then((r) => r.data.notice),
     remove: (id) => client.delete(`/notices/${id}`).then((r) => r.data),
 };
+
+export const storeApi = {
+    list: (params) => client.get('/store/requests', { params }).then((r) => r.data.requests),
+    get: (id) => client.get(`/store/requests/${id}`).then((r) => r.data.request),
+    create: (payload) => client.post('/store/requests', payload).then((r) => r.data.request),
+    update: (id, payload) => client.patch(`/store/requests/${id}`, payload).then((r) => r.data.request),
+    cancel: (id) => client.delete(`/store/requests/${id}`).then((r) => r.data),
+    storeReview: (id, decision, note) =>
+        client.post(`/store/requests/${id}/store-review`, { decision, note }).then((r) => r.data.request),
+    adminReview: (id, decision, note) =>
+        client.post(`/store/requests/${id}/admin-review`, { decision, note }).then((r) => r.data.request),
+};

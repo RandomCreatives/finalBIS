@@ -59,7 +59,7 @@ const floatingButtons = [
     { label: 'Admin', icon: AdminPanelSettingsIcon, href: '/login' },
     { label: 'Teachers', icon: SchoolIcon, href: '/login' },
     { label: 'Clinic', icon: LocalHospitalIcon, href: '/login' },
-    { label: 'Store', icon: StorefrontIcon, href: '/login' },
+    { label: 'Store Manager', icon: StorefrontIcon, href: '/login', accent: true },
     { label: 'Library', icon: LocalLibraryIcon, href: '/login' },
 ];
 
@@ -207,6 +207,7 @@ export default function Landing() {
                         key={btn.label}
                         component={RouterLink}
                         to={btn.href}
+                        sx={btn.accent ? { border: '1px solid', borderColor: 'primary.main' } : undefined}
                     >
                         <Icon sx={{ fontSize: 18, opacity: 0.8 }} />
                         {btn.label}

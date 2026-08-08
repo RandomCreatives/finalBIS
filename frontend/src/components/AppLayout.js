@@ -22,6 +22,7 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
     { label: 'Calendar', to: '/app/calendar', icon: <EventNoteIcon /> },
     { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon /> },
     { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon /> },
+    { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
     { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon /> },
     { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
     { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
@@ -55,6 +57,7 @@ const ROLE_LABELS = {
     main_teacher: 'Main Teacher',
     assistant_teacher: 'Assistant Teacher',
     subject_teacher: 'Subject Teacher',
+    store_manager: 'Store Manager',
 };
 
 export default function AppLayout() {

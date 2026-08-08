@@ -18,6 +18,7 @@ const ROLES = [
     { value: 'main_teacher', label: 'Main Teacher' },
     { value: 'assistant_teacher', label: 'Assistant Teacher' },
     { value: 'subject_teacher', label: 'Subject Teacher' },
+    { value: 'store_manager', label: 'Store Manager' },
 ];
 
 const EMPTY = { name: '', email: '', password: '', role: 'main_teacher' };

@@ -1,4 +1,4 @@
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, Navigate } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem,
     ListItemText, Stack, Typography,
@@ -496,7 +496,11 @@ export default function Dashboard() {
                 subtitle={termLine || (isAdmin ? 'School overview.' : 'Your classes, schedule and work for today.')}
             />
             <DataFlowCommandCenter />
-            {isAdmin ? <AdminDashboard /> : <TeacherDashboard />}
+            {isAdmin ? <AdminDashboard /> : user?.role === 'store_manager' ? (
+                <Navigate to="/app/store" replace />
+            ) : (
+                <TeacherDashboard />
+            )}
         </>
     );
 }
