@@ -44,6 +44,13 @@ export function AuthProvider({ children }) {
         return profile;
     }, []);
 
+    const googleLogin = useCallback(async (email) => {
+        const { token, user: profile } = await authApi.googleLogin(email);
+        setToken(token);
+        setUser(profile);
+        return profile;
+    }, []);
+
     const logout = useCallback(() => {
         clearToken();
         setUser(null);
@@ -60,10 +67,11 @@ export function AuthProvider({ children }) {
             login,
             logout,
             updateUser,
+            googleLogin,
             isAdmin: user?.role === 'admin',
             isAuthenticated: Boolean(user),
         }),
-        [user, loading, login, logout, updateUser]
+        [user, loading, login, logout, updateUser, googleLogin]
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

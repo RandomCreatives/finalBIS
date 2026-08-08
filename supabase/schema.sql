@@ -128,18 +128,21 @@ $$;
 -- users — every human who can log in
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    school_id     UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
-    name          TEXT NOT NULL,
-    email         CITEXT NOT NULL UNIQUE,
-    phone         TEXT,
-    password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK (role IN (
-                      'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher')),
-    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
-    last_login_at TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id          UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    name               TEXT NOT NULL,
+    email              CITEXT NOT NULL UNIQUE,
+    phone              TEXT,
+    password_hash      TEXT NOT NULL,
+    role               TEXT NOT NULL CHECK (role IN (
+                       'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher')),
+    is_active          BOOLEAN NOT NULL DEFAULT TRUE,
+    is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+    pending_email      TEXT,
+    verification_code  TEXT,
+    last_login_at      TIMESTAMPTZ,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id, role);

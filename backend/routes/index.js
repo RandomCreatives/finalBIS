@@ -62,6 +62,29 @@ router.patch(
     auth.updateProfile
 );
 
+router.post(
+    '/auth/send-verification-code',
+    authenticate,
+    body('email').isEmail().normalizeEmail().withMessage('A valid Gmail is required'),
+    validate,
+    auth.sendVerificationCode
+);
+
+router.post(
+    '/auth/verify-code',
+    authenticate,
+    body('code').isString().notEmpty().withMessage('Verification code is required'),
+    validate,
+    auth.verifyCode
+);
+
+router.post(
+    '/auth/google-login',
+    body('email').isEmail().normalizeEmail().withMessage('A valid Gmail is required'),
+    validate,
+    auth.googleLogin
+);
+
 // =============================================================================
 // STAFF ACCOUNTS  (admin only)
 // =============================================================================
