@@ -24,6 +24,7 @@ const threads = require('../controllers/thread.controller');
 const tasks = require('../controllers/task.controller');
 const dashboard = require('../controllers/dashboard.controller');
 const datacenter = require('../controllers/datacenter.controller');
+const store = require('../controllers/store.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
 
@@ -66,7 +67,7 @@ router.post(
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().normalizeEmail().withMessage('A valid email is required'),
     body('password').isLength({ min: 10 }).withMessage('Password must be at least 10 characters'),
-    body('role').isIn([ROLES.ADMIN, ...TEACHER_ROLES]).withMessage('Invalid role'),
+    body('role').isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER]).withMessage('Invalid role'),
     validate,
     users.createUser
 );
@@ -76,7 +77,7 @@ router.patch(
     authenticate,
     authorize(ROLES.ADMIN),
     uuid('id'),
-    body('role').optional().isIn([ROLES.ADMIN, ...TEACHER_ROLES]),
+    body('role').optional().isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER]),
     body('isActive').optional().isBoolean(),
     validate,
     users.updateUser
@@ -559,6 +560,69 @@ router.patch(
 );
 
 router.delete('/timetable/:id', authenticate, authorize(ROLES.ADMIN), uuid('id'), validate, timetable.deleteSlot);
+
+// =============================================================================
+// STORE REQUESTS — class resource requisitions
+//
+// Teachers request items for their class; the store manager reviews first,
+// then the admin gives the final approval. The approved form is printed and
+// kept in the school's records.
+// =============================================================================
+router.get('/store/requests', authenticate, store.listRequests);
+router.get('/store/requests/:id', authenticate, uuid('id'), validate, store.getRequest);
+
+router.post(
+    '/store/requests',
+    authenticate,
+    authorize(...STAFF, ROLES.STORE_MANAGER),
+    body('classId').optional({ nullable: true }).isUUID(),
+    body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
+    body('items.*.item').trim().notEmpty().withMessage('Every item needs a name'),
+    body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be a positive number'),
+    body('purpose').optional().trim(),
+    validate,
+    store.createRequest
+);
+
+router.patch(
+    '/store/requests/:id',
+    authenticate,
+    uuid('id'),
+    body('classId').optional({ nullable: true }).isUUID(),
+    body('items').optional().isArray({ min: 1 }),
+    body('items.*.item').optional().trim().notEmpty(),
+    body('items.*.quantity').optional().isInt({ min: 1 }),
+    body('purpose').optional().trim(),
+    validate,
+    store.updateRequest
+);
+
+router.delete('/store/requests/:id', authenticate, uuid('id'), validate, store.cancelRequest);
+
+// Stage one — store manager (admin may stand in while there is no store account).
+router.post(
+    '/store/requests/:id/store-review',
+    authenticate,
+    authorize(ROLES.STORE_MANAGER, ROLES.ADMIN),
+    uuid('id'),
+    body('decision').isIn(['approved', 'rejected']).withMessage('Decision must be approved or rejected'),
+    body('note').optional().trim(),
+    validate,
+    store.storeReview
+);
+
+// Stage two — admin only.
+router.post(
+    '/store/requests/:id/admin-review',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    uuid('id'),
+    body('decision').isIn(['approved', 'rejected']).withMessage('Decision must be approved or rejected'),
+    body('note').optional().trim(),
+    validate,
+    store.adminReview
+);
+
 
 // =============================================================================
 // NOTICES

@@ -23,6 +23,7 @@ import Assignments from './pages/Assignments';
 import Timetable from './pages/Timetable';
 import Calendar from './pages/Calendar';
 import Planning from './pages/Planning';
+import Store from './pages/Store';
 
 export default function App() {
     return (
@@ -52,6 +53,7 @@ export default function App() {
                             <Route path="timetable" element={<Timetable />} />
                             <Route path="calendar" element={<Calendar />} />
                             <Route path="planning" element={<Planning />} />
+                            <Route path="store" element={<Store />} />
                             <Route path="library" element={<Library />} />
                             <Route path="clinic" element={<Clinic />} />
                             <Route path="notices" element={<Notices />} />

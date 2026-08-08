@@ -134,8 +134,8 @@ CREATE TABLE IF NOT EXISTS users (
     email         CITEXT NOT NULL UNIQUE,
     phone         TEXT,
     password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK (role IN (
-                      'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher')),
+    role          TEXT NOT NULL CONSTRAINT users_role_check CHECK (role IN (
+                      'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager')),
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     last_login_at TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -143,6 +143,17 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id, role);
+
+-- Existing databases created before the store_manager role existed still carry
+-- the old four-role CHECK. Widen it in place so a fresh schema.sql run (which
+-- defines the new constraint inline above) and an upgrade both converge.
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+        ALTER TABLE users DROP CONSTRAINT users_role_check;
+    END IF;
+    ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK (role IN ('admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager'));
+END $$;
 
 
 -- ---------------------------------------------------------------------------
@@ -336,6 +347,51 @@ DROP TRIGGER IF EXISTS trg_cascade_teacher ON class_subjects;
 CREATE TRIGGER trg_cascade_teacher
     AFTER UPDATE OF teacher_id ON class_subjects
     FOR EACH ROW EXECUTE FUNCTION cascade_teacher_to_timetable();
+
+
+-- ---------------------------------------------------------------------------
+-- store_requests — class resource requisitions
+--
+-- Teachers request classroom items (books, markers, pens, pencils, ...) for
+-- their class. The flow is two-stage: a store manager reviews the request
+-- first, then the admin gives the final approval. `items` is a JSONB array of
+-- { item, quantity, note } so the form stays simple and the printed
+-- requisition mirrors what was typed.
+--
+-- Statuses:
+--   pending        submitted, waiting for the store manager
+--   store_approved store manager approved, waiting for the admin
+--   approved       admin gave the final approval (printable record)
+--   rejected       turned down at either stage (note recorded)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS store_requests (
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id         UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    academic_year_id  UUID REFERENCES academic_years(id) ON DELETE SET NULL,
+    request_number    TEXT NOT NULL,
+    requester_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    class_id          UUID REFERENCES classes(id) ON DELETE SET NULL,
+    items             JSONB NOT NULL DEFAULT '[]'::jsonb,
+    purpose           TEXT,
+    status            TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending', 'store_approved', 'approved', 'rejected')),
+    store_reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    store_reviewed_at TIMESTAMPTZ,
+    store_review_note TEXT,
+    admin_reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    admin_reviewed_at TIMESTAMPTZ,
+    admin_review_note TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (school_id, request_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_store_requests_school
+    ON store_requests(school_id, status);
+CREATE INDEX IF NOT EXISTS idx_store_requests_requester
+    ON store_requests(requester_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_store_requests_class
+    ON store_requests(class_id);
 
 
 -- ---------------------------------------------------------------------------
