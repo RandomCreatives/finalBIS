@@ -21,7 +21,7 @@ const verifyTelegramLogin = (data, botToken) => {
     if (!botToken) return null;
 
     const hash = data.hash;
-    if (!hash || typeof data.auth_date !== 'string' && typeof data.auth_date !== 'number') {
+    if (!hash || (typeof data.auth_date !== 'string' && typeof data.auth_date !== 'number')) {
         return null;
     }
 

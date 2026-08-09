@@ -173,6 +173,39 @@ by `GET /api/dashboard/data-flow`:
 
 ---
 
+## Telegram sign-in
+
+Staff can sign in with Telegram instead of a password, via the official **Telegram
+Login Widget**. A staff member's Telegram account is linked to their BIS NOC login, and
+from then on one tap on the Telegram button signs them in — the widget payload is
+HMAC-signed by the school bot, so it cannot be forged.
+
+**Linking is self-service.** A staff member signs in with their password, opens
+**Settings → Telegram Sign-in**, and taps the Telegram button; the verified account is
+attached to them automatically. Admins keep a fallback on the **Staff** page (the link
+icon) that shows the bot link to share and still accepts a numeric user id directly.
+
+To enable it:
+
+1. **Create the bot** — talk to [@BotFather](https://t.me/BotFather), run `/newbot`, and
+   copy the token into the backend's `TELEGRAM_BOT_TOKEN`. Put the bot's username (no
+   leading `@`) in `TELEGRAM_BOT_USERNAME`.
+2. **Register your domain** — in BotFather run `/setdomain`, pick the bot, and enter the
+   exact domain that serves the site. The widget only renders on an HTTPS domain
+   registered this way, so it will not appear on `localhost`.
+3. **Done.** The login page and the Settings card read the bot username from
+   `GET /api/auth/telegram-config`, so no frontend rebuild is needed once the backend
+   env is set.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/auth/telegram-config` | Public. Reports whether the widget is enabled + the bot username |
+| `POST /api/auth/telegram` | Sign in with a verified widget payload |
+| `POST /api/auth/link-telegram` | Authenticated. Link the verified account to *my* login |
+| `DELETE /api/auth/link-telegram` | Authenticated. Unlink *my* Telegram account |
+
+---
+
 ## Getting started
 
 You need Node 18+ and a Supabase project.
@@ -264,19 +297,20 @@ missing staff.
 
 ```sh
 cd backend
-npm test          # everything (174 tests)
+npm test          # everything (188 tests)
 npm run test:api  # API layer only
 npm run test:db   # database layer only
 ```
 
 Two layers, both offline — no Supabase project, no Docker, no external server.
 
-**API tests (130)** run the Express app against a stubbed Supabase client: authentication,
+**API tests (144)** run the Express app against a stubbed Supabase client: authentication,
 token handling, role authorisation on every protected route, input validation, password
 hashing, teaching assignments, timetable visibility per role, teacher rotation, student
 placement, scheme and lesson-plan ownership, the submit/review workflow, calendar
-audience targeting, thread privacy, task permissions, notice targeting and the dashboard
-data-flow rollups.
+audience targeting, thread privacy, task permissions, notice targeting, the dashboard
+data-flow rollups, and Telegram widget sign-in with self-service account linking
+(signature verification, replay rejection, duplicate-link conflicts).
 
 **Database tests (44)** apply `schema.sql` and `functions.sql` to a **real PostgreSQL 18
 engine** (PGlite, Postgres compiled to WebAssembly) and exercise what a stub cannot:
@@ -338,3 +372,7 @@ environment with GitHub workflow permissions to run it on pull requests and push
 Both halves deploy to Vercel from their own directory. Set the environment variables in
 the dashboard — `CORS_ORIGINS` on the backend must include the deployed frontend URL,
 and `REACT_APP_API_URL` on the frontend must point at the deployed backend.
+
+For **Telegram sign-in** in production, also set `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_BOT_USERNAME` on the backend and register the deployed domain with
+`@BotFather → /setdomain` — the widget only renders on that exact HTTPS domain.

@@ -19,6 +19,10 @@ export const authApi = {
         client.post('/auth/gmail/verify', { email, code }).then((r) => r.data),
     telegramLogin: (payload) =>
         client.post('/auth/telegram', payload).then((r) => r.data),
+    telegramConfig: () => client.get('/auth/telegram-config').then((r) => r.data),
+    linkTelegram: (payload) =>
+        client.post('/auth/link-telegram', payload).then((r) => r.data),
+    unlinkTelegram: () => client.delete('/auth/link-telegram').then((r) => r.data),
 };
 
 export const dashboardApi = {

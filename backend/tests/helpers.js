@@ -11,6 +11,7 @@ process.env.JWT_SECRET = 'test-secret-that-is-long-enough-to-pass-validation';
 process.env.NODE_ENV = 'test';
 process.env.CORS_ORIGINS = 'http://localhost:3000';
 process.env.TELEGRAM_BOT_TOKEN = '123456:TESTBOTTOKEN';
+process.env.TELEGRAM_BOT_USERNAME = 'bis_noc_test_bot';
 
 const Module = require('module');
 const path = require('path');

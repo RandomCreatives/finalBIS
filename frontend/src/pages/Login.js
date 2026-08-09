@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, CircularProgress,
@@ -6,52 +6,7 @@ import {
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import { useAuth } from '../auth/AuthContext';
-
-const TELEGRAM_BOT_USERNAME = process.env.REACT_APP_TELEGRAM_BOT_USERNAME || '';
-
-/**
- * Renders the official Telegram Login Widget. The widget injects an iframe
- * button; the script tag carries the bot username and the name of the global
- * callback the widget calls with the signed identity when the user authorizes.
- */
-function TelegramLoginWidget({ onAuth }) {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (!TELEGRAM_BOT_USERNAME || !containerRef.current) return undefined;
-
-        const container = containerRef.current;
-        const script = document.createElement('script');
-        script.async = true;
-        script.src = 'https://telegram.org/js/telegram-widget.js?22';
-        script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
-        script.setAttribute('data-size', 'large');
-        script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-        script.setAttribute('data-request-access', 'write');
-
-        window.onTelegramAuth = (user) => onAuth(user);
-
-        container.appendChild(script);
-
-        return () => {
-            container.innerHTML = '';
-            delete window.onTelegramAuth;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    if (!TELEGRAM_BOT_USERNAME) {
-        return (
-            <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center' }}>
-                Telegram login is not configured. Set REACT_APP_TELEGRAM_BOT_USERNAME to enable it.
-            </Typography>
-        );
-    }
-
-    return (
-        <Box ref={containerRef} sx={{ display: 'flex', justifyContent: 'center' }} />
-    );
-}
+import TelegramLoginButton from '../components/TelegramLoginButton';
 
 /**
  * The single sign-in screen for all staff.
@@ -190,7 +145,7 @@ export default function Login() {
                                     <CircularProgress size={24} />
                                 </Stack>
                             ) : (
-                                <TelegramLoginWidget onAuth={handleTelegramAuth} />
+                                <TelegramLoginButton onAuth={handleTelegramAuth} />
                             )}
                         </Stack>
                     </Box>

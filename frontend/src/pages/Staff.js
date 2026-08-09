@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-    MenuItem, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
+    Link, MenuItem, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -15,6 +15,7 @@ import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
+import { fetchTelegramConfig, botChatUrl } from '../auth/telegram';
 
 const ROLES = [
     { value: 'admin', label: 'Administrator' },
@@ -37,6 +38,17 @@ export default function Staff() {
     const [telegramId, setTelegramId] = useState('');
     const [telegramSaving, setTelegramSaving] = useState(false);
     const [telegramError, setTelegramError] = useState('');
+    const [tgConfig, setTgConfig] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchTelegramConfig().then((cfg) => {
+            if (!cancelled) setTgConfig(cfg);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const staff = useApi(() => userApi.list(), []);
 
@@ -273,19 +285,27 @@ export default function Staff() {
                 <DialogTitle>Link Telegram account</DialogTitle>
                 <DialogContent>
                     {telegramError && <Alert severity="error" sx={{ mb: 2 }}>{telegramError}</Alert>}
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Ask {telegramDialog?.name} to start a chat with your school bot in Telegram, then enter their
-                        numeric user id here. They will then be able to sign in with the Telegram button.
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Easiest way: {telegramDialog?.name} signs in with their password, opens
+                        <strong> Settings → Telegram Sign-in</strong> and taps the Telegram button there —
+                        it links their account automatically.
                     </Typography>
+                    {tgConfig?.enabled && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Share the school bot with them:{' '}
+                            <Link href={botChatUrl(tgConfig.botUsername)} target="_blank" rel="noopener noreferrer">
+                                {botChatUrl(tgConfig.botUsername)}
+                            </Link>
+                        </Typography>
+                    )}
                     <TextField
-                        label="Telegram user id"
-                        required
+                        label="Or enter their numeric Telegram user id"
                         fullWidth
                         autoFocus
                         value={telegramId}
                         onChange={(e) => setTelegramId(e.target.value)}
                         placeholder="e.g. 123456789"
-                        helperText="Leave blank and save to unlink."
+                        helperText="Manual override — leave blank and save to unlink."
                     />
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>

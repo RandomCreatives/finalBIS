@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const request = require('./request');
 const app = require('../app');
+const { signToken } = require('../middleware/auth');
 
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
 const ADMIN = 'd4f1a2b8-7c63-4e59-9f21-3a8e6b0d5c74';
@@ -255,5 +256,155 @@ describe('POST /api/auth/telegram', () => {
 
         assert.equal(res.status, 401);
         assert.match(res.body.message, /deactivated/i);
+    });
+
+    test('captures the Telegram username at sign-in when missing', async () => {
+        const { rowsOf } = require('./helpers');
+        rowsOf('users')[0].telegram_username = null;
+
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(signedTelegramPayload());
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.user.telegramUsername, 'test_staff');
+    });
+});
+
+describe('GET /api/auth/telegram-config', () => {
+    test('exposes the bot username so the login page can render the widget', async () => {
+        const res = await request(app).get('/api/auth/telegram-config');
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.enabled, true);
+        assert.equal(res.body.botUsername, 'bis_noc_test_bot');
+    });
+});
+
+describe('POST /api/auth/link-telegram (self-service linking)', () => {
+    const TEACHER = '5be2c1a4-9f0d-4c1b-8a6e-2d3f4a5b6c7d';
+
+    beforeEach(() => {
+        reset({
+            users: [
+                {
+                    id: ADMIN,
+                    school_id: SCHOOL,
+                    name: 'Test Admin',
+                    email: 'admin@school.et',
+                    password_hash: 'x',
+                    role: 'admin',
+                    is_active: true,
+                    telegram_id: null,
+                    telegram_username: null,
+                },
+                {
+                    id: TEACHER,
+                    school_id: SCHOOL,
+                    name: 'Test Teacher',
+                    email: 'teacher@school.et',
+                    password_hash: 'x',
+                    role: 'main_teacher',
+                    is_active: true,
+                    telegram_id: null,
+                    telegram_username: null,
+                },
+            ],
+        });
+    });
+
+    const teacherToken = () => signToken({ id: TEACHER, role: 'main_teacher' });
+
+    test('links a verified Telegram account to the signed-in user', async () => {
+        const res = await request(app)
+            .post('/api/auth/link-telegram')
+            .auth(teacherToken())
+            .send(signedTelegramPayload());
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.user.id, TEACHER);
+        assert.equal(res.body.user.telegramId, 987654321);
+        assert.equal(res.body.user.telegramUsername, 'test_staff');
+
+        // And the account can now actually sign in with Telegram.
+        const login = await request(app)
+            .post('/api/auth/telegram')
+            .send(signedTelegramPayload());
+
+        assert.equal(login.status, 200);
+        assert.equal(login.body.user.id, TEACHER);
+    });
+
+    test('rejects a forged payload', async () => {
+        const payload = signedTelegramPayload();
+        payload.id = 555;
+
+        const res = await request(app)
+            .post('/api/auth/link-telegram')
+            .auth(teacherToken())
+            .send(payload);
+
+        assert.equal(res.status, 401);
+    });
+
+    test('rejects a Telegram account already linked to someone else', async () => {
+        const { rowsOf } = require('./helpers');
+        rowsOf('users')[0].telegram_id = 987654321;
+
+        const res = await request(app)
+            .post('/api/auth/link-telegram')
+            .auth(teacherToken())
+            .send(signedTelegramPayload());
+
+        assert.equal(res.status, 409);
+        assert.match(res.body.message, /already linked/i);
+    });
+
+    test('requires authentication', async () => {
+        const res = await request(app)
+            .post('/api/auth/link-telegram')
+            .send(signedTelegramPayload());
+
+        assert.equal(res.status, 401);
+    });
+});
+
+describe('DELETE /api/auth/link-telegram', () => {
+    beforeEach(() => {
+        reset({
+            users: [
+                {
+                    id: ADMIN,
+                    school_id: SCHOOL,
+                    name: 'Test Admin',
+                    email: 'admin@school.et',
+                    password_hash: 'x',
+                    role: 'admin',
+                    is_active: true,
+                    telegram_id: 987654321,
+                    telegram_username: 'test_staff',
+                },
+            ],
+        });
+    });
+
+    test('unlinks the signed-in user and revokes Telegram sign-in', async () => {
+        const token = signToken({ id: ADMIN, role: 'admin' });
+
+        const res = await request(app).delete('/api/auth/link-telegram').auth(token);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.user.telegramId, null);
+
+        const login = await request(app)
+            .post('/api/auth/telegram')
+            .send(signedTelegramPayload());
+
+        assert.equal(login.status, 401);
+    });
+
+    test('requires authentication', async () => {
+        const res = await request(app).delete('/api/auth/link-telegram');
+        assert.equal(res.status, 401);
     });
 });

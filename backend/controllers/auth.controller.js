@@ -337,12 +337,93 @@ const telegramLogin = asyncHandler(async (req, res) => {
         throw new UnauthorizedError('Account has been deactivated');
     }
 
+    // Keep the stored username fresh — Telegram lets people change it, and
+    // accounts linked by numeric id alone may not have had one yet.
+    const loginPatch = { last_login_at: new Date().toISOString() };
+    if (identity.username) loginPatch.telegram_username = identity.username;
+
     await supabase
         .from('users')
-        .update({ last_login_at: new Date().toISOString() })
+        .update(loginPatch)
         .eq('id', user.id);
 
     res.json({ token: signToken(user), user: publicUser(user) });
+});
+
+/**
+ * GET /api/auth/telegram-config
+ *
+ * Public (no session needed — it is read on the login page). Exposes only
+ * the bot's public username, which is visible to everyone on Telegram
+ * anyway. This makes the backend env the single source of truth: the login
+ * widget and the Settings linking card no longer depend on a build-time
+ * REACT_APP_* variable.
+ */
+const telegramConfig = asyncHandler(async (req, res) => {
+    const enabled = Boolean(env.telegram.botUsername && env.telegram.botToken);
+    res.json({
+        enabled,
+        botUsername: enabled ? env.telegram.botUsername : null,
+    });
+});
+
+/**
+ * POST /api/auth/link-telegram
+ *
+ * Self-service linking. The staff member is already signed in (password or
+ * Gmail code); they click the Telegram Login Widget in Settings and we
+ * attach the verified Telegram identity to THEIR account. The signature is
+ * verified exactly like at sign-in, so a payload cannot be forged, and the
+ * unique index guarantees one Telegram account maps to one staff login.
+ */
+const linkTelegram = asyncHandler(async (req, res) => {
+    const identity = verifyTelegramLogin(req.body, env.telegram.botToken);
+
+    if (!identity) {
+        throw new UnauthorizedError('Telegram login could not be verified. Please try again');
+    }
+
+    const { data: existing, error: lookupError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('telegram_id', identity.telegramId)
+        .neq('id', req.user.id)
+        .maybeSingle();
+
+    if (lookupError) throw lookupError;
+    if (existing) {
+        throw new ConflictError('That Telegram account is already linked to another staff member');
+    }
+
+    const { data, error } = await supabase
+        .from('users')
+        .update({ telegram_id: identity.telegramId, telegram_username: identity.username })
+        .eq('id', req.user.id)
+        .select()
+        .single();
+
+    if (error) {
+        if (error.code === '23505') {
+            throw new ConflictError('That Telegram account is already linked to another staff member');
+        }
+        throw error;
+    }
+
+    res.json({ user: publicUser(data), message: 'Telegram account linked. You can now sign in with Telegram.' });
+});
+
+/** DELETE /api/auth/link-telegram — remove Telegram sign-in from my account. */
+const unlinkTelegram = asyncHandler(async (req, res) => {
+    const { data, error } = await supabase
+        .from('users')
+        .update({ telegram_id: null, telegram_username: null })
+        .eq('id', req.user.id)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    res.json({ user: publicUser(data), message: 'Telegram account unlinked' });
 });
 
 module.exports = {
@@ -355,6 +436,9 @@ module.exports = {
     gmailRequestCode,
     gmailVerifyCode,
     telegramLogin,
+    telegramConfig,
+    linkTelegram,
+    unlinkTelegram,
     publicUser,
     BCRYPT_ROUNDS,
 };
