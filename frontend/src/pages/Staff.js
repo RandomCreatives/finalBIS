@@ -7,6 +7,9 @@ import {
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import SendIcon from '@mui/icons-material/Send';
+import LinkIcon from '@mui/icons-material/Link';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { userApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -29,6 +32,11 @@ export default function Staff() {
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
+
+    const [telegramDialog, setTelegramDialog] = useState(null);
+    const [telegramId, setTelegramId] = useState('');
+    const [telegramSaving, setTelegramSaving] = useState(false);
+    const [telegramError, setTelegramError] = useState('');
 
     const staff = useApi(() => userApi.list(), []);
 
@@ -79,6 +87,37 @@ export default function Staff() {
         }
     };
 
+    const openTelegramLink = (member) => {
+        setTelegramError('');
+        setTelegramId(member.telegramId ? String(member.telegramId) : '');
+        setTelegramDialog(member);
+    };
+
+    const saveTelegramLink = async () => {
+        setTelegramSaving(true);
+        setTelegramError('');
+        try {
+            await userApi.update(telegramDialog.id, { telegramId: telegramId.trim() || null });
+            setToast('Telegram account linked');
+            setTelegramDialog(null);
+            staff.reload();
+        } catch (err) {
+            setTelegramError(err.message);
+        } finally {
+            setTelegramSaving(false);
+        }
+    };
+
+    const unlinkTelegram = async (member) => {
+        try {
+            await userApi.update(member.id, { telegramId: null });
+            setToast('Telegram account unlinked');
+            staff.reload();
+        } catch (err) {
+            setToast(err.message);
+        }
+    };
+
     const rows = staff.data || [];
 
     return (
@@ -110,6 +149,7 @@ export default function Staff() {
                                 <TableCell>Email</TableCell>
                                 <TableCell>Role</TableCell>
                                 <TableCell>Status</TableCell>
+                                <TableCell>Telegram</TableCell>
                                 <TableCell>Last sign-in</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
@@ -146,11 +186,38 @@ export default function Staff() {
                                             />
                                         </TableCell>
                                         <TableCell>
+                                            {m.telegramId ? (
+                                                <Chip
+                                                    size="small"
+                                                    icon={<SendIcon fontSize="small" />}
+                                                    label={m.telegramUsername ? `@${m.telegramUsername}` : `#${m.telegramId}`}
+                                                    color="info"
+                                                    variant="outlined"
+                                                />
+                                            ) : (
+                                                <Typography variant="caption" color="text.secondary">Not linked</Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
                                             {m.lastLoginAt
                                                 ? new Date(m.lastLoginAt).toLocaleDateString()
                                                 : <Typography variant="caption" color="text.secondary">never</Typography>}
                                         </TableCell>
                                         <TableCell align="right">
+                                            <Tooltip title={m.telegramId ? 'Change Telegram link' : 'Link Telegram account'}>
+                                                <IconButton size="small" onClick={() => openTelegramLink(m)}>
+                                                    {m.telegramId
+                                                        ? <LinkIcon fontSize="small" color="primary" />
+                                                        : <LinkIcon fontSize="small" />}
+                                                </IconButton>
+                                            </Tooltip>
+                                            {m.telegramId && (
+                                                <Tooltip title="Unlink Telegram">
+                                                    <IconButton size="small" onClick={() => unlinkTelegram(m)}>
+                                                        <LinkOffIcon fontSize="small" color="error" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
                                             {!isSelf && (
                                                 <Tooltip title={m.isActive ? 'Deactivate' : 'Reactivate'}>
                                                     <IconButton size="small" onClick={() => toggleActive(m)}>
@@ -198,6 +265,37 @@ export default function Staff() {
                         disabled={saving || !dialog?.name?.trim() || !dialog?.email?.trim() || (dialog?.password || '').length < 10}
                     >
                         Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={Boolean(telegramDialog)} onClose={() => setTelegramDialog(null)} maxWidth="xs" fullWidth>
+                <DialogTitle>Link Telegram account</DialogTitle>
+                <DialogContent>
+                    {telegramError && <Alert severity="error" sx={{ mb: 2 }}>{telegramError}</Alert>}
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Ask {telegramDialog?.name} to start a chat with your school bot in Telegram, then enter their
+                        numeric user id here. They will then be able to sign in with the Telegram button.
+                    </Typography>
+                    <TextField
+                        label="Telegram user id"
+                        required
+                        fullWidth
+                        autoFocus
+                        value={telegramId}
+                        onChange={(e) => setTelegramId(e.target.value)}
+                        placeholder="e.g. 123456789"
+                        helperText="Leave blank and save to unlink."
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setTelegramDialog(null)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={saveTelegramLink}
+                        disabled={telegramSaving}
+                    >
+                        {telegramSaving ? 'Saving…' : 'Save'}
                     </Button>
                 </DialogActions>
             </Dialog>

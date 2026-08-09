@@ -17,6 +17,8 @@ export const authApi = {
         client.post('/auth/gmail/request', { email }).then((r) => r.data),
     gmailVerify: (email, code) =>
         client.post('/auth/gmail/verify', { email, code }).then((r) => r.data),
+    telegramLogin: (payload) =>
+        client.post('/auth/telegram', payload).then((r) => r.data),
 };
 
 export const dashboardApi = {

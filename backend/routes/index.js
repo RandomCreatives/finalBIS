@@ -98,6 +98,17 @@ router.post(
     auth.gmailVerifyCode
 );
 
+// Telegram Login Widget sign-in. The widget payload carries an HMAC signed by
+// our bot token; the controller verifies it, so an unlinked/forged payload is
+// rejected. Rate-limited like the other sign-in paths.
+router.post(
+    '/auth/telegram',
+    authLimiter,
+    body('hash').isString().notEmpty().withMessage('Telegram login data is missing'),
+    validate,
+    auth.telegramLogin
+);
+
 // =============================================================================
 // STAFF ACCOUNTS  (admin only)
 // =============================================================================

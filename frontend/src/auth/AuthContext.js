@@ -51,6 +51,13 @@ export function AuthProvider({ children }) {
         return profile;
     }, []);
 
+    const telegramLogin = useCallback(async (payload) => {
+        const { token, user: profile } = await authApi.telegramLogin(payload);
+        setToken(token);
+        setUser(profile);
+        return profile;
+    }, []);
+
     const logout = useCallback(() => {
         clearToken();
         setUser(null);
@@ -68,10 +75,11 @@ export function AuthProvider({ children }) {
             logout,
             updateUser,
             gmailLogin,
+            telegramLogin,
             isAdmin: user?.role === 'admin',
             isAuthenticated: Boolean(user),
         }),
-        [user, loading, login, logout, updateUser, gmailLogin]
+        [user, loading, login, logout, updateUser, gmailLogin, telegramLogin]
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

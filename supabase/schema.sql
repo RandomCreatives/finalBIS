@@ -143,12 +143,16 @@ CREATE TABLE IF NOT EXISTS users (
     verification_code_expires_at TIMESTAMPTZ,
     login_code         TEXT,
     login_code_expires_at TIMESTAMPTZ,
+    telegram_id        BIGINT,
+    telegram_username  TEXT,
     last_login_at      TIMESTAMPTZ,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id, role);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)
+    WHERE telegram_id IS NOT NULL;
 
 -- Existing databases created before the store_manager role existed still carry
 -- the old four-role CHECK. Widen it in place so a fresh schema.sql run (which

@@ -50,7 +50,14 @@ const env = {
         secure: process.env.SMTP_SECURE === 'true',
         user: process.env.SMTP_USER || '',
         pass: process.env.SMTP_PASS || '',
-        from: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@bisnoc.school.et',
+        from: process.env.SMTP_FROM || '',
+    },
+
+    // Telegram Login Widget bot. The token is used to verify the widget's
+    // HMAC signature and, later, to send staff notifications.
+    telegram: {
+        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+        botUsername: process.env.TELEGRAM_BOT_USERNAME || '',
     },
 };
 

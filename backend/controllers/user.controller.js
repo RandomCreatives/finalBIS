@@ -15,7 +15,7 @@ const listUsers = asyncHandler(async (req, res) => {
 
     let query = supabase
         .from('users')
-        .select('id, name, email, role, is_active, last_login_at, school_id')
+        .select('id, name, email, role, is_active, last_login_at, school_id, telegram_id, telegram_username')
         .eq('school_id', req.user.school_id)
         .order('name');
 
@@ -55,12 +55,26 @@ const createUser = asyncHandler(async (req, res) => {
 
 /** PATCH /api/users/:id */
 const updateUser = asyncHandler(async (req, res) => {
-    const { name, role, isActive } = req.body;
+    const { name, role, isActive, telegramId } = req.body;
 
     const patch = {};
     if (name !== undefined) patch.name = name;
     if (role !== undefined) patch.role = role;
     if (isActive !== undefined) patch.is_active = isActive;
+
+    // Telegram linking: pass null to unlink, a numeric id to link.
+    if (telegramId !== undefined) {
+        if (telegramId === null || telegramId === '') {
+            patch.telegram_id = null;
+            patch.telegram_username = null;
+        } else {
+            const id = Number(telegramId);
+            if (!Number.isInteger(id) || id <= 0) {
+                throw new BadRequestError('Telegram user id must be a positive number');
+            }
+            patch.telegram_id = id;
+        }
+    }
 
     if (Object.keys(patch).length === 0) {
         throw new BadRequestError('No updatable fields supplied');
@@ -79,7 +93,13 @@ const updateUser = asyncHandler(async (req, res) => {
         .select()
         .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+        // Unique violation (23505) — that Telegram account is already linked.
+        if (error.code === '23505') {
+            throw new ConflictError('That Telegram account is already linked to another user');
+        }
+        throw error;
+    }
     if (!data) throw new NotFoundError('User not found');
 
     res.json({ user: publicUser(data) });

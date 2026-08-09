@@ -1,5 +1,6 @@
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 
 const { reset } = require('./helpers');
 const bcrypt = require('bcryptjs');
@@ -9,6 +10,28 @@ const app = require('../app');
 
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
 const ADMIN = 'd4f1a2b8-7c63-4e59-9f21-3a8e6b0d5c74';
+
+/** Build a widget payload signed exactly as the Telegram widget signs it. */
+const signedTelegramPayload = (fields = {}) => {
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+        id: 987654321,
+        first_name: 'Test',
+        last_name: 'Staff',
+        username: 'test_staff',
+        auth_date: now,
+        ...fields,
+    };
+
+    const dataCheckString = Object.keys(payload)
+        .sort()
+        .map((key) => `${key}=${payload[key]}`)
+        .join('\n');
+
+    const secretKey = crypto.createHash('sha256').update(process.env.TELEGRAM_BOT_TOKEN).digest();
+    payload.hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    return payload;
+};
 
 const seedAdmin = async (overrides = {}) => {
     reset({
@@ -146,5 +169,91 @@ describe('authentication middleware', () => {
 
         const res = await request(app).get('/api/auth/me').auth(login.body.token);
         assert.equal(res.status, 401);
+    });
+});
+
+describe('POST /api/auth/telegram', () => {
+    beforeEach(() => {
+        reset({
+            users: [
+                {
+                    id: ADMIN,
+                    school_id: SCHOOL,
+                    name: 'Test Admin',
+                    email: 'admin@school.et',
+                    password_hash: 'x',
+                    role: 'admin',
+                    is_active: true,
+                    telegram_id: 987654321,
+                    telegram_username: 'test_staff',
+                    last_login_at: null,
+                },
+            ],
+        });
+    });
+
+    test('signs in a staff member with a linked Telegram account', async () => {
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(signedTelegramPayload());
+
+        assert.equal(res.status, 200);
+        assert.ok(res.body.token, 'expected a token');
+        assert.equal(res.body.user.id, ADMIN);
+        assert.equal(res.body.user.telegramId, 987654321);
+        assert.equal(res.body.user.telegramUsername, 'test_staff');
+    });
+
+    test('rejects a payload whose signature does not match', async () => {
+        const payload = signedTelegramPayload();
+        payload.first_name = 'Tampered';
+
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(payload);
+
+        assert.equal(res.status, 401);
+    });
+
+    test('rejects a payload missing the hash', async () => {
+        const payload = signedTelegramPayload();
+        delete payload.hash;
+
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(payload);
+
+        assert.equal(res.status, 400);
+    });
+
+    test('rejects an expired auth_date (replay)', async () => {
+        const payload = signedTelegramPayload({ auth_date: Math.floor(Date.now() / 1000) - 3600 });
+
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(payload);
+
+        assert.equal(res.status, 401);
+    });
+
+    test('rejects an unlinked Telegram account', async () => {
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(signedTelegramPayload({ id: 111222333, username: 'stranger' }));
+
+        assert.equal(res.status, 401);
+        assert.match(res.body.message, /not linked/i);
+    });
+
+    test('refuses a linked but deactivated account', async () => {
+        const { rowsOf } = require('./helpers');
+        rowsOf('users')[0].is_active = false;
+
+        const res = await request(app)
+            .post('/api/auth/telegram')
+            .send(signedTelegramPayload());
+
+        assert.equal(res.status, 401);
+        assert.match(res.body.message, /deactivated/i);
     });
 });

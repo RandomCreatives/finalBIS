@@ -4,6 +4,7 @@ const supabase = require('../config/supabase');
 const { signToken } = require('../middleware/auth');
 const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, asyncHandler } = require('../utils/errors');
 const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
+const { verifyTelegramLogin } = require('../utils/telegram');
 
 const BCRYPT_ROUNDS = 12;
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -37,6 +38,8 @@ const publicUser = (u) => ({
     isActive: u.is_active,
     isEmailVerified: u.is_email_verified ?? false,
     lastLoginAt: u.last_login_at ?? null,
+    telegramId: u.telegram_id ?? null,
+    telegramUsername: u.telegram_username ?? null,
 });
 
 /**
@@ -302,6 +305,46 @@ const gmailVerifyCode = asyncHandler(async (req, res) => {
     res.json({ token: signToken(user), user: publicUser(user) });
 });
 
+/**
+ * POST /api/auth/telegram
+ *
+ * Exchange a verified Telegram Login Widget payload for a session. The widget
+ * runs client-side; the signature is checked here against the bot token, so
+ * the identity cannot be forged. The Telegram account must be linked to a
+ * staff account first (admins do that from the Staff page).
+ */
+const telegramLogin = asyncHandler(async (req, res) => {
+    const identity = verifyTelegramLogin(req.body, env.telegram.botToken);
+
+    if (!identity) {
+        throw new UnauthorizedError('Telegram login could not be verified. Please try again');
+    }
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', identity.telegramId)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!user) {
+        throw new UnauthorizedError(
+            'This Telegram account is not linked to any BIS NOC login. Ask an administrator to link it from the Staff page.'
+        );
+    }
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
+    }
+
+    await supabase
+        .from('users')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+    res.json({ token: signToken(user), user: publicUser(user) });
+});
+
 module.exports = {
     login,
     me,
@@ -311,6 +354,7 @@ module.exports = {
     verifyCode,
     gmailRequestCode,
     gmailVerifyCode,
+    telegramLogin,
     publicUser,
     BCRYPT_ROUNDS,
 };
