@@ -109,6 +109,23 @@ router.post(
     auth.telegramLogin
 );
 
+// Public on purpose: the login page reads it to render the widget. It only
+// exposes the bot's public username, never the token.
+router.get('/auth/telegram-config', auth.telegramConfig);
+
+// Self-service Telegram linking from Settings — the signed-in staff member
+// authorizes with the widget and the verified identity is attached to their
+// own account. The signature check makes forgery impossible.
+router.post(
+    '/auth/link-telegram',
+    authenticate,
+    body('hash').isString().notEmpty().withMessage('Telegram login data is missing'),
+    validate,
+    auth.linkTelegram
+);
+
+router.delete('/auth/link-telegram', authenticate, auth.unlinkTelegram);
+
 // =============================================================================
 // STAFF ACCOUNTS  (admin only)
 // =============================================================================

@@ -42,6 +42,6 @@ describe('Landing Page', () => {
         expect(screen.getByText('Admin')).toBeInTheDocument();
         expect(screen.getByText('Teachers')).toBeInTheDocument();
         expect(screen.getByText('Clinic')).toBeInTheDocument();
-        expect(screen.getByText('Store')).toBeInTheDocument();
+        expect(screen.getByText('Store Manager')).toBeInTheDocument();
     });
 });

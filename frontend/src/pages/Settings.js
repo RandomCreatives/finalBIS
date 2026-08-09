@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Card,
@@ -15,6 +15,9 @@ import {
     Stack,
     Switch,
     FormControlLabel,
+    Chip,
+    Link,
+    CircularProgress,
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import LockIcon from '@mui/icons-material/Lock';
@@ -24,9 +27,12 @@ import SaveIcon from '@mui/icons-material/Save';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 import { authApi } from '../api/endpoints';
+import TelegramLoginButton from '../components/TelegramLoginButton';
+import { fetchTelegramConfig, botChatUrl } from '../auth/telegram';
 
 const ROLE_LABELS = {
     admin: 'System Administrator',
@@ -112,6 +118,54 @@ export default function Settings() {
             setPasswordError(err.message || 'Failed to change password');
         } finally {
             setUpdatingPassword(false);
+        }
+    };
+
+    // Telegram linking state
+    const [tgConfig, setTgConfig] = useState(null);
+    const [tgMessage, setTgMessage] = useState('');
+    const [tgError, setTgError] = useState('');
+    const [tgBusy, setTgBusy] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchTelegramConfig().then((cfg) => {
+            if (!cancelled) setTgConfig(cfg);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // The widget returns a bot-signed identity; the backend verifies the
+    // signature and attaches it to the signed-in account.
+    const handleTelegramLink = async (payload) => {
+        setTgError('');
+        setTgMessage('');
+        setTgBusy(true);
+        try {
+            const { user: updated } = await authApi.linkTelegram(payload);
+            updateUser(updated);
+            setTgMessage('Telegram account linked. You can now sign in with Telegram.');
+        } catch (err) {
+            setTgError(err.message || 'Could not link your Telegram account. Please try again.');
+        } finally {
+            setTgBusy(false);
+        }
+    };
+
+    const handleTelegramUnlink = async () => {
+        setTgError('');
+        setTgMessage('');
+        setTgBusy(true);
+        try {
+            const { user: updated } = await authApi.unlinkTelegram();
+            updateUser(updated);
+            setTgMessage('Telegram account unlinked.');
+        } catch (err) {
+            setTgError(err.message || 'Could not unlink your Telegram account. Please try again.');
+        } finally {
+            setTgBusy(false);
         }
     };
 
@@ -370,6 +424,65 @@ export default function Settings() {
                                         </Button>
                                     </Box>
                                 </Box>
+                            </CardContent>
+                        </Card>
+
+                        {/* Telegram Sign-in Card */}
+                        <Card>
+                            <CardContent sx={{ p: 3 }}>
+                                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 700 }}>
+                                    <SendIcon color="primary" /> Telegram Sign-in
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                                    Link your Telegram account so you can sign in with one tap — no password needed.
+                                </Typography>
+
+                                {tgMessage && <Alert severity="success" sx={{ mb: 3 }}>{tgMessage}</Alert>}
+                                {tgError && <Alert severity="error" sx={{ mb: 3 }}>{tgError}</Alert>}
+
+                                {user?.telegramId ? (
+                                    <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+                                        <Chip
+                                            icon={<SendIcon />}
+                                            label={user.telegramUsername ? `@${user.telegramUsername}` : `Linked (#${user.telegramId})`}
+                                            color="info"
+                                        />
+                                        <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
+                                            You can now use the Telegram button on the sign-in page.
+                                        </Typography>
+                                        <Button
+                                            onClick={handleTelegramUnlink}
+                                            disabled={tgBusy}
+                                            color="error"
+                                            variant="outlined"
+                                            size="small"
+                                        >
+                                            {tgBusy ? 'Working…' : 'Unlink'}
+                                        </Button>
+                                    </Stack>
+                                ) : (
+                                    <Stack spacing={2} alignItems="center">
+                                        {tgBusy ? (
+                                            <CircularProgress size={28} />
+                                        ) : (
+                                            <TelegramLoginButton onAuth={handleTelegramLink} />
+                                        )}
+                                        {tgConfig?.enabled ? (
+                                            <Typography variant="caption" color="text.secondary" align="center">
+                                                Click the button above and confirm in Telegram. This links your account
+                                                with the school bot{' '}
+                                                <Link href={botChatUrl(tgConfig.botUsername)} target="_blank" rel="noopener noreferrer">
+                                                    @{tgConfig.botUsername}
+                                                </Link>
+                                                .
+                                            </Typography>
+                                        ) : tgConfig ? (
+                                            <Typography variant="caption" color="text.disabled" align="center">
+                                                Telegram sign-in has not been enabled for this school yet.
+                                            </Typography>
+                                        ) : null}
+                                    </Stack>
+                                )}
                             </CardContent>
                         </Card>
                     </Stack>
