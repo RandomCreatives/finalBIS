@@ -7,7 +7,6 @@ import SchoolIcon from '@mui/icons-material/School';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import LocalLibraryIcon from '@mui/icons-material/LocalLibrary';
-import StorageIcon from '@mui/icons-material/Storage';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
