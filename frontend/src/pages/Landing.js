@@ -15,12 +15,12 @@ import { useColorScheme } from '../theme';
 
 /* ── palette ─────────────────────────────────────────────── */
 const C = {
-    magenta: '#FF2E93',
-    purple:  '#7A20DF',
-    teal:    '#00F0A8',
-    offWhite:'#F7F6F2',
-    charcoal:'#1E1E24',
-    dark2:   '#14141A',
+    magenta: '#39FF14',   // neon green  (replaces magenta)
+    purple:  '#0A1F6B',   // navy blue   (replaces purple)
+    teal:    '#00E5FF',   // electric cyan-green accent
+    offWhite:'#F4F7F4',
+    charcoal:'#050D1A',   // deep navy dark base
+    dark2:   '#020810',
 };
 
 /* ── keyframes ───────────────────────────────────────────── */
@@ -217,11 +217,11 @@ export default function Landing() {
             </Box>
 
             {/* ── TICKER ──────────────────────────────────────── */}
-            <Box sx={{ overflow: 'hidden', bgcolor: C.magenta, py: .6, userSelect: 'none' }}>
+            <Box sx={{ overflow: 'hidden', bgcolor: C.purple, py: .6, userSelect: 'none' }}>
                 <Box sx={{ display: 'flex', animation: `${marqueeAnim} 22s linear infinite`, width: 'max-content' }}>
                     {[ticker, ticker].map((t, i) => (
                         <Typography key={i} sx={{ whiteSpace: 'nowrap', fontSize: 11, fontWeight: 700,
-                            letterSpacing: 2, color: '#fff', px: 2 }}>{t}</Typography>
+                            letterSpacing: 2, color: C.magenta, px: 2 }}>{t}</Typography>
                     ))}
                 </Box>
             </Box>
