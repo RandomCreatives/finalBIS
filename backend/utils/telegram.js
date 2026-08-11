@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 
-const TELEGRAM_AUTH_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes, as Telegram recommends
+// Telegram recommends checking freshness; 24 hours (86400 s) is the
+// industry-standard window — tight enough to block replays, loose enough
+// not to reject legitimate users on slow connections.
+const TELEGRAM_AUTH_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Verify the payload returned by the Telegram Login Widget.
@@ -25,6 +28,9 @@ const verifyTelegramLogin = (data, botToken) => {
         return null;
     }
 
+    // Validate hash is exactly 64 lowercase hex chars before touching Buffers.
+    if (!/^[0-9a-f]{64}$/.test(hash)) return null;
+
     const secretKey = crypto.createHash('sha256').update(botToken).digest();
 
     const dataCheckString = Object.keys(data)
@@ -47,8 +53,10 @@ const verifyTelegramLogin = (data, botToken) => {
         return null;
     }
 
+    // Telegram IDs are large integers; keep them as strings to avoid any
+    // future precision loss when JS Number can no longer represent them exactly.
     return {
-        telegramId: Number(data.id),
+        telegramId: String(data.id),
         username: data.username ? String(data.username) : null,
         firstName: data.first_name ? String(data.first_name) : '',
         lastName: data.last_name ? String(data.last_name) : null,

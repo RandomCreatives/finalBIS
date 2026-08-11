@@ -314,6 +314,14 @@ const gmailVerifyCode = asyncHandler(async (req, res) => {
  * staff account first (admins do that from the Staff page).
  */
 const telegramLogin = asyncHandler(async (req, res) => {
+    // Guard: if the bot token is missing, this is a server config problem,
+    // not a user error. Distinguish clearly so an admin can diagnose it.
+    if (!env.telegram.botToken) {
+        throw new BadRequestError(
+            'Telegram sign-in is not configured on this server. Contact your administrator.'
+        );
+    }
+
     const identity = verifyTelegramLogin(req.body, env.telegram.botToken);
 
     if (!identity) {
@@ -377,6 +385,12 @@ const telegramConfig = asyncHandler(async (req, res) => {
  * unique index guarantees one Telegram account maps to one staff login.
  */
 const linkTelegram = asyncHandler(async (req, res) => {
+    if (!env.telegram.botToken) {
+        throw new BadRequestError(
+            'Telegram sign-in is not configured on this server. Contact your administrator.'
+        );
+    }
+
     const identity = verifyTelegramLogin(req.body, env.telegram.botToken);
 
     if (!identity) {

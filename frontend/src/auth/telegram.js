@@ -20,12 +20,22 @@ export const fetchTelegramConfig = () => {
                 enabled: Boolean(res.data?.enabled && res.data?.botUsername),
                 botUsername: res.data?.botUsername || '',
             }))
-            .catch(() => ({
-                enabled: Boolean(FALLBACK_BOT_USERNAME),
-                botUsername: FALLBACK_BOT_USERNAME,
-            }));
+            .catch(() => {
+                // Clear the cache on error so the next call retries the server
+                // rather than serving a stale failure for the entire session.
+                cachedPromise = null;
+                return {
+                    enabled: Boolean(FALLBACK_BOT_USERNAME),
+                    botUsername: FALLBACK_BOT_USERNAME,
+                };
+            });
     }
     return cachedPromise;
+};
+
+/** Bust the in-memory cache — call this after the bot is configured at runtime. */
+export const clearTelegramConfigCache = () => {
+    cachedPromise = null;
 };
 
 /** Direct chat link for the school bot, e.g. https://t.me/bis_noc_bot. */
