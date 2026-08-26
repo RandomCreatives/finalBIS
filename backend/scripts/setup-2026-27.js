@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+
 /**
  * Provisions the 2026/27 academic year structure:
  *
- *   - 10 x Year 4 (Grade 3) classes
- *   -  4 x Year 3 (Grade 2) classes
- *   - capacity 30 per class (max-average class size)
+ * - 10 x Year 4 (Grade 3) classes
+ * - 4 x Year 3 (Grade 2) classes
+ * - capacity 30 per class (max-average class size)
  *
  * Staffing is NOT touched here: assign the 14 main teachers (and assistants
  * as they are hired) through the admin UI or backend/scripts/assign-staff.js.
@@ -16,21 +17,23 @@
  * The script is re-runnable: existing rows are detected by their unique
  * names and left untouched.
  *
- *   cd backend
- *   npm run setup:year
+ * cd backend
+ * npm run setup:year
  *
  * Override the class rosters or term dates without editing this file:
  *
- *   YEAR4_CLASSES="Blue,Green,Red,Yellow,Orange,Magenta,Violet,Lavender,Cyan,Maroon" \
- *   YEAR3_CLASSES="Coral,Teal,Amber,Indigo" \
- *   CLASS_CAPACITY=30 \
- *   ACADEMIC_YEAR="2026/2027" \
- *   TERM1_START=2026-09-01 TERM1_END=2026-11-17 \
- *   TERM2_START=2027-01-06 TERM2_END=2027-03-23 \
- *   TERM3_START=2027-04-07 TERM3_END=2027-06-22 \
- *   npm run setup:year
+ * YEAR4_CLASSES="Blue,Green,Red,Yellow,Orange,Magenta,Violet,Lavender,Cyan,Maroon" \
+ * YEAR3_CLASSES="Coral,Teal,Amber,Indigo" \
+ * CLASS_CAPACITY=30 \
+ * ACADEMIC_YEAR="2026/2027" \
+ * TERM1_START=2026-08-24 TERM1_END=2026-12-21 \
+ * TERM2_START=2027-01-11 TERM2_END=2027-04-30 \
+ * TERM3_START=2027-05-10 TERM3_END=2027-07-12 \
+ * npm run setup:year
  */
+
 require('../config/env');
+
 const supabase = require('../config/supabase');
 
 // ---------------------------------------------------------------------------
@@ -52,12 +55,11 @@ const DEFAULT_YEAR3_CLASSES = ['Coral', 'Teal', 'Amber', 'Indigo'];
 
 const DEFAULT_CAPACITY = 30; // max-average students per class
 
-// Term dates default to the standard Ethiopian independent-school calendar;
-// the admin can adjust them later in the UI, or pass exact dates via env.
+// Term dates from BIS_School_Calendar_2026_2027.csv
 const DEFAULT_TERMS = [
-    { term_index: 1, name: 'Term 1', starts_on: '2026-09-01', ends_on: '2026-11-17' },
-    { term_index: 2, name: 'Term 2', starts_on: '2027-01-06', ends_on: '2027-03-23' },
-    { term_index: 3, name: 'Term 3', starts_on: '2027-04-07', ends_on: '2027-06-22' },
+    { term_index: 1, name: 'Term 1', starts_on: '2026-08-24', ends_on: '2026-12-21' },
+    { term_index: 2, name: 'Term 2', starts_on: '2027-01-11', ends_on: '2027-04-30' },
+    { term_index: 3, name: 'Term 3', starts_on: '2027-05-10', ends_on: '2027-07-12' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -80,9 +82,9 @@ const TERMS = DEFAULT_TERMS.map((t) => ({
 
 async function main() {
     console.log(`\nProvisioning academic year ${YEAR_NAME}\n`);
-    console.log(`  Year 4 classes: ${YEAR4_CLASSES.length} (${YEAR4_CLASSES.join(', ')})`);
-    console.log(`  Year 3 classes: ${YEAR3_CLASSES.length} (${YEAR3_CLASSES.join(', ')})`);
-    console.log(`  capacity:       ${CAPACITY} students per class\n`);
+    console.log(` Year 4 classes: ${YEAR4_CLASSES.length} (${YEAR4_CLASSES.join(', ')})`);
+    console.log(` Year 3 classes: ${YEAR3_CLASSES.length} (${YEAR3_CLASSES.join(', ')})`);
+    console.log(` capacity: ${CAPACITY} students per class\n`);
 
     // School — the seed script must have run first.
     const { data: school, error: schoolError } = await supabase
@@ -119,9 +121,9 @@ async function main() {
             .select('id, name')
             .single());
         if (yearError) throw yearError;
-        console.log(`  created year     ${year.name}`);
+        console.log(` created year ${year.name}`);
     } else {
-        console.log(`  year exists      ${year.name}`);
+        console.log(` year exists ${year.name}`);
     }
 
     // Terms — only insert whichever are missing.
@@ -144,7 +146,7 @@ async function main() {
             }))
         );
         if (termError) throw termError;
-        console.log(`  created terms    ${missing.map((t) => t.name).join(', ')}`);
+        console.log(` created terms ${missing.map((t) => t.name).join(', ')}`);
 
         // Point "current term" at whichever term contains today, else Term 1.
         const today = new Date().toISOString().slice(0, 10);
@@ -162,10 +164,10 @@ async function main() {
                 p_term_id: activeRow.id,
                 p_school_id: school.id,
             });
-            console.log(`  current term     ${active.name}`);
+            console.log(` current term ${active.name}`);
         }
     } else {
-        console.log('  terms exist      nothing to add');
+        console.log(' terms exist nothing to add');
     }
 
     // Classes — 10 x Year 4 + 4 x Year 3, all capacity 30.
@@ -205,16 +207,16 @@ async function main() {
                 .update(patch)
                 .eq('id', existing.id);
             if (patchError) throw patchError;
-            console.log(`  updated class    ${cls.name} (${Object.keys(patch).join(', ')})`);
+            console.log(` updated class ${cls.name} (${Object.keys(patch).join(', ')})`);
         } else {
-            console.log(`  class exists     ${cls.name}`);
+            console.log(` class exists ${cls.name}`);
         }
     }
 
     if (toCreate.length > 0) {
         const { error: createError } = await supabase.from('classes').insert(toCreate);
         if (createError) throw createError;
-        console.log(`  created classes  ${toCreate.map((c) => c.name).join(', ')}`);
+        console.log(` created classes ${toCreate.map((c) => c.name).join(', ')}`);
     }
 
     // Summary.
@@ -231,13 +233,13 @@ async function main() {
     const y3 = finalClasses.filter((c) => c.year_level === 3);
 
     console.log(`\nDone. ${finalClasses.length} classes in the school:`);
-    console.log(`  Year 4: ${y4.length} classes — ${y4.map((c) => c.name).join(', ')}`);
-    console.log(`  Year 3: ${y3.length} classes — ${y3.map((c) => c.name).join(', ')}`);
+    console.log(` Year 4: ${y4.length} classes — ${y4.map((c) => c.name).join(', ')}`);
+    console.log(` Year 3: ${y3.length} classes — ${y3.map((c) => c.name).join(', ')}`);
     console.log(`\nNext steps:`);
-    console.log(`  1. Assign a main teacher to each class (admin UI → Classes, or scripts/assign-staff.js).`);
-    console.log(`  2. Add assistants to classes as they are hired.`);
-    console.log(`  3. Assign subject teachers across classes (Assignments → Subject teaching).`);
-    console.log(`  4. Auto-assign main-teacher subjects (Maths & Science) to every staffed class.\n`);
+    console.log(` 1. Assign a main teacher to each class (admin UI → Classes, or scripts/assign-staff.js).`);
+    console.log(` 2. Add assistants to classes as they are hired.`);
+    console.log(` 3. Assign subject teachers across classes (Assignments → Subject teaching).`);
+    console.log(` 4. Auto-assign main-teacher subjects (Maths & Science) to every staffed class.\n`);
 }
 
 main().catch((err) => {
