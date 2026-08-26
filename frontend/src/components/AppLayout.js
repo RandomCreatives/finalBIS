@@ -20,6 +20,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import BadgeIcon from '@mui/icons-material/Badge';
 import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import GradeIcon from '@mui/icons-material/Grade';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -51,6 +52,7 @@ import CalendarPage from '../pages/Calendar';
 import DataCenterPage from '../pages/DataCenter';
 import SettingsPage from '../pages/Settings';
 import FilesPage from '../pages/Files';
+import MarksheetsPage from '../pages/Marksheets';
 
 const DRAWER_WIDTH = 248;
 
@@ -64,6 +66,12 @@ const NAV_SECTIONS = [
             { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon /> },
             { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon /> },
             { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon /> },
+            {
+                label: 'Marksheets', to: '/app/marksheets', icon: <GradeIcon />,
+                // Assistants deliberately have no marks access — editing is
+                // admin/main/subject teachers, mirroring the backend rules.
+                roles: ['admin', 'main_teacher', 'subject_teacher'],
+            },
         ],
     },
     {
@@ -104,6 +112,7 @@ const WINDOW_COMPONENTS = {
     '/app/timetable': { component: TimetablePage, title: 'Timetable', icon: CalendarMonthIcon },
     '/app/attendance': { component: AttendancePage, title: 'Attendance', icon: FactCheckIcon },
     '/app/planning': { component: PlanningPage, title: 'Planning', icon: MenuBookOutlinedIcon },
+    '/app/marksheets': { component: MarksheetsPage, title: 'Marksheets', icon: GradeIcon },
     '/app/classes': { component: ClassesPage, title: 'Classes', icon: ClassIcon },
     '/app/subjects': { component: SubjectsPage, title: 'Subjects', icon: MenuBookIcon },
     '/app/library': { component: LibraryPage, title: 'Library', icon: LocalLibraryIcon },
@@ -235,13 +244,16 @@ export default function AppLayout() {
         .filter((s) => !s.adminOnly || isAdmin)
         .map((s) => ({
             ...s,
-            items: s.items.map((item) => {
+items: s.items
+            .filter((item) => !item.roles || item.roles.includes(user?.role))
+            .map((item) => {
                 const windowId = getWindowIdFromRoute(item.to);
                 const windowOpen = !!windows[windowId];
                 const active = location.pathname === item.to;
                 return { ...item, active, windowOpen };
             }),
-        }));
+        }))
+        .filter((s) => s.items.length > 0);
 
     const drawer = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

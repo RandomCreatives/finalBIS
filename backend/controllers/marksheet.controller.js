@@ -2,6 +2,9 @@ const supabase = require('../config/supabase');
 const { resolveTermId } = require('./term.controller');
 const { NotFoundError, BadRequestError, asyncHandler } = require('../utils/errors');
 
+/** Hard ceiling for one bulk save — a roster of 30 classes stays well under. */
+const BULK_LIMIT = 200;
+
 /** Percentage → letter grade. Single source of truth for grading. */
 const gradeFor = (percentage) => {
     if (percentage >= 90) return 'A+';
@@ -70,6 +73,61 @@ const upsertMarksheet = asyncHandler(async (req, res) => {
     res.json({ marksheet: shape(data) });
 });
 
+/**
+ * POST /api/marksheets/bulk — save a whole sheet in one request.
+ *
+ * A subject teacher facing 30 students across six classes should not pay one
+ * round-trip per cell. `entries` is an array of { studentId, subjectId,
+ * marks, maxMarks?, classId? }; `classId`/`termId` at the top level apply to
+ * any entry that does not name its own. Percentage and grade are derived
+ * server-side per entry, exactly as in the single-row upsert.
+ */
+const bulkUpsertMarksheets = asyncHandler(async (req, res) => {
+    const { entries, classId } = req.body;
+    const termId = await resolveTermId(req);
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+        throw new BadRequestError('No marksheet entries provided');
+    }
+    if (entries.length > BULK_LIMIT) {
+        throw new BadRequestError(`At most ${BULK_LIMIT} entries per request`);
+    }
+
+    for (const e of entries) {
+        const max = e.maxMarks ?? 100;
+        if (Number(e.marks) > Number(max)) {
+            throw new BadRequestError('Marks cannot exceed the maximum marks');
+        }
+    }
+
+    const rows = entries.map((e) => {
+        const max = e.maxMarks ?? 100;
+        const percentage = Number(((e.marks / max) * 100).toFixed(2));
+
+        return {
+            school_id: req.user.school_id,
+            student_id: e.studentId,
+            subject_id: e.subjectId,
+            class_id: e.classId ?? classId ?? null,
+            term_id: termId,
+            marks: e.marks,
+            max_marks: max,
+            percentage,
+            grade: gradeFor(percentage),
+            entered_by: req.user.id,
+        };
+    });
+
+    const { data, error } = await supabase
+        .from('marksheets')
+        .upsert(rows, { onConflict: 'student_id,subject_id,term_id' })
+        .select(SELECT);
+
+    if (error) throw error;
+
+    res.json({ saved: rows.length, marksheets: (data || []).map(shape) });
+});
+
 /** GET /api/marksheets?classId=&termId=&subjectId= */
 const listMarksheets = asyncHandler(async (req, res) => {
     const { classId, termId, subjectId } = req.query;
@@ -133,4 +191,7 @@ const deleteMarksheet = asyncHandler(async (req, res) => {
     res.json({ message: 'Marksheet deleted' });
 });
 
-module.exports = { upsertMarksheet, listMarksheets, getStudentMarksheet, deleteMarksheet, gradeFor };
+module.exports = {
+    upsertMarksheet, bulkUpsertMarksheets, listMarksheets,
+    getStudentMarksheet, deleteMarksheet, gradeFor,
+};

@@ -412,6 +412,21 @@ router.put(
 );
 
 router.get('/marksheets', authenticate, marksheets.listMarksheets);
+
+router.post(
+    '/marksheets/bulk',
+    authenticate,
+    authorize(...TEACHING),
+    body('entries').isArray({ min: 1 }).withMessage('Provide at least one entry'),
+    body('entries.*.studentId').isUUID(),
+    body('entries.*.subjectId').isUUID(),
+    body('entries.*.classId').optional({ nullable: true }).isUUID(),
+    body('entries.*.marks').isFloat({ min: 0 }).withMessage('Marks must be zero or greater'),
+    body('entries.*.maxMarks').optional({ nullable: true }).isFloat({ gt: 0 }),
+    body('classId').optional({ nullable: true }).isUUID(),
+    validate,
+    marksheets.bulkUpsertMarksheets
+);
 router.get('/marksheets/student/:studentId', authenticate, uuid('studentId'), validate, marksheets.getStudentMarksheet);
 router.delete('/marksheets/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, marksheets.deleteMarksheet);
 
