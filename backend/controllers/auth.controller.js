@@ -75,7 +75,8 @@ const login = asyncHandler(async (req, res) => {
     await supabase
         .from('users')
         .update({ last_login_at: new Date().toISOString() })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('[auth] Failed to update last_login_at:', error.message); });
 
     res.json({ token: signToken(user), user: publicUser(user) });
 });
@@ -255,7 +256,8 @@ const gmailRequestCode = asyncHandler(async (req, res) => {
             login_code: code,
             login_code_expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('[auth] Failed to store login code:', error.message); });
 
     const sent = await deliverCode(email, code, 'login');
 
@@ -300,7 +302,8 @@ const gmailVerifyCode = asyncHandler(async (req, res) => {
             login_code_expires_at: null,
             last_login_at: new Date().toISOString(),
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('[auth] Failed to clear login code:', error.message); });
 
     res.json({ token: signToken(user), user: publicUser(user) });
 });
@@ -353,7 +356,8 @@ const telegramLogin = asyncHandler(async (req, res) => {
     await supabase
         .from('users')
         .update(loginPatch)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('[auth] Failed to update telegram login:', error.message); });
 
     res.json({ token: signToken(user), user: publicUser(user) });
 });

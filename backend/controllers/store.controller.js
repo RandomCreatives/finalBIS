@@ -1,5 +1,5 @@
 const supabase = require('../config/supabase');
-const { NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
+const { NotFoundError, ForbiddenError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 
 /**
  * Store Requests — class resource requisitions.
@@ -12,7 +12,7 @@ const { NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('
  */
 
 const SELECT = `
-    id, request_number, items, purpose, status, created_at, updated_at,
+    id, request_number, requester_id, items, purpose, status, created_at, updated_at,
     requester:users!requester_id(id, name, role),
     class:classes(id, name),
     store_reviewer:users!store_reviewed_by(id, name),
@@ -42,14 +42,14 @@ const shape = (r) => ({
 /** Normalise + validate the items array from the request body. */
 const cleanItems = (items) => {
     if (!Array.isArray(items) || items.length === 0) {
-        throw new Error('At least one item is required');
+        throw new BadRequestError('At least one item is required');
     }
     return items.map((it) => {
         const item = typeof it.item === 'string' ? it.item.trim() : '';
         const quantity = Number.parseInt(it.quantity, 10);
-        if (!item) throw new Error('Every item needs a name');
+        if (!item) throw new BadRequestError('Every item needs a name');
         if (!Number.isInteger(quantity) || quantity <= 0) {
-            throw new Error(`Quantity for "${item}" must be a positive number`);
+            throw new BadRequestError(`Quantity for "${item}" must be a positive number`);
         }
         const note = typeof it.note === 'string' ? it.note.trim() : '';
         return { item, quantity, note };

@@ -40,7 +40,10 @@ const listStudents = asyncHandler(async (req, res) => {
     if (classId) query = query.eq('class_id', classId);
     if (specialNeeds === 'true') query = query.eq('special_needs', true);
     if (includeInactive !== 'true') query = query.eq('is_active', true);
-    if (search) query = query.or(`name.ilike.%${search}%,admission_no.ilike.%${search}%`);
+    if (search) {
+        const safe = search.replace(/[%_\\]/g, '\\$&');
+        query = query.or(`name.ilike.%${safe}%,admission_no.ilike.%${safe}%`);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -284,7 +287,7 @@ const importStudents = asyncHandler(async (req, res) => {
         guardian_email: row.guardianEmail ? String(row.guardianEmail).trim() : null,
         special_needs: row.specialNeeds === true || String(row.specialNeeds).toLowerCase() === 'yes' || row.specialNeeds === 'TRUE',
         special_needs_note: row.specialNeedsNote ? String(row.specialNeedsNote).trim() : null,
-        class_id: row.classId || null,
+        class_id: row.classId ? (typeof row.classId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.classId) ? row.classId : null) : null,
         school_id: req.user.school_id,
     })).filter((s) => s.admission_no && s.name);
 

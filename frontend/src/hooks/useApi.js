@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Runs an async fetcher and tracks loading/error/data.
@@ -12,18 +12,20 @@ export default function useApi(fetcher, deps = []) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const fetcherRef = useRef(fetcher);
+    fetcherRef.current = fetcher;
+
     const run = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            setData(await fetcher());
+            setData(await fetcherRef.current());
         } catch (err) {
             setError(err.message || 'Failed to load data');
         } finally {
             setLoading(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, deps);
+    }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         let active = true;

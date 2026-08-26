@@ -210,3 +210,13 @@ export const storeApi = {
     adminReview: (id, decision, note) =>
         client.post(`/store/requests/${id}/admin-review`, { decision, note }).then((r) => r.data.request),
 };
+
+export const filesApi = {
+    list: (params) => client.get('/files', { params }).then((r) => r.data.files),
+    get: (id) => client.get(`/files/${id}`).then((r) => r.data.file),
+    upload: (formData) => client.post('/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data.file),
+    download: (id) => client.get(`/files/${id}/download`).then((r) => r.data),
+    remove: (id) => client.delete(`/files/${id}`).then((r) => r.data),
+};

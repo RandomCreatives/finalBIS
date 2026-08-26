@@ -135,7 +135,7 @@ const createTerm = asyncHandler(async (req, res) => {
     const { name, termIndex, startsOn, endsOn, isCurrent } = req.body;
     const yearId = req.body.academicYearId || (await resolveYearId(req));
 
-    if (endsOn <= startsOn) throw new BadRequestError('A term must end after it starts');
+    if (new Date(endsOn) <= new Date(startsOn)) throw new BadRequestError('A term must end after it starts');
 
     const { data, error } = await supabase
         .from('terms')

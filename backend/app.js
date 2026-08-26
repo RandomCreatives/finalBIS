@@ -22,6 +22,8 @@ app.use(helmet({
             useDefaults: true,
             directives: {
                 "default-src": ["'self'"],
+                "script-src": ["'self'"],
+                "font-src": ["'self'", "https://fonts.gstatic.com"],
                 "connect-src": ["'self'", env.supabaseUrl, ...env.corsOrigins],
                 "img-src": ["'self'", 'data:', 'https:'],
                 "style-src": ["'self'", "'unsafe-inline'"],
@@ -78,6 +80,23 @@ app.get('/', (req, res) => {
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', env: env.nodeEnv, timestamp: new Date().toISOString() });
+});
+
+/**
+ * Keep-alive endpoint for Supabase free tier.
+ * Free projects pause after 7 days of inactivity. This lightweight query
+ * touches the DB once every 5 days via Vercel cron to prevent that.
+ */
+app.get('/api/keep-alive', async (req, res) => {
+    try {
+        const supabase = require('./config/supabase');
+        const { error } = await supabase.from('users').select('id', { count: 'exact', head: true }).limit(1);
+        if (error) throw error;
+        res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    } catch (err) {
+        console.error('[keep-alive] Ping failed:', err.message);
+        res.status(500).json({ status: 'error', message: 'Database ping failed' });
+    }
 });
 
 app.use('/api', apiLimiter, routes);

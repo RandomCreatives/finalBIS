@@ -25,6 +25,7 @@ const tasks = require('../controllers/task.controller');
 const dashboard = require('../controllers/dashboard.controller');
 const datacenter = require('../controllers/datacenter.controller');
 const store = require('../controllers/store.controller');
+const files = require('../controllers/files.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
 
@@ -802,5 +803,32 @@ router.get('/dashboard/data-flow', authenticate, dashboard.getDataFlow);
 // =============================================================================
 router.get('/datacenter/stats', datacenter.getStats);
 router.get('/datacenter/academic', datacenter.getAcademic);
+
+// =============================================================================
+// FILES (Google Drive integration)
+// =============================================================================
+const uploadMemory = require('multer')({
+    storage: require('multer').memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+    fileFilter: (req, file, cb) => {
+        const allowed = [
+            'application/pdf', 'image/', 'video/', 'audio/',
+            'application/msword', 'application/vnd.openxmlformats-officedocument',
+            'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+            'text/plain', 'text/csv', 'application/zip',
+        ];
+        if (allowed.some((t) => file.mimetype.startsWith(t) || file.mimetype === t)) {
+            cb(null, true);
+        } else {
+            cb(new Error(`File type "${file.mimetype}" is not allowed`));
+        }
+    },
+});
+
+router.get('/files', authenticate, files.listFiles);
+router.get('/files/:id', authenticate, uuid('id'), validate, files.getFile);
+router.post('/files/upload', authenticate, uploadMemory.single('file'), files.uploadFile);
+router.get('/files/:id/download', authenticate, uuid('id'), validate, files.downloadFile);
+router.delete('/files/:id', authenticate, uuid('id'), validate, files.deleteFile);
 
 module.exports = router;

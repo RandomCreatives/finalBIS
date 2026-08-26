@@ -5,27 +5,11 @@ import { ThemeProvider } from './theme';
 import { AuthProvider } from './auth/AuthContext';
 import RequireAuth from './auth/RequireAuth';
 import AppLayout from './components/AppLayout';
+import { WindowManagerProvider } from './context/WindowManager';
 
 import Landing from './pages/Landing';
 import DataCenter from './pages/DataCenter';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Students from './pages/Students';
-import Classes from './pages/Classes';
-import Subjects from './pages/Subjects';
-import Attendance from './pages/Attendance';
-import Library from './pages/Library';
-import Clinic from './pages/Clinic';
-import Notices from './pages/Notices';
-import Staff from './pages/Staff';
-import Messages from './pages/Messages';
-import Tasks from './pages/Tasks';
-import Assignments from './pages/Assignments';
-import Timetable from './pages/Timetable';
-import Calendar from './pages/Calendar';
-import Planning from './pages/Planning';
-import Settings from './pages/Settings';
-import Store from './pages/Store';
 
 export default function App() {
     return (
@@ -33,55 +17,24 @@ export default function App() {
             <CssBaseline />
             <BrowserRouter>
                 <AuthProvider>
-                    <Routes>
-                        <Route path="/login" element={<Login />} />
+                    <WindowManagerProvider>
+                        <Routes>
+                            <Route path="/login" element={<Login />} />
 
-                        {/* Everything below the guard requires a valid session. */}
-                        <Route
-                            path="/app"
-                            element={
-                                <RequireAuth>
-                                    <AppLayout />
-                                </RequireAuth>
-                            }
-                        >
-                            <Route index element={<Dashboard />} />
-                            <Route path="settings" element={<Settings />} />
-                            <Route path="messages" element={<Messages />} />
-                            <Route path="tasks" element={<Tasks />} />
-                            <Route path="students" element={<Students />} />
-                            <Route path="classes" element={<Classes />} />
-                            <Route path="subjects" element={<Subjects />} />
-                            <Route path="attendance" element={<Attendance />} />
-                            <Route path="timetable" element={<Timetable />} />
-                            <Route path="calendar" element={<Calendar />} />
-                            <Route path="planning" element={<Planning />} />
-                            <Route path="store" element={<Store />} />
-                            <Route path="library" element={<Library />} />
-                            <Route path="clinic" element={<Clinic />} />
-                            <Route path="notices" element={<Notices />} />
                             <Route
-                                path="assignments"
+                                path="/app"
                                 element={
-                                    <RequireAuth roles={['admin']}>
-                                        <Assignments />
+                                    <RequireAuth>
+                                        <AppLayout />
                                     </RequireAuth>
                                 }
                             />
-                            <Route
-                                path="staff"
-                                element={
-                                    <RequireAuth roles={['admin']}>
-                                        <Staff />
-                                    </RequireAuth>
-                                }
-                            />
-                        </Route>
 
-                        <Route path="/" element={<Landing />} />
-                        <Route path="/data-center" element={<DataCenter />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
+                            <Route path="/" element={<Landing />} />
+                            <Route path="/data-center" element={<DataCenter />} />
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                    </WindowManagerProvider>
                 </AuthProvider>
             </BrowserRouter>
         </ThemeProvider>

@@ -71,6 +71,7 @@ const listEvents = asyncHandler(async (req, res) => {
         const { data: staffRows, error: staffError } = await supabase
             .from('class_staff')
             .select('class_id')
+            .eq('school_id', req.user.school_id)
             .eq('user_id', req.user.id);
 
         if (staffError) throw staffError;
@@ -78,6 +79,7 @@ const listEvents = asyncHandler(async (req, res) => {
         const { data: subjectRows, error: subjectError } = await supabase
             .from('class_subjects')
             .select('class_id')
+            .eq('school_id', req.user.school_id)
             .eq('teacher_id', req.user.id);
 
         if (subjectError) throw subjectError;

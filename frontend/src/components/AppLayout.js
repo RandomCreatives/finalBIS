@@ -1,9 +1,8 @@
-import { Fragment, useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
     ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery,
-    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Alert, Button, CircularProgress
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -23,10 +22,35 @@ import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import FolderIcon from '@mui/icons-material/Folder';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
-import { threadApi, authApi } from '../api/endpoints';
+import { threadApi } from '../api/endpoints';
+import { useWindowManager, getWindowIdFromRoute } from '../context/WindowManager';
+import Taskbar from './Taskbar';
+import Window from './Window';
+
+// Import page components for window content
+import DashboardPage from '../pages/Dashboard';
+import StudentsPage from '../pages/Students';
+import StaffPage from '../pages/Staff';
+import TimetablePage from '../pages/Timetable';
+import AttendancePage from '../pages/Attendance';
+import PlanningPage from '../pages/Planning';
+import ClassesPage from '../pages/Classes';
+import SubjectsPage from '../pages/Subjects';
+import LibraryPage from '../pages/Library';
+import ClinicPage from '../pages/Clinic';
+import StorePage from '../pages/Store';
+import MessagesPage from '../pages/Messages';
+import NoticesPage from '../pages/Notices';
+import TasksPage from '../pages/Tasks';
+import AssignmentsPage from '../pages/Assignments';
+import CalendarPage from '../pages/Calendar';
+import DataCenterPage from '../pages/DataCenter';
+import SettingsPage from '../pages/Settings';
+import FilesPage from '../pages/Files';
 
 const DRAWER_WIDTH = 248;
 
@@ -48,6 +72,7 @@ const NAV_SECTIONS = [
             { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
             { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
             { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
+            { label: 'Files', to: '/app/files', icon: <FolderIcon /> },
             { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
             { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
         ],
@@ -71,7 +96,30 @@ const ROLE_LABELS = {
     store_manager: 'Store Manager',
 };
 
-function NavButton({ item, onClick }) {
+// Window component registry - maps routes to page components
+const WINDOW_COMPONENTS = {
+    '/app': { component: DashboardPage, title: 'Dashboard', icon: DashboardIcon },
+    '/app/students': { component: StudentsPage, title: 'Students', icon: GroupsIcon },
+    '/app/staff': { component: StaffPage, title: 'Staff', icon: BadgeIcon },
+    '/app/timetable': { component: TimetablePage, title: 'Timetable', icon: CalendarMonthIcon },
+    '/app/attendance': { component: AttendancePage, title: 'Attendance', icon: FactCheckIcon },
+    '/app/planning': { component: PlanningPage, title: 'Planning', icon: MenuBookOutlinedIcon },
+    '/app/classes': { component: ClassesPage, title: 'Classes', icon: ClassIcon },
+    '/app/subjects': { component: SubjectsPage, title: 'Subjects', icon: MenuBookIcon },
+    '/app/library': { component: LibraryPage, title: 'Library', icon: LocalLibraryIcon },
+    '/app/clinic': { component: ClinicPage, title: 'Clinic', icon: HealthAndSafetyIcon },
+    '/app/store': { component: StorePage, title: 'Store', icon: StorefrontIcon },
+    '/app/files': { component: FilesPage, title: 'Files', icon: FolderIcon },
+    '/app/messages': { component: MessagesPage, title: 'Messages', icon: ForumIcon },
+    '/app/notices': { component: NoticesPage, title: 'Notices', icon: NotificationsIcon },
+    '/app/tasks': { component: TasksPage, title: 'Tasks', icon: TaskAltIcon },
+    '/app/assignments': { component: AssignmentsPage, title: 'Assignments', icon: AssignmentIndIcon },
+    '/app/calendar': { component: CalendarPage, title: 'Calendar', icon: EventNoteIcon },
+    '/app/data-center': { component: DataCenterPage, title: 'Data Center', icon: NotificationsIcon },
+    '/app/settings': { component: SettingsPage, title: 'Settings', icon: SettingsIcon },
+};
+
+function NavButton({ item, onClick, active, windowOpen }) {
     return (
         <ListItemButton
             component={NavLink}
@@ -81,12 +129,24 @@ function NavButton({ item, onClick }) {
             sx={{
                 borderRadius: 2,
                 mb: 0.5,
+                position: 'relative',
                 '&.active': {
                     bgcolor: 'primary.main',
                     color: 'common.white',
                     '& .MuiListItemIcon-root': { color: 'common.white' },
                     '&:hover': { bgcolor: 'primary.dark' },
                 },
+                '&::before': windowOpen && !active ? {
+                    content: '""',
+                    position: 'absolute',
+                    left: 0,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 3,
+                    height: '60%',
+                    backgroundColor: 'primary.main',
+                    borderRadius: '0 2px 2px 0',
+                } : null,
             }}
         >
             <ListItemIcon sx={{ minWidth: 40 }}>
@@ -107,87 +167,34 @@ export default function AppLayout() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
 
-    const { user, logout, isAdmin, updateUser } = useAuth();
+    const { user, logout, isAdmin } = useAuth();
     const navigate = useNavigate();
     const theme = useTheme();
     const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+    const location = useLocation();
+
+    const {
+        windows,
+        openWindow,
+        closeWindow,
+        minimizeWindow,
+        maximizeWindow,
+        focusWindow,
+        updateWindowGeometry,
+        setWindowSnapshot,
+    } = useWindowManager();
 
     const [unread, setUnread] = useState(0);
 
-    // Gmail connection states
-    const [connectGmailOpen, setConnectGmailOpen] = useState(false);
-    const [gmailEmail, setGmailEmail] = useState('');
-    const [verificationCode, setVerificationCode] = useState('');
-    const [verifyStep, setVerifyStep] = useState(1);
-    const [modalError, setModalError] = useState('');
-    const [modalSuccess, setModalSuccess] = useState('');
-    const [modalSubmitting, setModalSubmitting] = useState(false);
-
-    const handleSendCode = async (e) => {
-        e.preventDefault();
-        setModalError('');
-        setModalSuccess('');
-
-        if (!gmailEmail || !gmailEmail.toLowerCase().endsWith('@gmail.com')) {
-            setModalError('Please enter a valid Gmail address ending in @gmail.com');
-            return;
-        }
-
-        setModalSubmitting(true);
-        try {
-            await authApi.sendVerificationCode(gmailEmail);
-            setVerifyStep(2);
-            setModalSuccess('Verification code sent successfully!');
-        } catch (err) {
-            setModalError(err.message || 'Failed to send verification code');
-        } finally {
-            setModalSubmitting(false);
-        }
-    };
-
-    const handleVerifyCode = async (e) => {
-        e.preventDefault();
-        setModalError('');
-        setModalSuccess('');
-
-        if (!verificationCode) {
-            setModalError('Verification code is required');
-            return;
-        }
-
-        setModalSubmitting(true);
-        try {
-            const data = await authApi.verifyCode(verificationCode);
-            updateUser(data.user);
-            setModalSuccess('Gmail connected and verified successfully!');
-            setTimeout(() => {
-                setConnectGmailOpen(false);
-                setVerifyStep(1);
-                setGmailEmail('');
-                setVerificationCode('');
-                setModalSuccess('');
-            }, 2000);
-        } catch (err) {
-            setModalError(err.message || 'Invalid or expired verification code');
-        } finally {
-            setModalSubmitting(false);
-        }
-    };
-
-    // Poll the unread badge so a teacher notices an incoming message without
-    // having to sit on the inbox.
+    // Poll unread messages
     useEffect(() => {
         let active = true;
-
         const poll = async () => {
             try {
-                const { threads } = await threadApi.unreadCount();
-                if (active) setUnread(threads);
-            } catch {
-                /* badge is non-critical */
-            }
+                const { count } = await threadApi.unreadCount();
+                if (active) setUnread(count || 0);
+            } catch { }
         };
-
         poll();
         const id = setInterval(poll, 60000);
         return () => { active = false; clearInterval(id); };
@@ -195,23 +202,45 @@ export default function AppLayout() {
 
     const handleLogout = () => {
         logout();
-        navigate('/login', { replace: true });
+        window.location.replace('/login');
     };
 
     const handleSettings = () => {
         setAnchorEl(null);
-        navigate('/app/settings');
+        openWindow(getWindowIdFromRoute('/app/settings'), WINDOW_COMPONENTS['/app/settings']);
     };
 
     const closeDrawer = () => setMobileOpen(false);
+
+    // Handle sidebar navigation - open window instead of routing
+    const handleNavClick = useCallback((item) => {
+        closeDrawer();
+        const windowId = getWindowIdFromRoute(item.to);
+        const windowConfig = WINDOW_COMPONENTS[item.to];
+        if (windowConfig) {
+            openWindow(windowId, {
+                title: windowConfig.title,
+                icon: windowConfig.icon,
+                component: windowConfig.component,
+                width: 1000,
+                height: 700,
+            });
+        } else {
+            // Fallback to navigation for unknown routes
+            navigate(item.to);
+        }
+    }, [openWindow, navigate]);
 
     const sections = NAV_SECTIONS
         .filter((s) => !s.adminOnly || isAdmin)
         .map((s) => ({
             ...s,
-            items: s.items.map((item) =>
-                item.badge === 'messages' ? { ...item, unread } : item
-            ),
+            items: s.items.map((item) => {
+                const windowId = getWindowIdFromRoute(item.to);
+                const windowOpen = !!windows[windowId];
+                const active = location.pathname === item.to;
+                return { ...item, active, windowOpen };
+            }),
         }));
 
     const drawer = (
@@ -223,7 +252,12 @@ export default function AppLayout() {
             </Toolbar>
             <Divider />
             <List sx={{ px: 1, py: 1, flexGrow: 1, overflowY: 'auto' }}>
-                <NavButton item={DASHBOARD_ITEM} onClick={closeDrawer} />
+                <NavButton 
+                    item={DASHBOARD_ITEM} 
+                    onClick={(e) => handleNavClick(DASHBOARD_ITEM)}
+                    active={location.pathname === '/app'}
+                    windowOpen={!!windows[getWindowIdFromRoute('/app')]}
+                />
                 {sections.map((section) => (
                     <Fragment key={section.label}>
                         <Typography
@@ -233,7 +267,13 @@ export default function AppLayout() {
                             {section.label}
                         </Typography>
                         {section.items.map((item) => (
-                            <NavButton key={item.to} item={item} onClick={closeDrawer} />
+                            <NavButton
+                                key={item.to}
+                                item={item}
+                                onClick={(e) => handleNavClick(item)}
+                                active={item.active}
+                                windowOpen={item.windowOpen}
+                            />
                         ))}
                     </Fragment>
                 ))}
@@ -256,6 +296,49 @@ export default function AppLayout() {
         </Box>
     );
 
+    // Render open windows
+    const windowElements = useMemo(() => {
+        return Object.entries(windows).map(([id, win]) => {
+            const Component = win.component;
+            if (!Component) return null;
+
+            return (
+                <Window
+                    key={id}
+                    id={id}
+                    title={win.title}
+                    icon={win.icon}
+                    width={win.width}
+                    height={win.height}
+                    x={win.x}
+                    y={win.y}
+                    minimized={win.minimized}
+                    maximized={win.maximized}
+                    focused={win.focused}
+                    zIndex={win.zIndex}
+                    onClose={closeWindow}
+                    onMinimize={minimizeWindow}
+                    onMaximize={maximizeWindow}
+                    onFocus={focusWindow}
+                    onGeometryChange={updateWindowGeometry}
+                    snapshot={win.snapshot}
+                    onSnapshotChange={setWindowSnapshot}
+                    minWidth={450}
+                    minHeight={350}
+                    showRefresh={true}
+                    onRefresh={() => {
+                        if (Component.prototype && Component.prototype.forceUpdate) {
+                            // For class components
+                        }
+                        // Functional components handle their own refresh via key or internal state
+                    }}
+                >
+                    <Component />
+                </Window>
+            );
+        });
+    }, [windows, closeWindow, minimizeWindow, maximizeWindow, focusWindow, updateWindowGeometry, setWindowSnapshot]);
+
     return (
         <Box sx={{ display: 'flex', minHeight: '100vh' }}>
             <AppBar
@@ -267,6 +350,7 @@ export default function AppLayout() {
                     bgcolor: 'background.paper',
                     color: 'text.primary',
                     borderBottom: '1px solid #e5e7eb',
+                    zIndex: 1100,
                 }}
             >
                 <Toolbar>
@@ -284,16 +368,14 @@ export default function AppLayout() {
                     {/* Quick access: calendar, messages, notifications */}
                     <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
                         <IconButton
-                            component={NavLink}
-                            to="/app/calendar"
+                            onClick={() => handleNavClick({ to: '/app/calendar' })}
                             sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
                             aria-label="Calendar"
                         >
                             <EventNoteIcon />
                         </IconButton>
                         <IconButton
-                            component={NavLink}
-                            to="/app/messages"
+                            onClick={() => handleNavClick({ to: '/app/messages' })}
                             sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
                             aria-label="Messages"
                         >
@@ -302,8 +384,7 @@ export default function AppLayout() {
                             </Badge>
                         </IconButton>
                         <IconButton
-                            component={NavLink}
-                            to="/app/notices"
+                            onClick={() => handleNavClick({ to: '/app/notices' })}
                             sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
                             aria-label="Notifications"
                         >
@@ -352,6 +433,7 @@ export default function AppLayout() {
                 </Drawer>
             </Box>
 
+            {/* Main content area - now primarily for windows */}
             <Box
                 component="main"
                 sx={{
@@ -359,155 +441,39 @@ export default function AppLayout() {
                     width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
                     p: { xs: 2, sm: 3 },
                     mt: 8,
+                    overflow: 'hidden',
                 }}
             >
-                {user && !user.isEmailVerified && (
-                    <Alert
-                        severity="warning"
-                        variant="filled"
-                        sx={{
-                            mb: 3,
-                            borderRadius: 3,
-                            boxShadow: '0 4px 20px rgba(245, 158, 11, 0.15)',
-                            '& .MuiAlert-message': { width: '100%' }
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
-                            <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                    Gmail Connection Required
-                                </Typography>
-                                <Typography variant="body2" sx={{ fontSize: 13, opacity: 0.9 }}>
-                                    You are currently using temporary default details. Please link and verify your working Gmail account to secure your portal access.
-                                </Typography>
-                            </Box>
-                            <Button
-                                color="inherit"
-                                variant="outlined"
-                                size="small"
-                                onClick={() => setConnectGmailOpen(true)}
-                                sx={{
-                                    fontWeight: 700,
-                                    textTransform: 'none',
-                                    px: 2.5,
-                                    py: 0.5,
-                                    borderRadius: 2,
-                                    borderColor: 'rgba(255,255,255,0.5)',
-                                    alignSelf: { xs: 'flex-start', sm: 'center' },
-                                    whiteSpace: 'nowrap',
-                                    '&:hover': {
-                                        borderColor: '#ffffff',
-                                        backgroundColor: 'rgba(255,255,255,0.08)'
-                                    }
-                                }}
-                            >
-                                Link Working Gmail
-                            </Button>
-                        </Box>
-                    </Alert>
+                {/* Windows rendered here */}
+                {windowElements}
+                
+                {/* Empty state when no windows open */}
+                {Object.keys(windows).length === 0 && (
+                    <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        height: '100%',
+                        minHeight: 400,
+                        color: 'text.secondary',
+                        textAlign: 'center',
+                        px: 4,
+                    }}>
+                        <DashboardIcon sx={{ fontSize: 72, mb: 2, opacity: 0.3 }} />
+                        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                            Welcome to BIS NOC Gerji
+                        </Typography>
+                        <Typography variant="body1" sx={{ maxWidth: 400, opacity: 0.7 }}>
+                            Open an application from the sidebar to get started. 
+                            Multiple windows can be opened, moved, resized, minimized, and maximized.
+                        </Typography>
+                    </Box>
                 )}
-
-                <Outlet />
-
-                {/* Dialog to connect and verify Gmail */}
-                <Dialog
-                    open={connectGmailOpen}
-                    onClose={() => !modalSubmitting && setConnectGmailOpen(false)}
-                    maxWidth="xs"
-                    fullWidth
-                    PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
-                >
-                    <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-                        Connect Working Gmail
-                    </DialogTitle>
-
-                    <DialogContent>
-                        <DialogContentText sx={{ mb: 3, fontSize: 14 }}>
-                            Enter your official school Gmail address. We will email you a one-time verification code to confirm ownership.
-                        </DialogContentText>
-
-                        {modalError && (
-                            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-                                {modalError}
-                            </Alert>
-                        )}
-
-                        {modalSuccess && (
-                            <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
-                                {modalSuccess}
-                            </Alert>
-                        )}
-
-                        {verifyStep === 1 ? (
-                            <Box component="form" onSubmit={handleSendCode}>
-                                <TextField
-                                    fullWidth
-                                    label="Gmail Address"
-                                    placeholder="your.name@gmail.com"
-                                    value={gmailEmail}
-                                    onChange={(e) => setGmailEmail(e.target.value)}
-                                    variant="outlined"
-                                    type="email"
-                                    required
-                                    disabled={modalSubmitting}
-                                    sx={{ mb: 2 }}
-                                />
-                                <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button
-                                        onClick={() => setConnectGmailOpen(false)}
-                                        disabled={modalSubmitting}
-                                        variant="text"
-                                        sx={{ textTransform: 'none' }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        disabled={modalSubmitting || !gmailEmail}
-                                        sx={{ textTransform: 'none', px: 3 }}
-                                    >
-                                        {modalSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Send Code'}
-                                    </Button>
-                                </DialogActions>
-                            </Box>
-                        ) : (
-                            <Box component="form" onSubmit={handleVerifyCode}>
-                                <TextField
-                                    fullWidth
-                                    label="6-Digit Verification Code"
-                                    placeholder="Enter code"
-                                    value={verificationCode}
-                                    onChange={(e) => setVerificationCode(e.target.value)}
-                                    variant="outlined"
-                                    required
-                                    disabled={modalSubmitting}
-                                    helperText="Codes expire after 10 minutes."
-                                    sx={{ mb: 2 }}
-                                />
-                                <DialogActions sx={{ px: 0, pt: 1 }}>
-                                    <Button
-                                        onClick={() => setVerifyStep(1)}
-                                        disabled={modalSubmitting}
-                                        variant="text"
-                                        sx={{ textTransform: 'none' }}
-                                    >
-                                        Back
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        disabled={modalSubmitting || !verificationCode}
-                                        sx={{ textTransform: 'none', px: 3 }}
-                                    >
-                                        {modalSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Verify & Connect'}
-                                    </Button>
-                                </DialogActions>
-                            </Box>
-                        )}
-                    </DialogContent>
-                </Dialog>
             </Box>
+
+            {/* Taskbar */}
+            <Taskbar />
         </Box>
     );
 }

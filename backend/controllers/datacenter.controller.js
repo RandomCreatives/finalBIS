@@ -14,6 +14,8 @@ const gradeFor = (percentage) => {
 };
 
 const getStats = asyncHandler(async (req, res) => {
+    const schoolId = req.user.school_id;
+
     const [
         studentsRes,
         maleStudentsRes,
@@ -28,41 +30,50 @@ const getStats = asyncHandler(async (req, res) => {
         supabase
             .from('students')
             .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId)
             .eq('is_active', true),
         supabase
             .from('students')
             .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .eq('gender', 'male'),
         supabase
             .from('students')
             .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .eq('gender', 'female'),
         supabase
             .from('students')
             .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .eq('gender', 'other'),
         supabase
             .from('classes')
-            .select('id', { count: 'exact', head: true }),
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId),
         supabase
             .from('users')
             .select('id, role', { count: 'exact' })
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .neq('role', 'admin'),
         supabase
             .from('subjects')
-            .select('id', { count: 'exact', head: true }),
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId),
         supabase
             .from('students')
             .select('class_id, class:classes(name)')
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .not('class_id', 'is', null),
         supabase
             .from('attendance')
-            .select('status'),
+            .select('status')
+            .eq('school_id', schoolId),
     ]);
 
     for (const r of [studentsRes, maleStudentsRes, femaleStudentsRes, otherGenderStudentsRes, classesRes, staffRes, subjectsRes, classRollsRes, attendanceRes]) {
@@ -158,9 +169,12 @@ const getStats = asyncHandler(async (req, res) => {
  * partially-entered terms simply show fewer ranked students.
  */
 const getAcademic = asyncHandler(async (req, res) => {
+    const schoolId = req.user.school_id;
+
     const { data: term, error: termError } = await supabase
         .from('terms')
         .select('id, name, term_index')
+        .eq('school_id', schoolId)
         .eq('is_current', true)
         .limit(1)
         .maybeSingle();
@@ -185,6 +199,7 @@ const getAcademic = asyncHandler(async (req, res) => {
             subject_id, subject:subjects(name),
             percentage, grade
         `)
+        .eq('school_id', schoolId)
         .eq('term_id', term.id);
 
     if (marksError) throw marksError;

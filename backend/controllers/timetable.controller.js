@@ -100,6 +100,7 @@ const getMyWeek = asyncHandler(async (req, res) => {
     const { data, error } = await supabase
         .from('timetable_slots')
         .select(SELECT)
+        .eq('school_id', req.user.school_id)
         .eq('academic_year_id', yearId)
         .eq('teacher_id', req.user.id)
         .order('day_of_week')
@@ -187,14 +188,25 @@ const createSlot = asyncHandler(async (req, res) => {
     const { classSubjectId, dayOfWeek, startsAt, endsAt, room } = req.body;
     const yearId = await resolveYearId(req);
 
-    // class_id and teacher_id are filled by a DB trigger from the assignment.
+    // Look up class_id and teacher_id from the assignment before inserting.
+    const { data: assignment, error: assignErr } = await supabase
+        .from('class_subjects')
+        .select('class_id, teacher_id')
+        .eq('id', classSubjectId)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    if (assignErr) throw assignErr;
+    if (!assignment) throw new NotFoundError('Subject assignment not found');
+
     const { data, error } = await supabase
         .from('timetable_slots')
         .insert({
             school_id: req.user.school_id,
             academic_year_id: yearId,
             class_subject_id: classSubjectId,
-            class_id: '00000000-0000-0000-0000-000000000000',
+            class_id: assignment.class_id,
+            teacher_id: assignment.teacher_id,
             day_of_week: dayOfWeek,
             starts_at: startsAt,
             ends_at: endsAt,

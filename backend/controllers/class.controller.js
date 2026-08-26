@@ -154,6 +154,7 @@ const deleteClass = asyncHandler(async (req, res) => {
     const { count, error: countError } = await supabase
         .from('students')
         .select('id', { count: 'exact', head: true })
+        .eq('school_id', req.user.school_id)
         .eq('class_id', req.params.id);
 
     if (countError) throw countError;

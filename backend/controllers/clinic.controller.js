@@ -1,5 +1,5 @@
 const supabase = require('../config/supabase');
-const { NotFoundError, ConflictError, asyncHandler } = require('../utils/errors');
+const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 
 const SELECT = `
     id, visit_date, complaint, incident_type, severity, diagnosis, treatment,
@@ -82,6 +82,10 @@ const listVisits = asyncHandler(async (req, res) => {
  */
 const reviewLeaveRequest = asyncHandler(async (req, res) => {
     const { decision } = req.body; // 'approved' | 'rejected'
+
+    if (!['approved', 'rejected'].includes(decision)) {
+        throw new BadRequestError('decision must be "approved" or "rejected"');
+    }
 
     const { data: visit, error: lookupError } = await supabase
         .from('clinic_visits')

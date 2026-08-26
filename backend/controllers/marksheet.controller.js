@@ -1,6 +1,6 @@
 const supabase = require('../config/supabase');
 const { resolveTermId } = require('./term.controller');
-const { NotFoundError, asyncHandler } = require('../utils/errors');
+const { NotFoundError, BadRequestError, asyncHandler } = require('../utils/errors');
 
 /** Percentage → letter grade. Single source of truth for grading. */
 const gradeFor = (percentage) => {
@@ -42,6 +42,7 @@ const upsertMarksheet = asyncHandler(async (req, res) => {
     const termId = await resolveTermId(req);
 
     const max = maxMarks ?? 100;
+    if (max <= 0) throw new BadRequestError('maxMarks must be a positive number');
     const percentage = Number(((marks / max) * 100).toFixed(2));
 
     const { data, error } = await supabase

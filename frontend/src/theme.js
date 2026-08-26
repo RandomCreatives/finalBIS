@@ -4,7 +4,12 @@ import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material';
 const ThemeModeContext = createContext({ toggleColorScheme: () => null, mode: 'dark' });
 
 export function ThemeProvider({ children }) {
-    const [mode, setMode] = useState('dark');
+    const [mode, setMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('colorScheme') || 'light';
+        }
+        return 'light';
+    });
 
     const theme = useMemo(
         () => createTheme(getDesignTokens(mode)),
@@ -13,11 +18,18 @@ export function ThemeProvider({ children }) {
 
     const colorScheme = useMemo(
         () => ({
+            mode,
             toggleColorScheme: () => {
-                setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+                setMode((prevMode) => {
+                    const next = prevMode === 'light' ? 'dark' : 'light';
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('colorScheme', next);
+                    }
+                    return next;
+                });
             },
         }),
-        []
+        [mode]
     );
 
     return (

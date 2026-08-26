@@ -13,6 +13,11 @@ const notFound = (req, res) => {
  */
 // eslint-disable-next-line no-unused-vars -- Express identifies error handlers by arity
 const errorHandler = (err, req, res, next) => {
+    // Handle multer file-size errors
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File too large. Maximum size is 5 MB.' });
+    }
+
     const isOperational = err instanceof AppError && err.isOperational;
     const status = err.status || 500;
 

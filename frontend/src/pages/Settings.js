@@ -39,6 +39,7 @@ const ROLE_LABELS = {
     main_teacher: 'Main Teacher',
     assistant_teacher: 'Assistant Teacher',
     subject_teacher: 'Subject Teacher',
+    store_manager: 'Store Manager',
 };
 
 export default function Settings() {
