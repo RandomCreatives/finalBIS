@@ -31,8 +31,12 @@ A staff-facing school management system for the British International School, NO
 
 This is the core of the data structure, so it's worth stating plainly.
 
-**Classes** — each of the 12 classes has exactly **one main teacher** and **one assistant
-teacher**. Enforced by a partial unique index, so the seat can't be double-filled.
+**Classes** — for 2026/27 the school runs **14 classes**: ten Year 4 (Grade 3)
+and four Year 3 (Grade 2), each with a capacity of **30 students**
+(max-average). Every class has exactly **one main teacher** and **one assistant
+teacher**. Enforced by a partial unique index, so the seat can't be
+double-filled. Assistants are added as they are hired — a class may run with
+only its main teacher assigned.
 
 **Subjects** — a school-wide catalogue. "English" is *one* row, not one per class.
 Each subject records who normally delivers it:
@@ -255,7 +259,8 @@ npm start                 # http://localhost:3000
 
 1. Sign in as the seeded admin
 2. **Staff** → add teachers
-3. **Classes** → create the 12 classes
+3. **Classes** → run `cd backend && npm run setup:year` to create the 14
+   classes (10 × Year 4, 4 × Year 3, capacity 30), or create them by hand
 4. **Subjects** → the eight standard subjects are seeded already; add any others
 5. **Assignments → Class staffing** → set each class's main and assistant
 6. **Assignments → Subject teaching** → *Auto-assign main-teacher subjects*, then
