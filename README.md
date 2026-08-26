@@ -265,6 +265,8 @@ npm start                 # http://localhost:3000
 5. **Assignments → Class staffing** → set each class's main and assistant
 6. **Assignments → Subject teaching** → *Auto-assign main-teacher subjects*, then
    spread English, Amharic, Music, Arts, PE and French across classes
+7. **Marksheets** → each teacher manages results per class, subject and term;
+   a subject teacher sees one sheet per class they teach, saved in bulk
 7. **Students** → enrol, then **Assignments → Students** to place any without a class
 8. **Timetable** → build each class's week
 9. **Calendar → Terms** → adjust the seeded term dates if needed

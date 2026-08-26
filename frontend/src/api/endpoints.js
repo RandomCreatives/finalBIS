@@ -171,6 +171,7 @@ export const marksheetApi = {
     forStudent: (studentId, params) =>
         client.get(`/marksheets/student/${studentId}`, { params }).then((r) => r.data),
     save: (payload) => client.put('/marksheets', payload).then((r) => r.data.marksheet),
+    bulkSave: (payload) => client.post('/marksheets/bulk', payload).then((r) => r.data),
     remove: (id) => client.delete(`/marksheets/${id}`).then((r) => r.data),
 };
 

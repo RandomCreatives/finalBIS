@@ -185,7 +185,7 @@ describe('POST /api/auth/telegram', () => {
                     password_hash: 'x',
                     role: 'admin',
                     is_active: true,
-                    telegram_id: 987654321,
+                    telegram_id: '987654321', // stored as TEXT per the 24h-TTL hardening
                     telegram_username: 'test_staff',
                     last_login_at: null,
                 },
@@ -201,7 +201,7 @@ describe('POST /api/auth/telegram', () => {
         assert.equal(res.status, 200);
         assert.ok(res.body.token, 'expected a token');
         assert.equal(res.body.user.id, ADMIN);
-        assert.equal(res.body.user.telegramId, 987654321);
+        assert.equal(res.body.user.telegramId, '987654321'); // kept as string to avoid Number precision loss
         assert.equal(res.body.user.telegramUsername, 'test_staff');
     });
 
@@ -228,7 +228,8 @@ describe('POST /api/auth/telegram', () => {
     });
 
     test('rejects an expired auth_date (replay)', async () => {
-        const payload = signedTelegramPayload({ auth_date: Math.floor(Date.now() / 1000) - 3600 });
+        // The TTL is 24 hours (Telegram's standard), so go past it.
+        const payload = signedTelegramPayload({ auth_date: Math.floor(Date.now() / 1000) - 25 * 3600 });
 
         const res = await request(app)
             .post('/api/auth/telegram')
@@ -323,7 +324,7 @@ describe('POST /api/auth/link-telegram (self-service linking)', () => {
 
         assert.equal(res.status, 200);
         assert.equal(res.body.user.id, TEACHER);
-        assert.equal(res.body.user.telegramId, 987654321);
+        assert.equal(res.body.user.telegramId, '987654321'); // kept as string to avoid Number precision loss
         assert.equal(res.body.user.telegramUsername, 'test_staff');
 
         // And the account can now actually sign in with Telegram.
@@ -381,7 +382,7 @@ describe('DELETE /api/auth/link-telegram', () => {
                     password_hash: 'x',
                     role: 'admin',
                     is_active: true,
-                    telegram_id: 987654321,
+                    telegram_id: '987654321', // stored as TEXT per the 24h-TTL hardening
                     telegram_username: 'test_staff',
                 },
             ],
