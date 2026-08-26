@@ -411,7 +411,9 @@ router.put(
     marksheets.upsertMarksheet
 );
 
-router.get('/marksheets', authenticate, marksheets.listMarksheets);
+// Reads are teaching roles only — assistants and store staff have no marks
+// access, mirroring the write rules.
+router.get('/marksheets', authenticate, authorize(...TEACHING), marksheets.listMarksheets);
 
 router.post(
     '/marksheets/bulk',
@@ -427,7 +429,7 @@ router.post(
     validate,
     marksheets.bulkUpsertMarksheets
 );
-router.get('/marksheets/student/:studentId', authenticate, uuid('studentId'), validate, marksheets.getStudentMarksheet);
+router.get('/marksheets/student/:studentId', authenticate, authorize(...TEACHING), uuid('studentId'), validate, marksheets.getStudentMarksheet);
 router.delete('/marksheets/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, marksheets.deleteMarksheet);
 
 // =============================================================================

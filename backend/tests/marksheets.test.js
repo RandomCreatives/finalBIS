@@ -7,13 +7,17 @@ const app = require('../app');
 const { signToken } = require('../middleware/auth');
 
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
+const OTHER_SCHOOL = '9f8e7d6c-5b4a-4321-9876-543210fedcba';
 const YEAR = 'f1c9d3e2-4b7a-4c81-9d6e-5a2f8b3c1d40';
 const TERM_1 = '6b2f4d08-3b7a-4a5e-9d2c-1f8e6a4b0c93';
 const CLASS_A = '713bfeaa-d141-44f0-864a-cee594efb105';
 const CLASS_B = '2c4e6a80-1f3d-4b5c-8e7a-9d0f1b2c3e45';
 const SUBJ_ENG = 'e8c792f8-5e0f-4a8b-96e6-9a07ea4c932a';
+const SUBJ_MAT = '3b7d9e15-8c2a-4f60-b1d4-7e5a9c0f2b38';
 const STU_1 = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const STU_2 = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
+const STU_3 = 'f6a7b8c9-d0e1-4f2a-b3c4-d5e6f7a8b9c0';
+const STU_FOREIGN = 'c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f';
 
 const user = (id, role, name) => ({
     id, school_id: SCHOOL, name, email: `${name.toLowerCase()}@school.et`,
@@ -24,11 +28,12 @@ const ADMIN = user('b7180a79-119a-4dfb-9934-aa683058abf6', 'admin', 'Admin');
 const MAIN_A = user('82e61fbc-9942-415c-909c-f408360a2ef4', 'main_teacher', 'Meron');
 const ENG_T = user('343d1a63-716b-492c-88ca-f466c50aea97', 'subject_teacher', 'Dawit');
 const ASSIST = user('43d3dcca-5eba-4682-b5e5-9be5d3e9836c', 'assistant_teacher', 'Sara');
+const STORE = user('d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f80', 'store_manager', 'Kebede');
 
 const tokenFor = (u) => signToken(u);
 
 const tables = () => ({
-    users: [ADMIN, MAIN_A, ENG_T, ASSIST],
+    users: [ADMIN, MAIN_A, ENG_T, ASSIST, STORE],
     academic_years: [{ id: YEAR, school_id: SCHOOL, name: '2026/2027', is_current: true }],
     terms: [
         { id: TERM_1, school_id: SCHOOL, academic_year_id: YEAR, term_index: 1, name: 'Term 1', is_current: true },
@@ -39,10 +44,21 @@ const tables = () => ({
     ],
     subjects: [
         { id: SUBJ_ENG, school_id: SCHOOL, name: 'English', code: 'ENG', taught_by: 'subject_teacher' },
+        { id: SUBJ_MAT, school_id: SCHOOL, name: 'Mathematics', code: 'MAT', taught_by: 'main_teacher' },
+    ],
+    class_staff: [
+        // MAIN_A runs CLASS_A — anything in that class is theirs to record.
+        { id: 'cs-a', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, user_id: MAIN_A.id, position: 'main' },
+    ],
+    class_subjects: [
+        // ENG_T teaches English in CLASS_A only — not CLASS_B, not Maths.
+        { id: 'asg-1', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_ENG, teacher_id: ENG_T.id, sessions_per_week: 5 },
     ],
     students: [
         { id: STU_1, school_id: SCHOOL, name: 'Abel Tesfaye', admission_no: 'A001', roll_num: 1, class_id: CLASS_A, is_active: true },
         { id: STU_2, school_id: SCHOOL, name: 'Sara Kebede', admission_no: 'A002', roll_num: 2, class_id: CLASS_A, is_active: true },
+        { id: STU_3, school_id: SCHOOL, name: 'Daniel Girma', admission_no: 'B001', roll_num: 1, class_id: CLASS_B, is_active: true },
+        { id: STU_FOREIGN, school_id: OTHER_SCHOOL, name: 'Foreign Student', admission_no: 'X999', roll_num: 1, class_id: null, is_active: true },
     ],
     marksheets: [],
 });
@@ -155,6 +171,89 @@ describe('bulk marksheet save', () => {
     });
 });
 
+describe('write ownership', () => {
+    test('a subject teacher cannot write marks for a class they do not teach', async () => {
+        const res = await request(app)
+            .post('/api/marksheets/bulk')
+            .auth(tokenFor(ENG_T))
+            .send({
+                classId: CLASS_B,
+                entries: [{ studentId: STU_3, subjectId: SUBJ_ENG, marks: 50 }],
+            });
+
+        assert.equal(res.status, 403);
+        assert.equal(rowsOf('marksheets').length, 0);
+    });
+
+    test('a subject teacher cannot write a subject they are not assigned', async () => {
+        const res = await request(app)
+            .post('/api/marksheets/bulk')
+            .auth(tokenFor(ENG_T))
+            .send({
+                classId: CLASS_A,
+                entries: [{ studentId: STU_1, subjectId: SUBJ_MAT, marks: 50 }],
+            });
+
+        assert.equal(res.status, 403);
+    });
+
+    test('a main teacher records any subject of the class they run, even unassigned', async () => {
+        const res = await request(app)
+            .put('/api/marksheets')
+            .auth(tokenFor(MAIN_A))
+            .send({ studentId: STU_1, subjectId: SUBJ_MAT, classId: CLASS_A, marks: 62 });
+
+        assert.equal(res.status, 200);
+        assert.equal(rowsOf('marksheets')[0].class_id, CLASS_A);
+    });
+
+    test('a main teacher cannot write marks for another teacher\'s class', async () => {
+        const res = await request(app)
+            .post('/api/marksheets/bulk')
+            .auth(tokenFor(MAIN_A))
+            .send({
+                classId: CLASS_B,
+                entries: [{ studentId: STU_3, subjectId: SUBJ_MAT, marks: 50 }],
+            });
+
+        assert.equal(res.status, 403);
+    });
+
+    test('an admin records anywhere without needing an assignment', async () => {
+        const res = await request(app)
+            .post('/api/marksheets/bulk')
+            .auth(tokenFor(ADMIN))
+            .send({
+                classId: CLASS_B,
+                entries: [{ studentId: STU_3, subjectId: SUBJ_MAT, marks: 50 }],
+            });
+
+        assert.equal(res.status, 200);
+    });
+
+    test('a student from another school is rejected', async () => {
+        const res = await request(app)
+            .post('/api/marksheets/bulk')
+            .auth(tokenFor(ADMIN))
+            .send({ entries: [{ studentId: STU_FOREIGN, subjectId: SUBJ_ENG, marks: 50 }] });
+
+        assert.equal(res.status, 400);
+        assert.equal(rowsOf('marksheets').length, 0);
+    });
+
+    test('a claimed class that does not match the student\'s enrolment is rejected', async () => {
+        const res = await request(app)
+            .post('/api/marksheets/bulk')
+            .auth(tokenFor(MAIN_A))
+            .send({
+                classId: CLASS_B, // STU_1 is enrolled in CLASS_A
+                entries: [{ studentId: STU_1, subjectId: SUBJ_MAT, marks: 50 }],
+            });
+
+        assert.equal(res.status, 400);
+    });
+});
+
 describe('reading marksheets', () => {
     beforeEach(() => {
         rowsOf('marksheets').push(
@@ -190,6 +289,23 @@ describe('reading marksheets', () => {
         assert.equal(res.body.stats.subjectCount, 1);
         assert.equal(res.body.stats.averagePercentage, 80);
         assert.equal(res.body.stats.overallGrade, 'A');
+    });
+
+    test('assistants and store staff cannot read marksheets', async () => {
+        const list = await request(app)
+            .get('/api/marksheets')
+            .auth(tokenFor(ASSIST));
+        assert.equal(list.status, 403);
+
+        const store = await request(app)
+            .get('/api/marksheets')
+            .auth(tokenFor(STORE));
+        assert.equal(store.status, 403);
+
+        const report = await request(app)
+            .get(`/api/marksheets/student/${STU_1}`)
+            .auth(tokenFor(ASSIST));
+        assert.equal(report.status, 403);
     });
 
     test('only admin and main teachers can delete a result', async () => {
