@@ -288,9 +288,12 @@ export default function Marksheets() {
                             sx={{ minWidth: 210 }}
                             value={classId}
                             onChange={(e) => { setClassId(e.target.value); setSubjectId(''); }}
-                            helperText={isSubjectTeacher && classOptions.length > 1
-                                ? `${classOptions.length} classes assigned to you`
-                                : undefined}
+                            disabled={dirtyIds.length > 0}
+                            helperText={dirtyIds.length > 0
+                                ? 'Save or discard your edits to switch class'
+                                : isSubjectTeacher && classOptions.length > 1
+                                    ? `${classOptions.length} classes assigned to you`
+                                    : undefined}
                         >
                             {classOptions.map((c) => (
                                 <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
@@ -301,7 +304,8 @@ export default function Marksheets() {
                             select label="Subject" size="small" sx={{ minWidth: 200 }}
                             value={subjectId}
                             onChange={(e) => setSubjectId(e.target.value)}
-                            disabled={!classId}
+                            disabled={!classId || dirtyIds.length > 0}
+                            helperText={dirtyIds.length > 0 ? 'Save or discard your edits first' : undefined}
                         >
                             {subjectOptions.map((s) => (
                                 <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
@@ -312,6 +316,7 @@ export default function Marksheets() {
                             select label="Term" size="small" sx={{ minWidth: 170 }}
                             value={termId}
                             onChange={(e) => setTermId(e.target.value)}
+                            disabled={dirtyIds.length > 0}
                         >
                             {(terms.data || []).map((t) => (
                                 <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
