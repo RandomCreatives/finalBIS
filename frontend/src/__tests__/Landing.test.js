@@ -20,13 +20,13 @@ describe('Landing Page', () => {
     test('renders school branding and sign-in button', () => {
         renderWithProviders(<Landing />);
         expect(screen.getAllByText(/BIS NOC Gerji/i).length).toBeGreaterThan(0);
-        expect(screen.getByRole('link', { name: /Sign In/i })).toBeInTheDocument();
+        expect(screen.getAllByRole('link', { name: /Sign In/i }).length).toBeGreaterThan(0);
     });
 
-    test('renders welcome tagline', () => {
+    test('renders welcome heading', () => {
         renderWithProviders(<Landing />);
         expect(
-            screen.getByText(/manage teaching assignments/i)
+            screen.getByText(/One place for everything/i)
         ).toBeInTheDocument();
     });
 
@@ -37,11 +37,16 @@ describe('Landing Page', () => {
         ).toBeInTheDocument();
     });
 
-    test('renders floating quick access buttons', () => {
+    test('renders role access entries', () => {
         renderWithProviders(<Landing />);
-        expect(screen.getByText('Admin')).toBeInTheDocument();
-        expect(screen.getByText('Teachers')).toBeInTheDocument();
-        expect(screen.getByText('Clinic')).toBeInTheDocument();
+        expect(screen.getByText('Administrator')).toBeInTheDocument();
+        expect(screen.getAllByText('Clinic').length).toBeGreaterThan(0);
         expect(screen.getByText('Store Manager')).toBeInTheDocument();
+    });
+
+    test('renders module cards', () => {
+        renderWithProviders(<Landing />);
+        expect(screen.getByText('Attendance')).toBeInTheDocument();
+        expect(screen.getByText('Timetable')).toBeInTheDocument();
     });
 });
