@@ -17,6 +17,10 @@ export const authApi = {
         client.post('/auth/gmail/request', { email }).then((r) => r.data),
     gmailVerify: (email, code) =>
         client.post('/auth/gmail/verify', { email, code }).then((r) => r.data),
+        telegramRequestCode: (identifier) =>
+        client.post('/auth/telegram/request-code', { identifier }).then((r) => r.data),
+    telegramVerifyCode: (identifier, code) =>
+        client.post('/auth/telegram/verify-code', { identifier, code }).then((r) => r.data),
     telegramLogin: (payload) =>
         client.post('/auth/telegram', payload).then((r) => r.data),
     telegramConfig: () => client.get('/auth/telegram-config').then((r) => r.data),

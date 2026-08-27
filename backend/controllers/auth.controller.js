@@ -449,7 +449,113 @@ const unlinkTelegram = asyncHandler(async (req, res) => {
     res.json({ user: publicUser(data), message: 'Telegram account unlinked' });
 });
 
+
+/**
+ * POST /api/auth/telegram/request-code
+ *
+ * Step 1 of Telegram OTP login: staff member provides their email or Telegram handle.
+ * We find their account, generate a 6-digit OTP, send it via Telegram bot, and save code expiry.
+ */
+const telegramRequestCode = asyncHandler(async (req, res) => {
+    const identifier = (req.body.identifier || req.body.email || '').trim();
+
+    if (!identifier) {
+        throw new BadRequestError('Email or Telegram username is required');
+    }
+
+    const cleanIdentifier = identifier.replace(/^@/, '').toLowerCase();
+
+    // Query user by email or telegram_username or email match
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.ilike.${cleanIdentifier},telegram_username.ilike.${cleanIdentifier}`)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!user) {
+        throw new UnauthorizedError('No staff account found with that email or Telegram username.');
+    }
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
+    }
+    if (!user.telegram_id) {
+        throw new UnauthorizedError('Your account does not have a linked Telegram account yet. Please sign in with your password and link Telegram in Settings.');
+    }
+
+    const code = generateCode();
+    await supabase
+        .from('users')
+        .update({
+            login_code: code,
+            login_code_expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+        })
+        .eq('id', user.id)
+        .then(({ error: updateErr }) => { if (updateErr) console.error('[auth] Failed to store Telegram login code:', updateErr.message); });
+
+    const msg = `🔑 Your BIS NOC sign-in code is: ${code}
+
+It expires in 10 minutes. Do not share this code with anyone.`;
+    const sent = await sendTelegramMessage(user.telegram_id, msg);
+
+    if (!sent) {
+        console.log(`[telegram][dev] OTP code for user ${user.email}: ${code}`);
+    }
+
+    res.json({
+        message: 'Sign-in code sent to your Telegram account!',
+        identifier: user.email,
+        telegramUsername: user.telegram_username ? `@${user.telegram_username}` : null,
+        code: !sent && env.nodeEnv !== 'production' ? code : undefined,
+    });
+});
+
+/** POST /api/auth/telegram/verify-code — step 2: swap 6-digit Telegram OTP code for a session token. */
+const telegramVerifyCode = asyncHandler(async (req, res) => {
+    const identifier = (req.body.identifier || req.body.email || '').trim();
+    const { code } = req.body;
+
+    if (!code) throw new BadRequestError('Verification code is required');
+    if (!identifier) throw new BadRequestError('Email or Telegram username is required');
+
+    const cleanIdentifier = identifier.replace(/^@/, '').toLowerCase();
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.ilike.${cleanIdentifier},telegram_username.ilike.${cleanIdentifier}`)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!user) throw new UnauthorizedError('No account found');
+    if (!user.login_code || user.login_code !== code.trim()) {
+        throw new BadRequestError('Invalid verification code');
+    }
+    if (user.login_code_expires_at && new Date(user.login_code_expires_at) < new Date()) {
+        throw new BadRequestError('Code has expired. Request a new one.');
+    }
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
+    }
+
+    await supabase
+        .from('users')
+        .update({
+            login_code: null,
+            login_code_expires_at: null,
+            last_login_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .then(({ error: updateErr }) => { if (updateErr) console.error('[auth] Failed to clear Telegram login code:', updateErr.message); });
+
+    res.json({ token: signToken(user), user: publicUser(user) });
+});
+
 module.exports = {
+    telegramRequestCode,
+    telegramVerifyCode,
     login,
     me,
     changePassword,

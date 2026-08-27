@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
-    ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery,
+    ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery, Alert, Paper, Button
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -26,6 +26,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import FolderIcon from '@mui/icons-material/Folder';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
+import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '../auth/AuthContext';
 import { threadApi } from '../api/endpoints';
 
@@ -112,6 +113,7 @@ function NavButton({ item, onClick }) {
 export default function AppLayout() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
+    const [isTMA, setIsTMA] = useState(false);
 
     const { user, logout, isAdmin } = useAuth();
     const navigate = useNavigate();
@@ -119,6 +121,18 @@ export default function AppLayout() {
     const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
     const [unread, setUnread] = useState(0);
+
+    // Initialize Telegram Mini App SDK if running inside Telegram
+    useEffect(() => {
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+            if (tg.initData) {
+                setIsTMA(true);
+            }
+        }
+    }, []);
 
     // Poll unread messages
     useEffect(() => {
@@ -146,6 +160,9 @@ export default function AppLayout() {
 
     const closeDrawer = () => setMobileOpen(false);
 
+    // Primary operational roles for full Mini App access: Main Teachers, Subject Teachers, and Admins
+    const isPrimaryOperator = ['admin', 'main_teacher', 'subject_teacher'].includes(user?.role);
+
     const sections = NAV_SECTIONS
         .filter((s) => !s.adminOnly || isAdmin)
         .map((s) => ({
@@ -157,8 +174,8 @@ export default function AppLayout() {
     const drawer = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Toolbar sx={{ px: 2 }}>
-                <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: 'primary.main' }}>
-                    BIS NOC
+                <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    BIS NOC {isTMA && <SendIcon fontSize="small" color="primary" />}
                 </Typography>
             </Toolbar>
             <Divider />
@@ -204,7 +221,7 @@ export default function AppLayout() {
     );
 
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+        <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
             <AppBar
                 position="fixed"
                 elevation={0}
@@ -227,7 +244,13 @@ export default function AppLayout() {
                         <MenuIcon />
                     </IconButton>
 
-                    <Box sx={{ flexGrow: 1 }} />
+                    <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {isTMA && (
+                            <Paper variant="outlined" sx={{ px: 1, py: 0.25, bgcolor: 'primary.light', color: 'white', borderRadius: 1.5, fontSize: 11, fontWeight: 700 }}>
+                                Mini App
+                            </Paper>
+                        )}
+                    </Box>
 
                     {/* Quick access: calendar, messages, notifications */}
                     <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
@@ -309,6 +332,16 @@ export default function AppLayout() {
                     mt: 8,
                 }}
             >
+                {isTMA && !isPrimaryOperator && (
+                    <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }} action={
+                        <Button color="inherit" size="small" onClick={() => navigate('/app/notices')}>
+                            Open Notices
+                        </Button>
+                    }>
+                        Telegram Mini App Notification Mode: You have view access for school notices and messages.
+                    </Alert>
+                )}
+
                 <Outlet />
             </Box>
         </Box>

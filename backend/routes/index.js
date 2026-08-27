@@ -99,6 +99,24 @@ router.post(
     auth.gmailVerifyCode
 );
 
+// Telegram OTP Code sign-in — step 1 sends code to Telegram chat, step 2 verifies it
+router.post(
+    '/auth/telegram/request-code',
+    authLimiter,
+    body('identifier').isString().notEmpty().withMessage('Email or Telegram username is required'),
+    validate,
+    auth.telegramRequestCode
+);
+
+router.post(
+    '/auth/telegram/verify-code',
+    authLimiter,
+    body('identifier').isString().notEmpty().withMessage('Email or Telegram username is required'),
+    body('code').isString().notEmpty().withMessage('Verification code is required'),
+    validate,
+    auth.telegramVerifyCode
+);
+
 // Telegram Login Widget sign-in. The widget payload carries an HMAC signed by
 // our bot token; the controller verifies it, so an unlinked/forged payload is
 // rejected. Rate-limited like the other sign-in paths.
