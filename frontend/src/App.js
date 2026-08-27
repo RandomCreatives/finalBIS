@@ -24,6 +24,7 @@ import Store from './pages/Store';
 import Messages from './pages/Messages';
 import Notices from './pages/Notices';
 import Tasks from './pages/Tasks';
+import DailyPlanner from './pages/DailyPlanner';
 import Assignments from './pages/Assignments';
 import Calendar from './pages/Calendar';
 import Settings from './pages/Settings';
@@ -61,6 +62,14 @@ export default function App() {
                             <Route path="messages" element={<Messages />} />
                             <Route path="notices" element={<Notices />} />
                             <Route path="tasks" element={<Tasks />} />
+                            <Route
+                                path="planner"
+                                element={
+                                    <RequireAuth roles={['main_teacher', 'subject_teacher']}>
+                                        <DailyPlanner />
+                                    </RequireAuth>
+                                }
+                            />
                             <Route path="assignments" element={<Assignments />} />
                             <Route path="calendar" element={<Calendar />} />
                             <Route path="settings" element={<Settings />} />

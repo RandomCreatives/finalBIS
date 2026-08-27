@@ -20,6 +20,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import BadgeIcon from '@mui/icons-material/Badge';
 import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import TodayIcon from '@mui/icons-material/Today';
 import GradeIcon from '@mui/icons-material/Grade';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import StorefrontIcon from '@mui/icons-material/Storefront';
@@ -37,6 +38,7 @@ const NAV_SECTIONS = [
     {
         label: 'Academic',
         items: [
+            { label: 'Daily Planner', to: '/app/planner', icon: <TodayIcon />, roles: ['main_teacher', 'subject_teacher'] },
             { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon /> },
             { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon /> },
             { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon /> },
