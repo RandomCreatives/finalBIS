@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
-    DialogTitle, Divider, IconButton, MenuItem, Paper, Snackbar, Stack, Tab, Tabs,
+    DialogTitle, Divider, IconButton, MenuItem, Paper, Snackbar, Stack,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
     Tooltip, Typography,
 } from '@mui/material';
@@ -18,6 +18,7 @@ import { storeApi, classApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { FilterChips, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 
 const STATUS_META = {
@@ -27,7 +28,8 @@ const STATUS_META = {
     rejected: { label: 'Rejected', color: 'error' },
 };
 
-const TABS = [
+const FILTERS = [
+    { label: 'All', status: 'all' },
     { label: 'Pending', status: 'pending' },
     { label: 'Store approved', status: 'store_approved' },
     { label: 'Approved', status: 'approved' },
@@ -53,7 +55,7 @@ export default function Store() {
     const isStoreManager = user?.role === 'store_manager';
     const canStoreReview = isStoreManager || isAdmin;
 
-    const [tab, setTab] = useState(0);
+    const [filter, setFilter] = useState('all');
     const [dialog, setDialog] = useState(null); // { mode: 'create' | 'edit', request }
     const [review, setReview] = useState(null); // { request, stage: 'store' | 'admin' }
     const [print, setPrint] = useState(null);   // request being printed
@@ -61,9 +63,16 @@ export default function Store() {
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const status = TABS[tab].status;
-    const requests = useApi(() => storeApi.list({ status }), [status]);
+    // Single list, filtered by chips instead of status tabs.
+    const requests = useApi(() => storeApi.list({}), []);
     const classes = useApi(() => classApi.list(), []);
+
+    const allRequests = requests.data || [];
+    const counts = FILTERS.filter((f) => f.status !== 'all').reduce((acc, f) => {
+        acc[f.status] = allRequests.filter((r) => r.status === f.status).length;
+        return acc;
+    }, {});
+    const rows = filter === 'all' ? allRequests : allRequests.filter((r) => r.status === filter);
 
     // ---- Request form (create / edit) ----
     const [form, setForm] = useState({
@@ -198,22 +207,23 @@ export default function Store() {
                 }
             />
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-                    {TABS.map((t) => (
-                        <Tab key={t.status} label={t.label} />
-                    ))}
-                </Tabs>
-            </Card>
+            <StatGrid>
+                <StatCard label="Pending" value={counts.pending || 0} color="warning.main" />
+                <StatCard label="Store approved" value={counts.store_approved || 0} color="info.main" />
+                <StatCard label="Approved" value={counts.approved || 0} color="success.main" />
+                <StatCard label="Rejected" value={counts.rejected || 0} color="error.main" />
+            </StatGrid>
+
+            <FilterChips options={FILTERS} value={filter} onChange={setFilter} />
 
             <DataState
                 loading={requests.loading}
                 error={requests.error}
-                empty={(requests.data || []).length === 0}
-                emptyMessage={`No ${TABS[tab].label.toLowerCase()} requests.`}
+                empty={rows.length === 0}
+                emptyMessage="No requests in this view."
             >
                 <Stack spacing={1.5}>
-                    {(requests.data || []).map((r) => {
+                    {rows.map((r) => {
                         const meta = STATUS_META[r.status] || STATUS_META.pending;
                         const isOwner = r.requester?.id === user?.id;
                         const showStoreReview = canStoreReview && r.status === 'pending';

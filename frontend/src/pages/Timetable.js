@@ -2,15 +2,18 @@ import { useState } from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
     DialogTitle, Divider, IconButton, List, ListItem, ListItemText, MenuItem, Paper,
-    Snackbar, Stack, Tab, Tabs, TextField, Tooltip, Typography,
+    Snackbar, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import GroupsIcon from '@mui/icons-material/Groups';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { timetableApi, classApi, assignmentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 
 const DAYS = [
@@ -30,7 +33,6 @@ const periodTint = (slot) =>
 export default function Timetable() {
     const { user, isAdmin } = useAuth();
 
-    const [tab, setTab] = useState(0);
     const [classId, setClassId] = useState('');
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -39,15 +41,16 @@ export default function Timetable() {
 
     const classes = useApi(() => classApi.list(), []);
 
-    // Tab 0 = my own week, tab 1 = a class grid, tab 2 = who attends a class.
-    const myWeek = useApi(() => (tab === 0 ? timetableApi.myWeek() : Promise.resolve([])), [tab]);
+    // Previously separate tabs; now stacked sections. Fetch everything that is
+    // available so each panel can render independently.
+    const myWeek = useApi(() => timetableApi.myWeek(), []);
     const classGrid = useApi(
-        () => (tab === 1 && classId ? timetableApi.get({ classId }) : Promise.resolve([])),
-        [tab, classId]
+        () => (classId ? timetableApi.get({ classId }) : Promise.resolve([])),
+        [classId]
     );
     const roster = useApi(
-        () => (tab === 2 && classId ? timetableApi.roster(classId) : Promise.resolve(null)),
-        [tab, classId]
+        () => (classId ? timetableApi.roster(classId) : Promise.resolve(null)),
+        [classId]
     );
     const assignments = useApi(
         () => (isAdmin && classId ? assignmentApi.subjects({ classId }) : Promise.resolve(null)),
@@ -86,12 +89,10 @@ export default function Timetable() {
     };
 
     /** Renders a Mon–Fri grid from a flat slot list. */
-    const renderGrid = (slots, { editable = false } = {}) => {
+    const renderGrid = (slots, { editable = false, who = 'teacher' } = {}) => {
         if (slots.length === 0) {
             return (
-                <Alert severity="info">
-                    No periods scheduled{tab === 1 ? ' for this class' : ''} yet.
-                </Alert>
+                <Alert severity="info">No periods scheduled yet.</Alert>
             );
         }
 
@@ -135,7 +136,7 @@ export default function Timetable() {
                                             {slot.subject?.name}
                                         </Typography>
                                         <Typography variant="caption" display="block" color="text.secondary">
-                                            {tab === 0 ? slot.class?.name : slot.teacher?.name || 'Unassigned'}
+                                            {who === 'class' ? slot.class?.name : slot.teacher?.name || 'Unassigned'}
                                         </Typography>
                                         {slot.room && (
                                             <Typography variant="caption" color="text.disabled">
@@ -173,38 +174,15 @@ export default function Timetable() {
                         ? 'Your weekly teaching schedule.'
                         : 'Weekly schedules and who attends each class.'
                 }
-                action={isAdmin && tab === 1 && classId && (
-                    <Button
-                        variant="contained" startIcon={<AddIcon />}
-                        onClick={() => {
-                            setFormError('');
-                            setDialog({
-                                classSubjectId: '', dayOfWeek: 1,
-                                startsAt: '09:00', endsAt: '09:45', room: '',
-                            });
-                        }}
-                    >
-                        Add period
-                    </Button>
-                )}
             />
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" allowScrollButtonsMobile>
-                    <Tab label="My week" />
-                    {/* Subject teachers get only their own lessons, so the class
-                        grid would just repeat "My week" for them. */}
-                    {!isSubjectTeacher && <Tab label="Class schedule" />}
-                    {!isSubjectTeacher && <Tab label="Who attends" />}
-                </Tabs>
-            </Card>
-
-            {tab > 0 && (
+            {!isSubjectTeacher && (
                 <Card sx={{ p: 2, mb: 2.5 }}>
                     <TextField
                         select label="Class" size="small" sx={{ minWidth: 220 }}
                         value={classId} onChange={(e) => setClassId(e.target.value)}
                     >
+                        <MenuItem value=""><em>Select a class…</em></MenuItem>
                         {(classes.data || []).map((c) => (
                             <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
                         ))}
@@ -213,36 +191,56 @@ export default function Timetable() {
             )}
 
             {/* --- My week ---------------------------------------------------- */}
-            {tab === 0 && (
+            <Section title="My week" icon={<CalendarMonthIcon />} defaultExpanded>
                 <DataState loading={myWeek.loading} error={myWeek.error}>
                     <>
                         <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                             <Chip size="small" label="Main-teacher subject" sx={{ bgcolor: '#eef2ff' }} />
                             <Chip size="small" label="Subject-teacher subject" sx={{ bgcolor: '#ecfdf5' }} />
                         </Stack>
-                        {renderGrid(myWeek.data || [])}
+                        {renderGrid(myWeek.data || [], { who: 'class' })}
                     </>
                 </DataState>
-            )}
+            </Section>
 
             {/* --- Class schedule --------------------------------------------- */}
-            {tab === 1 && (
-                !classId ? (
-                    <Alert severity="info">Choose a class to view its weekly schedule.</Alert>
-                ) : (
-                    <DataState loading={classGrid.loading} error={classGrid.error}>
-                        {renderGrid(classGrid.data || [], { editable: isAdmin })}
-                    </DataState>
-                )
+            {!isSubjectTeacher && (
+                <Section
+                    title="Class schedule"
+                    icon={<CalendarMonthIcon />}
+                    action={isAdmin && classId && (
+                        <Button
+                            variant="contained" size="small" startIcon={<AddIcon />}
+                            onClick={() => {
+                                setFormError('');
+                                setDialog({
+                                    classSubjectId: '', dayOfWeek: 1,
+                                    startsAt: '09:00', endsAt: '09:45', room: '',
+                                });
+                            }}
+                        >
+                            Add period
+                        </Button>
+                    )}
+                >
+                    {!classId ? (
+                        <Alert severity="info">Choose a class to view its weekly schedule.</Alert>
+                    ) : (
+                        <DataState loading={classGrid.loading} error={classGrid.error}>
+                            {renderGrid(classGrid.data || [], { editable: isAdmin, who: 'teacher' })}
+                        </DataState>
+                    )}
+                </Section>
             )}
 
             {/* --- Who attends ------------------------------------------------ */}
-            {tab === 2 && (
-                !classId ? (
-                    <Alert severity="info">Choose a class to see everyone attached to it.</Alert>
-                ) : (
-                    <DataState loading={roster.loading} error={roster.error}>
-                        {roster.data && (
+            {!isSubjectTeacher && (
+                <Section title="Who attends" icon={<PeopleAltIcon />}>
+                    {!classId ? (
+                        <Alert severity="info">Choose a class to see everyone attached to it.</Alert>
+                    ) : (
+                        <DataState loading={roster.loading} error={roster.error}>
+                            {roster.data && (
                             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} alignItems="flex-start">
                                 <Card sx={{ flex: 1, width: '100%' }}>
                                     <CardContent>
@@ -326,7 +324,8 @@ export default function Timetable() {
                             </Stack>
                         )}
                     </DataState>
-                )
+                )}
+                </Section>
             )}
 
             {/* Add period ------------------------------------------------------ */}

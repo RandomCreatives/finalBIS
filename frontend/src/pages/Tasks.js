@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions,
-    DialogContent, DialogTitle, IconButton, MenuItem, Snackbar, Stack, Tab, Tabs,
+    DialogContent, DialogTitle, IconButton, MenuItem, Snackbar, Stack,
     TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddTaskIcon from '@mui/icons-material/AddTask';
@@ -10,7 +10,14 @@ import { taskApi, userApi, classApi, studentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { FilterChips, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+
+const FILTERS = [
+    { value: 'mine', label: 'Assigned to me' },
+    { value: 'all', label: 'All' },
+    { value: 'done', label: 'Completed' },
+];
 
 const PRIORITY_COLOR = { high: 'error', normal: 'default', low: 'info' };
 
@@ -23,15 +30,15 @@ export default function Tasks() {
     const { user, isAdmin } = useAuth();
     const canAssign = ['admin', 'main_teacher'].includes(user?.role);
 
-    const [tab, setTab] = useState(0);
+    const [filter, setFilter] = useState('mine');
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    // 0 = mine, 1 = everything I can see, 2 = completed
-    const params = [{ mine: 'true' }, {}, { status: 'done' }][tab];
-    const tasks = useApi(() => taskApi.list(params), [tab]);
+    // Single view, filtered via chips instead of tabs.
+    const params = filter === 'mine' ? { mine: 'true' } : filter === 'done' ? { status: 'done' } : {};
+    const tasks = useApi(() => taskApi.list(params), [filter]);
 
     const staff = useApi(() => (canAssign && isAdmin ? userApi.list() : Promise.resolve([])), [canAssign, isAdmin]);
     const classes = useApi(() => classApi.list(), []);
@@ -114,13 +121,14 @@ export default function Tasks() {
                 </Alert>
             )}
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-                    <Tab label="Assigned to me" />
-                    <Tab label="All" />
-                    <Tab label="Completed" />
-                </Tabs>
-            </Card>
+            <StatGrid>
+                <StatCard label="Open" value={rows.filter((t) => t.status !== 'done').length} />
+                <StatCard label="Overdue" value={overdueCount} color="error.main" />
+                <StatCard label="Completed" value={rows.filter((t) => t.status === 'done').length} color="success.main" />
+                <StatCard label="High priority" value={rows.filter((t) => t.priority === 'high' && t.status !== 'done').length} color="#7c3aed" />
+            </StatGrid>
+
+            <FilterChips options={FILTERS} value={filter} onChange={setFilter} />
 
             <DataState
                 loading={tasks.loading}

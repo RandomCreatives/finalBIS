@@ -2,17 +2,21 @@ import { useState } from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
     DialogTitle, FormControlLabel, Grid, IconButton, MenuItem, Snackbar, Stack, Switch,
-    Tab, Tabs, TextField, Tooltip, Typography,
+    TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import DateRangeIcon from '@mui/icons-material/DateRange';
 import { calendarApi, termApi, classApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { Section, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 
 const CATEGORIES = [
@@ -38,7 +42,6 @@ export default function Calendar() {
     const { user, isAdmin } = useAuth();
     const canPost = ['admin', 'main_teacher'].includes(user?.role);
 
-    const [tab, setTab] = useState(0);
     const [cursor, setCursor] = useState(new Date());
     const [dialog, setDialog] = useState(null);
     const [termDialog, setTermDialog] = useState(null);
@@ -241,7 +244,7 @@ export default function Calendar() {
                         ? `${current.data.term.name}${current.data.currentWeek ? ` · week ${current.data.currentWeek} of ${current.data.term.weekCount}` : ''}`
                         : 'Term dates, exams, meetings and events.'
                 }
-                action={canPost && tab === 0 && (
+                action={canPost && (
                     <Button
                         variant="contained" startIcon={<AddIcon />}
                         onClick={() => { setFormError(''); setDialog({ ...EMPTY }); }}
@@ -251,55 +254,45 @@ export default function Calendar() {
                 )}
             />
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-                    <Tab label="Month" />
-                    <Tab label="Upcoming" />
-                    {isAdmin && <Tab label="Terms" />}
-                </Tabs>
-            </Card>
-
             {/* --- Month view -------------------------------------------------- */}
-            {tab === 0 && (
-                <>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                            <IconButton
-                                onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
-                                aria-label="Previous month"
-                            >
-                                <ChevronLeftIcon />
-                            </IconButton>
-                            <Typography variant="h6" sx={{ minWidth: 190, textAlign: 'center' }}>
-                                {cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                            </Typography>
-                            <IconButton
-                                onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
-                                aria-label="Next month"
-                            >
-                                <ChevronRightIcon />
-                            </IconButton>
-                        </Stack>
-                        <Button size="small" onClick={() => setCursor(new Date())}>Today</Button>
+            <Section title="Month" icon={<CalendarMonthIcon />} defaultExpanded>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                        <IconButton
+                            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+                            aria-label="Previous month"
+                        >
+                            <ChevronLeftIcon />
+                        </IconButton>
+                        <Typography variant="h6" sx={{ minWidth: 190, textAlign: 'center' }}>
+                            {cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                        </Typography>
+                        <IconButton
+                            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+                            aria-label="Next month"
+                        >
+                            <ChevronRightIcon />
+                        </IconButton>
                     </Stack>
+                    <Button size="small" onClick={() => setCursor(new Date())}>Today</Button>
+                </Stack>
 
-                    <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-                        {CATEGORIES.map((c) => (
-                            <Chip
-                                key={c.value} label={c.label} size="small"
-                                sx={{ bgcolor: c.color, color: 'white', fontSize: 11, height: 22 }}
-                            />
-                        ))}
-                    </Stack>
+                <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+                    {CATEGORIES.map((c) => (
+                        <Chip
+                            key={c.value} label={c.label} size="small"
+                            sx={{ bgcolor: c.color, color: 'white', fontSize: 11, height: 22 }}
+                        />
+                    ))}
+                </Stack>
 
-                    <DataState loading={events.loading} error={events.error}>
-                        {renderMonth()}
-                    </DataState>
-                </>
-            )}
+                <DataState loading={events.loading} error={events.error}>
+                    {renderMonth()}
+                </DataState>
+            </Section>
 
             {/* --- Upcoming list ----------------------------------------------- */}
-            {tab === 1 && (
+            <Section title="Upcoming" icon={<EventNoteIcon />}>
                 <DataState
                     loading={events.loading}
                     error={events.error}
@@ -363,14 +356,16 @@ export default function Calendar() {
                         ))}
                     </Stack>
                 </DataState>
-            )}
+            </Section>
 
             {/* --- Terms -------------------------------------------------------- */}
-            {tab === 2 && isAdmin && (
-                <>
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+            {isAdmin && (
+                <Section
+                    title="Terms"
+                    icon={<DateRangeIcon />}
+                    action={
                         <Button
-                            variant="contained" startIcon={<AddIcon />}
+                            variant="contained" size="small" startIcon={<AddIcon />}
                             onClick={() => {
                                 setFormError('');
                                 setTermDialog({
@@ -381,14 +376,19 @@ export default function Calendar() {
                         >
                             Add term
                         </Button>
-                    </Stack>
-
+                    }
+                >
                     <DataState
                         loading={terms.loading}
                         error={terms.error}
                         empty={(terms.data || []).length === 0}
                         emptyMessage="No terms defined yet. Add three to structure the year."
                     >
+                        <StatGrid>
+                            <StatCard label="Terms" value={(terms.data || []).length} />
+                            <StatCard label="Current term" value={current.data?.term?.name || '—'} color="primary.main" />
+                        </StatGrid>
+
                         <Grid container spacing={2.5}>
                             {(terms.data || []).map((t) => (
                                 <Grid item xs={12} sm={6} md={4} key={t.id}>
@@ -431,7 +431,7 @@ export default function Calendar() {
                             ))}
                         </Grid>
                     </DataState>
-                </>
+                </Section>
             )}
 
             {/* Event dialog ----------------------------------------------------- */}

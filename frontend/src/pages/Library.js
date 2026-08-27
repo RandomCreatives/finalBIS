@@ -1,15 +1,22 @@
 import { useState } from 'react';
 import {
-    Alert, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    Grid, MenuItem, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, Tabs, Tab, TextField, Typography,
+    Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    MenuItem, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
+    TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { libraryApi, studentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { FilterChips, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+
+const FILTERS = [
+    { value: 'onloan', label: 'On loan' },
+    { value: 'overdue', label: 'Overdue' },
+    { value: 'returned', label: 'Returned' },
+];
 
 const inTwoWeeks = () => {
     const d = new Date();
@@ -21,15 +28,15 @@ export default function Library() {
     const { user } = useAuth();
     const canIssue = ['admin', 'main_teacher', 'assistant_teacher'].includes(user?.role);
 
-    const [tab, setTab] = useState(0);
+    const [filter, setFilter] = useState('onloan');
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const filters = [{ status: 'borrowed' }, { overdue: 'true' }, { status: 'returned' }][tab];
+    const filters = filter === 'onloan' ? { status: 'borrowed' } : filter === 'overdue' ? { overdue: 'true' } : { status: 'returned' };
 
-    const loans = useApi(() => libraryApi.loans(filters), [tab]);
+    const loans = useApi(() => libraryApi.loans(filters), [filter]);
     const summary = useApi(() => libraryApi.summary(), []);
     const students = useApi(() => studentApi.list(), []);
 
@@ -87,33 +94,14 @@ export default function Library() {
             />
 
             {summary.data && (
-                <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                    {[
-                        { label: 'On loan', value: summary.data.onLoan },
-                        { label: 'Overdue', value: summary.data.overdue, warn: summary.data.overdue > 0 },
-                        { label: 'Total loans', value: summary.data.totalLoans },
-                    ].map((s) => (
-                        <Grid item xs={6} md={3} key={s.label}>
-                            <Card>
-                                <CardContent>
-                                    <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-                                    <Typography variant="h5" color={s.warn ? 'error.main' : 'text.primary'}>
-                                        {s.value}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    ))}
-                </Grid>
+                <StatGrid>
+                    <StatCard label="On loan" value={summary.data.onLoan} />
+                    <StatCard label="Overdue" value={summary.data.overdue} color={summary.data.overdue > 0 ? 'error.main' : 'success.main'} />
+                    <StatCard label="Total loans" value={summary.data.totalLoans} color="secondary.main" />
+                </StatGrid>
             )}
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-                    <Tab label="On loan" />
-                    <Tab label="Overdue" />
-                    <Tab label="Returned" />
-                </Tabs>
-            </Card>
+            <FilterChips options={FILTERS} value={filter} onChange={setFilter} />
 
             <DataState
                 loading={loans.loading}

@@ -1,25 +1,29 @@
 import { useState } from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
-    DialogTitle, Grid, MenuItem, Paper, Snackbar, Stack, Tab, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, Tabs, TextField, ToggleButton, ToggleButtonGroup,
+    DialogTitle, Grid, MenuItem, Paper, Snackbar, Stack, Table, TableBody, TableCell,
+    TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup,
     Tooltip, Typography,
 } from '@mui/material';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import GroupsIcon from '@mui/icons-material/Groups';
+import ClassIcon from '@mui/icons-material/Class';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { assignmentApi, classApi, subjectApi, userApi, studentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { Section } from '../components/DashboardSections';
 
 const roleLabel = (r) => (r || '').replace(/_/g, ' ');
 
 export default function Assignments() {
-    const [tab, setTab] = useState(0);
     const [staffDialog, setStaffDialog] = useState(null);
     const [bulkDialog, setBulkDialog] = useState(null);
     const [rotateDialog, setRotateDialog] = useState(null);
@@ -172,18 +176,11 @@ export default function Assignments() {
                 </Alert>
             )}
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" allowScrollButtonsMobile>
-                    <Tab label="Class staffing" />
-                    <Tab label="Subject teaching" />
-                    <Tab label="Students" />
-                    <Tab label="Workload" />
-                </Tabs>
-            </Card>
-
-            {/* --- Class staffing -------------------------------------------- */}
-            {tab === 0 && (
-                <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+            <Section
+                title="Class staffing"
+                icon={<ClassIcon />}
+                defaultExpanded
+                action={
                     <Button
                         startIcon={<SwapHorizIcon />}
                         onClick={() => {
@@ -193,10 +190,8 @@ export default function Assignments() {
                     >
                         Rotate teachers
                     </Button>
-                </Stack>
-            )}
-
-            {tab === 0 && (
+                }
+            >
                 <DataState
                     loading={classes.loading}
                     error={classes.error}
@@ -249,12 +244,14 @@ export default function Assignments() {
                         ))}
                     </Grid>
                 </DataState>
-            )}
+            </Section>
 
             {/* --- Subject teaching ------------------------------------------ */}
-            {tab === 1 && (
-                <>
-                    <Stack direction="row" justifyContent="flex-end" spacing={1.5} sx={{ mb: 2 }}>
+            <Section
+                title="Subject teaching"
+                icon={<MenuBookIcon />}
+                action={
+                    <Stack direction="row" spacing={1.5}>
                         <Tooltip title="Give Maths, Science and semester subjects to each class's own main teacher">
                             <Button
                                 startIcon={<AutoFixHighIcon />}
@@ -275,45 +272,45 @@ export default function Assignments() {
                             Assign subject across classes
                         </Button>
                     </Stack>
-
-                    <DataState
-                        loading={subjectAssignments.loading}
-                        error={subjectAssignments.error}
-                        empty={(subjectAssignments.data?.assignments || []).length === 0}
-                        emptyMessage="No subject assignments yet. Use the button above to staff a subject across several classes at once."
-                    >
-                        <TableContainer component={Paper} variant="outlined">
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Subject</TableCell>
-                                        <TableCell>Class</TableCell>
-                                        <TableCell>Teacher</TableCell>
-                                        <TableCell align="right">Sessions/week</TableCell>
+                }
+            >
+                <DataState
+                    loading={subjectAssignments.loading}
+                    error={subjectAssignments.error}
+                    empty={(subjectAssignments.data?.assignments || []).length === 0}
+                    emptyMessage="No subject assignments yet. Use the button above to staff a subject across several classes at once."
+                >
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Subject</TableCell>
+                                    <TableCell>Class</TableCell>
+                                    <TableCell>Teacher</TableCell>
+                                    <TableCell align="right">Sessions/week</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {(subjectAssignments.data?.assignments || []).map((a) => (
+                                    <TableRow key={a.id} hover>
+                                        <TableCell sx={{ fontWeight: 500 }}>{a.subject?.name}</TableCell>
+                                        <TableCell>{a.class?.name}</TableCell>
+                                        <TableCell>
+                                            {a.teacher?.name || (
+                                                <Chip label="Unassigned" size="small" color="warning" variant="outlined" />
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="right">{a.sessionsPerWeek}</TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {(subjectAssignments.data?.assignments || []).map((a) => (
-                                        <TableRow key={a.id} hover>
-                                            <TableCell sx={{ fontWeight: 500 }}>{a.subject?.name}</TableCell>
-                                            <TableCell>{a.class?.name}</TableCell>
-                                            <TableCell>
-                                                {a.teacher?.name || (
-                                                    <Chip label="Unassigned" size="small" color="warning" variant="outlined" />
-                                                )}
-                                            </TableCell>
-                                            <TableCell align="right">{a.sessionsPerWeek}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </DataState>
-                </>
-            )}
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </DataState>
+            </Section>
 
             {/* --- Students ---------------------------------------------------- */}
-            {tab === 2 && (
+            <Section title="Students" icon={<GroupsIcon />}>
                 <DataState
                     loading={unassigned.loading}
                     error={unassigned.error}
@@ -424,10 +421,10 @@ export default function Assignments() {
                         </Grid>
                     </Grid>
                 </DataState>
-            )}
+            </Section>
 
             {/* --- Workload --------------------------------------------------- */}
-            {tab === 3 && (
+            <Section title="Workload" icon={<AssignmentIndIcon />}>
                 <DataState
                     loading={workload.loading}
                     error={workload.error}
@@ -477,7 +474,7 @@ export default function Assignments() {
                         </Table>
                     </TableContainer>
                 </DataState>
-            )}
+            </Section>
 
             {/* Assign class staff ---------------------------------------------- */}
             <Dialog open={Boolean(staffDialog)} onClose={() => setStaffDialog(null)} maxWidth="xs" fullWidth>

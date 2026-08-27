@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
-    DialogTitle, Grid, LinearProgress, MenuItem, Paper, Snackbar, Stack, Tab, Table,
-    TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Typography,
+    DialogTitle, Grid, LinearProgress, MenuItem, Paper, Snackbar, Stack, Table,
+    TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
+import GroupsIcon from '@mui/icons-material/Groups';
 import { planningApi, termApi, assignmentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { Section, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 
 const STATUS_META = {
@@ -29,7 +33,6 @@ export default function Planning() {
     const { user } = useAuth();
     const canReview = ['admin', 'main_teacher'].includes(user?.role);
 
-    const [tab, setTab] = useState(0);
     const [schemeDialog, setSchemeDialog] = useState(null);
     const [openScheme, setOpenScheme] = useState(null);
     const [planDialog, setPlanDialog] = useState(null);
@@ -42,8 +45,8 @@ export default function Planning() {
     const schemes = useApi(() => planningApi.schemes({ mine: 'true' }), []);
     const plans = useApi(() => planningApi.lessonPlans({ mine: 'true' }), []);
     const overview = useApi(
-        () => (canReview && tab === 2 ? planningApi.overview() : Promise.resolve(null)),
-        [canReview, tab]
+        () => (canReview ? planningApi.overview() : Promise.resolve(null)),
+        [canReview]
     );
     // Subjects the signed-in teacher actually teaches.
     const myAssignments = useApi(
@@ -167,244 +170,215 @@ export default function Planning() {
                 }
             />
 
-            <Card sx={{ mb: 2.5 }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" allowScrollButtonsMobile>
-                    <Tab label="My schemes of work" />
-                    <Tab label="My lesson plans" />
-                    {canReview && <Tab label="Staff overview" />}
-                </Tabs>
-            </Card>
-
-            {/* --- Schemes ------------------------------------------------------ */}
-            {tab === 0 && (
-                <>
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-                        <Button
-                            variant="contained" startIcon={<AddIcon />}
-                            onClick={() => {
-                                setFormError('');
-                                setSchemeDialog({ classSubjectId: '', title: '', aims: '' });
-                            }}
-                        >
-                            New scheme of work
-                        </Button>
-                    </Stack>
-
-                    <DataState
-                        loading={schemes.loading}
-                        error={schemes.error}
-                        empty={(schemes.data || []).length === 0}
-                        emptyMessage="No schemes yet. Create one for each subject you teach this term."
+            <Section title="My schemes of work" icon={<MenuBookIcon />} defaultExpanded
+                action={
+                    <Button
+                        variant="contained" size="small" startIcon={<AddIcon />}
+                        onClick={() => {
+                            setFormError('');
+                            setSchemeDialog({ classSubjectId: '', title: '', aims: '' });
+                        }}
                     >
-                        <Grid container spacing={2.5}>
-                            {(schemes.data || []).map((s) => (
-                                <Grid item xs={12} md={6} key={s.id}>
-                                    <Card>
-                                        <CardContent>
-                                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                                                <Box>
-                                                    <Typography variant="h6">{s.title}</Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {s.subject?.name} · {s.class?.name}
-                                                    </Typography>
-                                                </Box>
-                                                <StatusChip status={s.status} />
-                                            </Stack>
+                        New scheme of work
+                    </Button>
+                }
+            >
+                <DataState
+                    loading={schemes.loading}
+                    error={schemes.error}
+                    empty={(schemes.data || []).length === 0}
+                    emptyMessage="No schemes yet. Create one for each subject you teach this term."
+                >
+                    <Grid container spacing={2.5}>
+                        {(schemes.data || []).map((s) => (
+                            <Grid item xs={12} md={6} key={s.id}>
+                                <Card>
+                                    <CardContent>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                            <Box>
+                                                <Typography variant="h6">{s.title}</Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {s.subject?.name} · {s.class?.name}
+                                                </Typography>
+                                            </Box>
+                                            <StatusChip status={s.status} />
+                                        </Stack>
 
-                                            {s.reviewNote && s.status === 'changes_requested' && (
-                                                <Alert severity="warning" sx={{ mt: 1.5, py: 0.5 }}>
-                                                    {s.reviewNote}
-                                                </Alert>
-                                            )}
+                                        {s.reviewNote && s.status === 'changes_requested' && (
+                                            <Alert severity="warning" sx={{ mt: 1.5, py: 0.5 }}>
+                                                {s.reviewNote}
+                                            </Alert>
+                                        )}
 
-                                            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                                                <Button size="small" onClick={() => openSchemeDetail(s)}>
-                                                    Open weeks
+                                        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                                            <Button size="small" onClick={() => openSchemeDetail(s)}>
+                                                Open weeks
+                                            </Button>
+                                            {['draft', 'changes_requested'].includes(s.status) && (
+                                                <Button
+                                                    size="small" startIcon={<SendIcon />}
+                                                    onClick={() => submit('schemes', s.id)}
+                                                >
+                                                    Submit
                                                 </Button>
-                                                {['draft', 'changes_requested'].includes(s.status) && (
-                                                    <Button
-                                                        size="small" startIcon={<SendIcon />}
-                                                        onClick={() => submit('schemes', s.id)}
-                                                    >
+                                            )}
+                                        </Stack>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </DataState>
+            </Section>
+
+            <Section title="My lesson plans" icon={<AutoStoriesIcon />}
+                action={
+                    <Button
+                        variant="contained" size="small" startIcon={<AddIcon />}
+                        onClick={() => {
+                            setFormError('');
+                            setPlanDialog({
+                                classSubjectId: '', weekNumber: currentWeek || 1, topic: '',
+                                objectives: '', activities: '', resources: '', homework: '', reflection: '',
+                            });
+                        }}
+                    >
+                        New lesson plan
+                    </Button>
+                }
+            >
+                <DataState
+                    loading={plans.loading}
+                    error={plans.error}
+                    empty={(plans.data || []).length === 0}
+                    emptyMessage="No lesson plans yet for this term."
+                >
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell align="center">Week</TableCell>
+                                    <TableCell>Subject</TableCell>
+                                    <TableCell>Class</TableCell>
+                                    <TableCell>Topic</TableCell>
+                                    <TableCell>Status</TableCell>
+                                    <TableCell align="right">Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {(plans.data || []).map((p) => (
+                                    <TableRow
+                                        key={p.id}
+                                        hover
+                                        sx={p.weekNumber === currentWeek ? { bgcolor: '#eff6ff' } : undefined}
+                                    >
+                                        <TableCell align="center" sx={{ fontWeight: 600 }}>{p.weekNumber}</TableCell>
+                                        <TableCell>{p.subject?.name}</TableCell>
+                                        <TableCell>{p.class?.name}</TableCell>
+                                        <TableCell>{p.topic}</TableCell>
+                                        <TableCell><StatusChip status={p.status} /></TableCell>
+                                        <TableCell align="right">
+                                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                                <Button
+                                                    size="small"
+                                                    disabled={p.status === 'approved'}
+                                                    onClick={() => {
+                                                        setFormError('');
+                                                        setPlanDialog({
+                                                            classSubjectId: p.classSubjectId,
+                                                            weekNumber: p.weekNumber,
+                                                            topic: p.topic || '',
+                                                            objectives: p.objectives || '',
+                                                            activities: p.activities || '',
+                                                            resources: p.resources || '',
+                                                            homework: p.homework || '',
+                                                            reflection: p.reflection || '',
+                                                        });
+                                                    }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                {['draft', 'changes_requested'].includes(p.status) && (
+                                                    <Button size="small" onClick={() => submit('lesson-plans', p.id)}>
                                                         Submit
                                                     </Button>
                                                 )}
                                             </Stack>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))}
-                        </Grid>
-                    </DataState>
-                </>
-            )}
-
-            {/* --- Lesson plans -------------------------------------------------- */}
-            {tab === 1 && (
-                <>
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-                        <Button
-                            variant="contained" startIcon={<AddIcon />}
-                            onClick={() => {
-                                setFormError('');
-                                setPlanDialog({
-                                    classSubjectId: '', weekNumber: currentWeek || 1, topic: '',
-                                    objectives: '', activities: '', resources: '', homework: '', reflection: '',
-                                });
-                            }}
-                        >
-                            New lesson plan
-                        </Button>
-                    </Stack>
-
-                    <DataState
-                        loading={plans.loading}
-                        error={plans.error}
-                        empty={(plans.data || []).length === 0}
-                        emptyMessage="No lesson plans yet for this term."
-                    >
-                        <TableContainer component={Paper} variant="outlined">
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell align="center">Week</TableCell>
-                                        <TableCell>Subject</TableCell>
-                                        <TableCell>Class</TableCell>
-                                        <TableCell>Topic</TableCell>
-                                        <TableCell>Status</TableCell>
-                                        <TableCell align="right">Actions</TableCell>
+                                        </TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {(plans.data || []).map((p) => (
-                                        <TableRow
-                                            key={p.id}
-                                            hover
-                                            sx={p.weekNumber === currentWeek ? { bgcolor: '#eff6ff' } : undefined}
-                                        >
-                                            <TableCell align="center" sx={{ fontWeight: 600 }}>{p.weekNumber}</TableCell>
-                                            <TableCell>{p.subject?.name}</TableCell>
-                                            <TableCell>{p.class?.name}</TableCell>
-                                            <TableCell>{p.topic}</TableCell>
-                                            <TableCell><StatusChip status={p.status} /></TableCell>
-                                            <TableCell align="right">
-                                                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                                    <Button
-                                                        size="small"
-                                                        disabled={p.status === 'approved'}
-                                                        onClick={() => {
-                                                            setFormError('');
-                                                            setPlanDialog({
-                                                                classSubjectId: p.classSubjectId,
-                                                                weekNumber: p.weekNumber,
-                                                                topic: p.topic || '',
-                                                                objectives: p.objectives || '',
-                                                                activities: p.activities || '',
-                                                                resources: p.resources || '',
-                                                                homework: p.homework || '',
-                                                                reflection: p.reflection || '',
-                                                            });
-                                                        }}
-                                                    >
-                                                        Edit
-                                                    </Button>
-                                                    {['draft', 'changes_requested'].includes(p.status) && (
-                                                        <Button size="small" onClick={() => submit('lesson-plans', p.id)}>
-                                                            Submit
-                                                        </Button>
-                                                    )}
-                                                </Stack>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </DataState>
-                </>
-            )}
-
-            {/* --- Staff overview ------------------------------------------------ */}
-            {tab === 2 && canReview && (
-                <DataState loading={overview.loading} error={overview.error}>
-                    {overview.data && (
-                        <>
-                            <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                                {[
-                                    { label: 'Assignments', value: overview.data.summary.assignments },
-                                    { label: 'Schemes missing', value: overview.data.summary.schemesMissing, warn: true },
-                                    { label: 'Awaiting review', value: overview.data.summary.awaitingReview },
-                                    { label: 'Approved', value: overview.data.summary.schemesApproved },
-                                ].map((s) => (
-                                    <Grid item xs={6} md={3} key={s.label}>
-                                        <Card>
-                                            <CardContent>
-                                                <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-                                                <Typography
-                                                    variant="h5"
-                                                    color={s.warn && s.value > 0 ? 'error.main' : 'text.primary'}
-                                                >
-                                                    {s.value}
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
                                 ))}
-                            </Grid>
-
-                            <TableContainer component={Paper} variant="outlined">
-                                <Table size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell>Teacher</TableCell>
-                                            <TableCell>Subject</TableCell>
-                                            <TableCell>Class</TableCell>
-                                            <TableCell>Scheme</TableCell>
-                                            <TableCell>Weekly plans</TableCell>
-                                            <TableCell align="right">Actions</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {overview.data.rows.map((r) => (
-                                            <TableRow key={r.classSubjectId} hover>
-                                                <TableCell sx={{ fontWeight: 500 }}>{r.teacher?.name}</TableCell>
-                                                <TableCell>{r.subject?.name}</TableCell>
-                                                <TableCell>{r.class?.name}</TableCell>
-                                                <TableCell><StatusChip status={r.schemeStatus} /></TableCell>
-                                                <TableCell sx={{ minWidth: 130 }}>
-                                                    <Stack spacing={0.5}>
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {r.lessonPlanCount} of {r.expectedWeeks}
-                                                        </Typography>
-                                                        <LinearProgress
-                                                            variant="determinate"
-                                                            value={Math.min(100, (r.lessonPlanCount / r.expectedWeeks) * 100)}
-                                                            sx={{ height: 5, borderRadius: 3 }}
-                                                        />
-                                                    </Stack>
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    {r.schemeStatus === 'submitted' && (
-                                                        <Button
-                                                            size="small"
-                                                            onClick={() => setReviewDialog({
-                                                                kind: 'schemes', id: r.schemeId,
-                                                                decision: 'approved', note: '',
-                                                                title: `${r.subject?.name} — ${r.teacher?.name}`,
-                                                            })}
-                                                        >
-                                                            Review
-                                                        </Button>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        </>
-                    )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
                 </DataState>
+            </Section>
+
+            {canReview && (
+                <Section title="Staff overview" icon={<GroupsIcon />}>
+                    <DataState loading={overview.loading} error={overview.error}>
+                        {overview.data && (
+                            <>
+                                <StatGrid>
+                                    <StatCard label="Assignments" value={overview.data.summary.assignments} />
+                                    <StatCard label="Schemes missing" value={overview.data.summary.schemesMissing} color={overview.data.summary.schemesMissing > 0 ? 'error.main' : 'success.main'} />
+                                    <StatCard label="Awaiting review" value={overview.data.summary.awaitingReview} color="warning.main" />
+                                    <StatCard label="Approved" value={overview.data.summary.schemesApproved} color="success.main" />
+                                </StatGrid>
+
+                                <TableContainer component={Paper} variant="outlined">
+                                    <Table size="small">
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell>Teacher</TableCell>
+                                                <TableCell>Subject</TableCell>
+                                                <TableCell>Class</TableCell>
+                                                <TableCell>Scheme</TableCell>
+                                                <TableCell>Weekly plans</TableCell>
+                                                <TableCell align="right">Actions</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {overview.data.rows.map((r) => (
+                                                <TableRow key={r.classSubjectId} hover>
+                                                    <TableCell sx={{ fontWeight: 500 }}>{r.teacher?.name}</TableCell>
+                                                    <TableCell>{r.subject?.name}</TableCell>
+                                                    <TableCell>{r.class?.name}</TableCell>
+                                                    <TableCell><StatusChip status={r.schemeStatus} /></TableCell>
+                                                    <TableCell sx={{ minWidth: 130 }}>
+                                                        <Stack spacing={0.5}>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {r.lessonPlanCount} of {r.expectedWeeks}
+                                                            </Typography>
+                                                            <LinearProgress
+                                                                variant="determinate"
+                                                                value={Math.min(100, (r.lessonPlanCount / r.expectedWeeks) * 100)}
+                                                                sx={{ height: 5, borderRadius: 3 }}
+                                                            />
+                                                        </Stack>
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        {r.schemeStatus === 'submitted' && (
+                                                            <Button
+                                                                size="small"
+                                                                onClick={() => setReviewDialog({
+                                                                    kind: 'schemes', id: r.schemeId,
+                                                                    decision: 'approved', note: '',
+                                                                    title: `${r.subject?.name} — ${r.teacher?.name}`,
+                                                                })}
+                                                            >
+                                                                Review
+                                                            </Button>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            </>
+                        )}
+                    </DataState>
+                </Section>
             )}
 
             {/* New scheme -------------------------------------------------------- */}
