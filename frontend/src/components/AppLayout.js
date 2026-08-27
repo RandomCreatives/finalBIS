@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Fragment, useEffect, useState } from 'react';
+import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
     ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery,
@@ -28,31 +28,6 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
 import { threadApi } from '../api/endpoints';
-import { useWindowManager, getWindowIdFromRoute } from '../context/WindowManager';
-import Taskbar from './Taskbar';
-import Window from './Window';
-
-// Import page components for window content
-import DashboardPage from '../pages/Dashboard';
-import StudentsPage from '../pages/Students';
-import StaffPage from '../pages/Staff';
-import TimetablePage from '../pages/Timetable';
-import AttendancePage from '../pages/Attendance';
-import PlanningPage from '../pages/Planning';
-import ClassesPage from '../pages/Classes';
-import SubjectsPage from '../pages/Subjects';
-import LibraryPage from '../pages/Library';
-import ClinicPage from '../pages/Clinic';
-import StorePage from '../pages/Store';
-import MessagesPage from '../pages/Messages';
-import NoticesPage from '../pages/Notices';
-import TasksPage from '../pages/Tasks';
-import AssignmentsPage from '../pages/Assignments';
-import CalendarPage from '../pages/Calendar';
-import DataCenterPage from '../pages/DataCenter';
-import SettingsPage from '../pages/Settings';
-import FilesPage from '../pages/Files';
-import MarksheetsPage from '../pages/Marksheets';
 
 const DRAWER_WIDTH = 248;
 
@@ -68,8 +43,6 @@ const NAV_SECTIONS = [
             { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon /> },
             {
                 label: 'Marksheets', to: '/app/marksheets', icon: <GradeIcon />,
-                // Assistants deliberately have no marks access — editing is
-                // admin/main/subject teachers, mirroring the backend rules.
                 roles: ['admin', 'main_teacher', 'subject_teacher'],
             },
         ],
@@ -104,31 +77,7 @@ const ROLE_LABELS = {
     store_manager: 'Store Manager',
 };
 
-// Window component registry - maps routes to page components
-const WINDOW_COMPONENTS = {
-    '/app': { component: DashboardPage, title: 'Dashboard', icon: DashboardIcon },
-    '/app/students': { component: StudentsPage, title: 'Students', icon: GroupsIcon },
-    '/app/staff': { component: StaffPage, title: 'Staff', icon: BadgeIcon },
-    '/app/timetable': { component: TimetablePage, title: 'Timetable', icon: CalendarMonthIcon },
-    '/app/attendance': { component: AttendancePage, title: 'Attendance', icon: FactCheckIcon },
-    '/app/planning': { component: PlanningPage, title: 'Planning', icon: MenuBookOutlinedIcon },
-    '/app/marksheets': { component: MarksheetsPage, title: 'Marksheets', icon: GradeIcon },
-    '/app/classes': { component: ClassesPage, title: 'Classes', icon: ClassIcon },
-    '/app/subjects': { component: SubjectsPage, title: 'Subjects', icon: MenuBookIcon },
-    '/app/library': { component: LibraryPage, title: 'Library', icon: LocalLibraryIcon },
-    '/app/clinic': { component: ClinicPage, title: 'Clinic', icon: HealthAndSafetyIcon },
-    '/app/store': { component: StorePage, title: 'Store', icon: StorefrontIcon },
-    '/app/files': { component: FilesPage, title: 'Files', icon: FolderIcon },
-    '/app/messages': { component: MessagesPage, title: 'Messages', icon: ForumIcon },
-    '/app/notices': { component: NoticesPage, title: 'Notices', icon: NotificationsIcon },
-    '/app/tasks': { component: TasksPage, title: 'Tasks', icon: TaskAltIcon },
-    '/app/assignments': { component: AssignmentsPage, title: 'Assignments', icon: AssignmentIndIcon },
-    '/app/calendar': { component: CalendarPage, title: 'Calendar', icon: EventNoteIcon },
-    '/app/data-center': { component: DataCenterPage, title: 'Data Center', icon: NotificationsIcon },
-    '/app/settings': { component: SettingsPage, title: 'Settings', icon: SettingsIcon },
-};
-
-function NavButton({ item, onClick, active, windowOpen }) {
+function NavButton({ item, onClick }) {
     return (
         <ListItemButton
             component={NavLink}
@@ -138,24 +87,12 @@ function NavButton({ item, onClick, active, windowOpen }) {
             sx={{
                 borderRadius: 2,
                 mb: 0.5,
-                position: 'relative',
                 '&.active': {
                     bgcolor: 'primary.main',
                     color: 'common.white',
                     '& .MuiListItemIcon-root': { color: 'common.white' },
                     '&:hover': { bgcolor: 'primary.dark' },
                 },
-                '&::before': windowOpen && !active ? {
-                    content: '""',
-                    position: 'absolute',
-                    left: 0,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 3,
-                    height: '60%',
-                    backgroundColor: 'primary.main',
-                    borderRadius: '0 2px 2px 0',
-                } : null,
             }}
         >
             <ListItemIcon sx={{ minWidth: 40 }}>
@@ -180,18 +117,6 @@ export default function AppLayout() {
     const navigate = useNavigate();
     const theme = useTheme();
     const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-    const location = useLocation();
-
-    const {
-        windows,
-        openWindow,
-        closeWindow,
-        minimizeWindow,
-        maximizeWindow,
-        focusWindow,
-        updateWindowGeometry,
-        setWindowSnapshot,
-    } = useWindowManager();
 
     const [unread, setUnread] = useState(0);
 
@@ -216,42 +141,16 @@ export default function AppLayout() {
 
     const handleSettings = () => {
         setAnchorEl(null);
-        openWindow(getWindowIdFromRoute('/app/settings'), WINDOW_COMPONENTS['/app/settings']);
+        navigate('/app/settings');
     };
 
     const closeDrawer = () => setMobileOpen(false);
-
-    // Handle sidebar navigation - open window instead of routing
-    const handleNavClick = useCallback((item) => {
-        closeDrawer();
-        const windowId = getWindowIdFromRoute(item.to);
-        const windowConfig = WINDOW_COMPONENTS[item.to];
-        if (windowConfig) {
-            openWindow(windowId, {
-                title: windowConfig.title,
-                icon: windowConfig.icon,
-                component: windowConfig.component,
-                width: 1000,
-                height: 700,
-            });
-        } else {
-            // Fallback to navigation for unknown routes
-            navigate(item.to);
-        }
-    }, [openWindow, navigate]);
 
     const sections = NAV_SECTIONS
         .filter((s) => !s.adminOnly || isAdmin)
         .map((s) => ({
             ...s,
-items: s.items
-            .filter((item) => !item.roles || item.roles.includes(user?.role))
-            .map((item) => {
-                const windowId = getWindowIdFromRoute(item.to);
-                const windowOpen = !!windows[windowId];
-                const active = location.pathname === item.to;
-                return { ...item, active, windowOpen };
-            }),
+            items: s.items.filter((item) => !item.roles || item.roles.includes(user?.role)),
         }))
         .filter((s) => s.items.length > 0);
 
@@ -266,9 +165,7 @@ items: s.items
             <List sx={{ px: 1, py: 1, flexGrow: 1, overflowY: 'auto' }}>
                 <NavButton 
                     item={DASHBOARD_ITEM} 
-                    onClick={(e) => handleNavClick(DASHBOARD_ITEM)}
-                    active={location.pathname === '/app'}
-                    windowOpen={!!windows[getWindowIdFromRoute('/app')]}
+                    onClick={closeDrawer}
                 />
                 {sections.map((section) => (
                     <Fragment key={section.label}>
@@ -282,9 +179,7 @@ items: s.items
                             <NavButton
                                 key={item.to}
                                 item={item}
-                                onClick={(e) => handleNavClick(item)}
-                                active={item.active}
-                                windowOpen={item.windowOpen}
+                                onClick={closeDrawer}
                             />
                         ))}
                     </Fragment>
@@ -307,49 +202,6 @@ items: s.items
             </List>
         </Box>
     );
-
-    // Render open windows
-    const windowElements = useMemo(() => {
-        return Object.entries(windows).map(([id, win]) => {
-            const Component = win.component;
-            if (!Component) return null;
-
-            return (
-                <Window
-                    key={id}
-                    id={id}
-                    title={win.title}
-                    icon={win.icon}
-                    width={win.width}
-                    height={win.height}
-                    x={win.x}
-                    y={win.y}
-                    minimized={win.minimized}
-                    maximized={win.maximized}
-                    focused={win.focused}
-                    zIndex={win.zIndex}
-                    onClose={closeWindow}
-                    onMinimize={minimizeWindow}
-                    onMaximize={maximizeWindow}
-                    onFocus={focusWindow}
-                    onGeometryChange={updateWindowGeometry}
-                    snapshot={win.snapshot}
-                    onSnapshotChange={setWindowSnapshot}
-                    minWidth={450}
-                    minHeight={350}
-                    showRefresh={true}
-                    onRefresh={() => {
-                        if (Component.prototype && Component.prototype.forceUpdate) {
-                            // For class components
-                        }
-                        // Functional components handle their own refresh via key or internal state
-                    }}
-                >
-                    <Component />
-                </Window>
-            );
-        });
-    }, [windows, closeWindow, minimizeWindow, maximizeWindow, focusWindow, updateWindowGeometry, setWindowSnapshot]);
 
     return (
         <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -380,15 +232,15 @@ items: s.items
                     {/* Quick access: calendar, messages, notifications */}
                     <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
                         <IconButton
-                            onClick={() => handleNavClick({ to: '/app/calendar' })}
-                            sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
+                            onClick={() => navigate('/app/calendar')}
+                            sx={{ color: 'text.secondary' }}
                             aria-label="Calendar"
                         >
                             <EventNoteIcon />
                         </IconButton>
                         <IconButton
-                            onClick={() => handleNavClick({ to: '/app/messages' })}
-                            sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
+                            onClick={() => navigate('/app/messages')}
+                            sx={{ color: 'text.secondary' }}
                             aria-label="Messages"
                         >
                             <Badge color="error" badgeContent={unread} invisible={!unread}>
@@ -396,8 +248,8 @@ items: s.items
                             </Badge>
                         </IconButton>
                         <IconButton
-                            onClick={() => handleNavClick({ to: '/app/notices' })}
-                            sx={{ color: 'text.secondary', '&.active': { color: 'primary.main' } }}
+                            onClick={() => navigate('/app/notices')}
+                            sx={{ color: 'text.secondary' }}
                             aria-label="Notifications"
                         >
                             <NotificationsIcon />
@@ -423,6 +275,8 @@ items: s.items
                         <MenuItem disabled sx={{ opacity: '1 !important' }}>
                             <Typography variant="caption" color="text.secondary">{user?.email}</Typography>
                         </MenuItem>
+                        <MenuItem onClick={handleSettings}>Settings</MenuItem>
+                        <MenuItem onClick={handleLogout}>Sign out</MenuItem>
                     </Menu>
                 </Toolbar>
             </AppBar>
@@ -445,7 +299,7 @@ items: s.items
                 </Drawer>
             </Box>
 
-            {/* Main content area - now primarily for windows */}
+            {/* Main content area - Stacked views rendered here via Outlet */}
             <Box
                 component="main"
                 sx={{
@@ -453,39 +307,10 @@ items: s.items
                     width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
                     p: { xs: 2, sm: 3 },
                     mt: 8,
-                    overflow: 'hidden',
                 }}
             >
-                {/* Windows rendered here */}
-                {windowElements}
-                
-                {/* Empty state when no windows open */}
-                {Object.keys(windows).length === 0 && (
-                    <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        height: '100%',
-                        minHeight: 400,
-                        color: 'text.secondary',
-                        textAlign: 'center',
-                        px: 4,
-                    }}>
-                        <DashboardIcon sx={{ fontSize: 72, mb: 2, opacity: 0.3 }} />
-                        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-                            Welcome to BIS NOC Gerji
-                        </Typography>
-                        <Typography variant="body1" sx={{ maxWidth: 400, opacity: 0.7 }}>
-                            Open an application from the sidebar to get started. 
-                            Multiple windows can be opened, moved, resized, minimized, and maximized.
-                        </Typography>
-                    </Box>
-                )}
+                <Outlet />
             </Box>
-
-            {/* Taskbar */}
-            <Taskbar />
         </Box>
     );
 }
