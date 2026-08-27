@@ -64,25 +64,81 @@ const verifyTelegramLogin = (data, botToken) => {
 };
 
 /**
- * Send a plain-text message to a chat/user via the Telegram Bot API.
- * Returns the parsed API response, or null on failure.
+ * Low-level caller for any Telegram Bot API method.
+ * Returns the parsed JSON response, or null on transport failure.
  */
-const sendTelegramMessage = async (chatId, text) => {
+const callTelegramApi = async (method, payload = {}) => {
     const env = require('../config/env');
     const token = env.telegram.botToken;
     if (!token) return null;
 
     try {
-        const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text }),
+            body: JSON.stringify(payload),
         });
         return await response.json();
     } catch (err) {
-        console.error('[telegram] sendMessage failed:', err.message);
+        console.error(`[telegram] ${method} failed:`, err.message);
         return null;
     }
 };
 
-module.exports = { verifyTelegramLogin, sendTelegramMessage };
+/**
+ * Send a message. `opts.replyMarkup` is a Telegram reply_markup object
+ * (e.g. an inline keyboard); `opts.parseMode` is optional.
+ */
+const sendTelegramMessage = async (chatId, text, opts = {}) => {
+    return callTelegramApi('sendMessage', {
+        chat_id: chatId,
+        text,
+        ...(opts.parseMode ? { parse_mode: opts.parseMode } : {}),
+        ...(opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+    });
+};
+
+/** Edit an existing message's text and/or keyboard. */
+const editMessageText = async (chatId, messageId, text, opts = {}) => {
+    return callTelegramApi('editMessageText', {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        ...(opts.parseMode ? { parse_mode: opts.parseMode } : {}),
+        ...(opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+    });
+};
+
+/** Acknowledge a callback query (shows a toast / alert to the user). */
+const answerCallbackQuery = async (callbackQueryId, opts = {}) => {
+    return callTelegramApi('answerCallbackQuery', {
+        callback_query_id: callbackQueryId,
+        ...(opts.text ? { text: opts.text } : {}),
+        ...(opts.showAlert ? { show_alert: true } : {}),
+    });
+};
+
+/** Register the webhook. `secret` sets the X-Telegram-Bot-Api-Secret-Token header. */
+const setWebhook = (url, secret) => {
+    return callTelegramApi('setWebhook', {
+        url,
+        allowed_updates: ['message', 'callback_query'],
+        drop_pending_updates: true,
+        ...(secret ? { secret_token: secret } : {}),
+    });
+};
+
+const deleteWebhook = () => callTelegramApi('deleteWebhook', { drop_pending_updates: true });
+
+const getMe = () => callTelegramApi('getMe', {});
+
+module.exports = {
+    verifyTelegramLogin,
+    callTelegramApi,
+    sendTelegramMessage,
+    editMessageText,
+    answerCallbackQuery,
+    setWebhook,
+    deleteWebhook,
+    getMe,
+};

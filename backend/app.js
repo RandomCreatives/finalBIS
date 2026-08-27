@@ -6,6 +6,7 @@ const env = require('./config/env');
 const routes = require('./routes');
 const { apiLimiter, isAllowedOrigin } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const telegramBot = require('./services/telegramBot');
 
 const app = express();
 
@@ -98,6 +99,10 @@ app.get('/api/keep-alive', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database ping failed' });
     }
 });
+
+// Telegram webhook: registered before the IP limiter so Telegram's own
+// delivery IPs are never throttled, and the secret-token header is checked.
+app.post('/api/telegram/webhook', telegramBot.webhookHandler);
 
 app.use('/api', apiLimiter, routes);
 

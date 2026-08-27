@@ -58,6 +58,9 @@ const env = {
     telegram: {
         botToken: process.env.TELEGRAM_BOT_TOKEN || '',
         botUsername: process.env.TELEGRAM_BOT_USERNAME || '',
+        // Optional shared secret sent by Telegram as the
+        // X-Telegram-Bot-Api-Secret-Token header on every webhook update.
+        webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
     },
 };
 
