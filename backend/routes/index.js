@@ -866,4 +866,10 @@ router.post('/files/upload', authenticate, uploadMemory.single('file'), files.up
 router.get('/files/:id/download', authenticate, uuid('id'), validate, files.downloadFile);
 router.delete('/files/:id', authenticate, uuid('id'), validate, files.deleteFile);
 
+
+const telegram = require('../controllers/telegram.controller');
+
+// Telegram Bot Webhook endpoint for /start, /menu, and inline keyboard callbacks
+router.post('/telegram/webhook', telegram.handleWebhook);
+
 module.exports = router;

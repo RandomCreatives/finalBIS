@@ -409,3 +409,33 @@ describe('DELETE /api/auth/link-telegram', () => {
         assert.equal(res.status, 401);
     });
 });
+
+
+describe('POST /api/telegram/webhook', () => {
+    it('handles /start command and returns inline keyboard', async () => {
+        const res = await request(app)
+            .post('/api/telegram/webhook')
+            .send({
+                message: {
+                    chat: { id: 123456 },
+                    from: { id: 987654321, first_name: 'Test' },
+                    text: '/start',
+                },
+            });
+        assert.equal(res.status, 200);
+    });
+
+    it('handles callback_query for btn_timetable', async () => {
+        const res = await request(app)
+            .post('/api/telegram/webhook')
+            .send({
+                callback_query: {
+                    id: 'cb_123',
+                    from: { id: 987654321 },
+                    message: { chat: { id: 123456 } },
+                    data: 'btn_timetable',
+                },
+            });
+        assert.equal(res.status, 200);
+    });
+});

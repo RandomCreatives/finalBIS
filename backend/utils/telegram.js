@@ -85,4 +85,46 @@ const sendTelegramMessage = async (chatId, text) => {
     }
 };
 
-module.exports = { verifyTelegramLogin, sendTelegramMessage };
+/**
+ * Send a message with options (like reply_markup for inline keyboards, parse_mode, etc.)
+ */
+const sendTelegramMessageWithOptions = async (chatId, text, options = {}) => {
+    const env = require('../config/env');
+    const token = env.telegram.botToken;
+    if (!token) return null;
+
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text, ...options }),
+        });
+        return await response.json();
+    } catch (err) {
+        console.error('[telegram] sendMessage failed:', err.message);
+        return null;
+    }
+};
+
+/**
+ * Answer an inline callback query
+ */
+const answerCallbackQuery = async (callbackQueryId, text = '') => {
+    const env = require('../config/env');
+    const token = env.telegram.botToken;
+    if (!token) return null;
+
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+        });
+        return await response.json();
+    } catch (err) {
+        console.error('[telegram] answerCallbackQuery failed:', err.message);
+        return null;
+    }
+};
+
+module.exports = { verifyTelegramLogin, sendTelegramMessage, sendTelegramMessageWithOptions, answerCallbackQuery };
