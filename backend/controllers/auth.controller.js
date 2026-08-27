@@ -4,7 +4,7 @@ const supabase = require('../config/supabase');
 const { signToken } = require('../middleware/auth');
 const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, asyncHandler } = require('../utils/errors');
 const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
-const { verifyTelegramLogin } = require('../utils/telegram');
+const { verifyTelegramLogin, sendTelegramMessage } = require('../utils/telegram');
 
 const BCRYPT_ROUNDS = 12;
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -425,6 +425,11 @@ const linkTelegram = asyncHandler(async (req, res) => {
             throw new ConflictError('That Telegram account is already linked to another staff member');
         }
         throw error;
+    }
+
+    if (identity.telegramId) {
+        const msg = `Hello ${data.name}! Your Telegram account (${identity.username ? '@' + identity.username : '#' + identity.telegramId}) is now linked to your BIS NOC staff account (${data.email}). You can now sign in with Telegram.`;
+        sendTelegramMessage(identity.telegramId, msg).catch((err) => console.error('[telegram] notification failed:', err.message));
     }
 
     res.json({ user: publicUser(data), message: 'Telegram account linked. You can now sign in with Telegram.' });
