@@ -9,6 +9,7 @@ import AppLayout from './components/AppLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import PublicClasses from './pages/PublicClasses';
+import PublicTeachers from './pages/PublicTeachers';
 
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -79,6 +80,7 @@ export default function App() {
 
                         <Route path="/" element={<Landing />} />
                         <Route path="/classes" element={<PublicClasses />} />
+                        <Route path="/teachers" element={<PublicTeachers />} />
                         {/* Data Center dormant in v1.0 (was public). */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

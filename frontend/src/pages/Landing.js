@@ -116,7 +116,7 @@ export default function Landing() {
 
                         <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3 }}>
                             <NavLink component={RouterLink} to="/classes">Classes</NavLink>
-                            <NavLink component={RouterLink} to="/app/staff">Teachers</NavLink>
+                            <NavLink component={RouterLink} to="/teachers">Teachers</NavLink>
                             <NavLink component={RouterLink} to="/app/students">Students</NavLink>
                         </Box>
 

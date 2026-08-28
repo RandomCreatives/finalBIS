@@ -5,6 +5,7 @@ const { authenticate, authorize, ROLES, TEACHER_ROLES } = require('../middleware
 const { authLimiter, validate, uploadSingle } = require('../middleware/security');
 
 const auth = require('../controllers/auth.controller');
+const pub = require('../controllers/public.controller');
 const users = require('../controllers/user.controller');
 const years = require('../controllers/academicYear.controller');
 const classes = require('../controllers/class.controller');
@@ -113,6 +114,11 @@ router.post(
 // Public on purpose: the login page reads it to render the widget. It only
 // exposes the bot's public username, never the token.
 router.get('/auth/telegram-config', auth.telegramConfig);
+
+// =============================================================================
+// PUBLIC DIRECTORY — no login, safe fields only (names, classes, subjects).
+// =============================================================================
+router.get('/public/teachers', pub.listPublicTeachers);
 
 // Self-service Telegram linking from Settings — the signed-in staff member
 // authorizes with the widget and the verified identity is attached to their
