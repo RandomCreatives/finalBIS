@@ -119,6 +119,7 @@ router.get('/auth/telegram-config', auth.telegramConfig);
 // PUBLIC DIRECTORY — no login, safe fields only (names, classes, subjects).
 // =============================================================================
 router.get('/public/teachers', pub.listPublicTeachers);
+router.get('/public/students', pub.listPublicStudents);
 
 // Self-service Telegram linking from Settings — the signed-in staff member
 // authorizes with the widget and the verified identity is attached to their

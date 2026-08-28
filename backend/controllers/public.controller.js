@@ -93,4 +93,40 @@ const listPublicTeachers = asyncHandler(async (req, res) => {
     });
 });
 
-module.exports = { listPublicTeachers };
+/**
+ * GET /api/public/students — login-free student directory.
+ *
+ * Shows every active, placed student grouped by class, with names only.
+ * Deliberately the minimum a public roster needs: no admission numbers,
+ * roll numbers, dates of birth, or guardian details ever leave the backend.
+ */
+const listPublicStudents = asyncHandler(async (req, res) => {
+    const { data: school, error: schoolError } = await supabase
+        .from('schools')
+        .select('id')
+        .maybeSingle();
+
+    if (schoolError) throw schoolError;
+    if (!school) return res.json({ students: [] });
+
+    const { data: students, error } = await supabase
+        .from('students')
+        .select('name, class:classes(name, year_level)')
+        .eq('school_id', school.id)
+        .eq('is_active', true)
+        .order('name');
+
+    if (error) throw error;
+
+    res.json({
+        students: (students || [])
+            .filter((s) => s.class) // unplaced students never appear publicly
+            .map((s) => ({
+                name: s.name,
+                className: s.class.name,
+                yearLevel: s.class.year_level,
+            })),
+    });
+});
+
+module.exports = { listPublicTeachers, listPublicStudents };

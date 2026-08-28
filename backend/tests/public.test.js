@@ -46,6 +46,28 @@ const tables = () => ({
         { id: 'asg-2', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_B, subject_id: SUBJ_ENG, teacher_id: ENG_T.id },
         { id: 'asg-3', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_FRA, teacher_id: ENG_T.id },
     ],
+    students: [
+        {
+            id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', school_id: SCHOOL,
+            name: 'Abel Tesfaye', admission_no: 'A001', roll_num: 1,
+            class_id: CLASS_A, is_active: true, guardian_name: 'Tesfaye G.', guardian_phone: '+251900000001',
+        },
+        {
+            id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e', school_id: SCHOOL,
+            name: 'Sara Kebede', admission_no: 'A002', roll_num: 2,
+            class_id: CLASS_B, is_active: true, guardian_name: 'Kebede T.', guardian_phone: '+251900000002',
+        },
+        {
+            id: 'c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f', school_id: SCHOOL,
+            name: 'Unplaced Child', admission_no: 'A003', roll_num: null,
+            class_id: null, is_active: true, guardian_name: null, guardian_phone: null,
+        },
+        {
+            id: 'd4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f81', school_id: SCHOOL,
+            name: 'Left Student', admission_no: 'A004', roll_num: 3,
+            class_id: CLASS_A, is_active: false, guardian_name: null, guardian_phone: null,
+        },
+    ],
 });
 
 beforeEach(() => {
@@ -90,6 +112,35 @@ describe('GET /api/public/teachers (login-free directory)', () => {
         assert.ok(!JSON.stringify(res.body).includes('password'));
         for (const t of res.body.teachers) {
             assert.deepEqual(Object.keys(t).sort(), ['classes', 'name', 'role', 'subjects']);
+        }
+    });
+});
+
+describe('GET /api/public/students (login-free roster)', () => {
+    test('requires no token and lists only active, placed students', async () => {
+        const res = await request(app).get('/api/public/students');
+
+        assert.equal(res.status, 200);
+
+        const names = res.body.students.map((s) => s.name).sort();
+        assert.deepEqual(names, ['Abel Tesfaye', 'Sara Kebede']);
+        assert.ok(!names.includes('Unplaced Child')); // no class
+        assert.ok(!names.includes('Left Student'));   // inactive
+
+        const abel = res.body.students.find((s) => s.name === 'Abel Tesfaye');
+        assert.deepEqual(abel, { name: 'Abel Tesfaye', className: 'Year 4 - Blue', yearLevel: 4 });
+    });
+
+    test('exposes names and class only — nothing more sensitive', async () => {
+        const res = await request(app).get('/api/public/students');
+
+        assert.equal(res.status, 200);
+        const raw = JSON.stringify(res.body);
+        assert.ok(!raw.includes('A001'));        // admission numbers
+        assert.ok(!raw.includes('guardian'));    // guardian details
+        assert.ok(!raw.includes('roll'));        // roll numbers
+        for (const s of res.body.students) {
+            assert.deepEqual(Object.keys(s).sort(), ['className', 'name', 'yearLevel']);
         }
     });
 });
