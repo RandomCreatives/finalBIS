@@ -15,17 +15,10 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SchoolIcon from '@mui/icons-material/School';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import LocalLibraryIcon from '@mui/icons-material/LocalLibrary';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AssignmentIcon from '@mui/icons-material/Assignment';
-import CampaignIcon from '@mui/icons-material/Campaign';
-import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
 import GradeIcon from '@mui/icons-material/Grade';
-import ChatIcon from '@mui/icons-material/Chat';
-import StorageIcon from '@mui/icons-material/Storage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
@@ -58,18 +51,16 @@ const Pill = styled(Box)(({ theme }) => ({
 
 /* ── data ────────────────────────────────────────────────── */
 const modules = [
+    { label: 'Classes',        icon: SchoolIcon,             desc: 'Homerooms, staffing and rosters' },
+    { label: 'Students',       icon: SchoolIcon,             desc: 'Enrolment, placement and records' },
     { label: 'Attendance',     icon: EventAvailableIcon,     desc: 'Daily attendance and registers' },
     { label: 'Timetable',      icon: CalendarMonthIcon,      desc: 'Period schedules and swaps' },
     { label: 'Lesson Plans',   icon: MenuBookIcon,           desc: 'Plan and share curriculum' },
     { label: 'Assignments',    icon: AssignmentIcon,         desc: 'Set and track coursework' },
     { label: 'Marksheets',     icon: GradeIcon,              desc: 'Record and review grades' },
-    { label: 'Notices',        icon: CampaignIcon,           desc: 'School-wide announcements' },
-    { label: 'Messages',       icon: ChatIcon,               desc: 'Staff communication' },
-    { label: 'Library',        icon: LocalLibraryIcon,       desc: 'Catalogue and lending' },
-    { label: 'Clinic',         icon: MonitorHeartIcon,       desc: 'Student health records' },
-    { label: 'Store',          icon: StorefrontIcon,         desc: 'Resource and inventory' },
     { label: 'Calendar',       icon: CalendarMonthIcon,      desc: 'Events and term dates' },
-    { label: 'Data Center',    icon: StorageIcon,            desc: 'Public insights and reports' },
+    // Dormant in v1.0, revived with their versions:
+    // Notices · Messages · Library · Clinic · Store · Data Center
 ];
 
 const roles = [
@@ -77,9 +68,7 @@ const roles = [
     { label: 'Main Teacher',   icon: SchoolIcon,            desc: 'Class and lesson leadership' },
     { label: 'Assistant Teacher', icon: SchoolIcon,         desc: 'Support teaching duties' },
     { label: 'Subject Teacher',icon: SchoolIcon,            desc: 'Specialist instruction' },
-    { label: 'Clinic',         icon: LocalHospitalIcon,     desc: 'Health and wellbeing' },
-    { label: 'Store Manager',  icon: StorefrontIcon,        desc: 'Inventory and supplies' },
-    { label: 'Library',        icon: LocalLibraryIcon,      desc: 'Reading and resources' },
+    // Clinic, Store Manager and Library roles return with their modules.
 ];
 
 /* ── component ───────────────────────────────────────────── */
@@ -128,7 +117,6 @@ export default function Landing() {
                         <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3 }}>
                             <NavLink component={RouterLink} to="#modules">Modules</NavLink>
                             <NavLink component={RouterLink} to="#roles">Staff Roles</NavLink>
-                            <NavLink component={RouterLink} to="/data-center">Data Center</NavLink>
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -192,12 +180,6 @@ export default function Landing() {
                                     textTransform: 'none' }}>
                                 {signInLabel} →
                             </Button>
-                            <Button component={RouterLink} to="/data-center" variant="outlined"
-                                size="large"
-                                sx={{ fontWeight: 700, px: 3, py: 1.5, borderRadius: 2, fontSize: 15,
-                                    textTransform: 'none' }}>
-                                Explore Data Center
-                            </Button>
                         </Box>
                     </Box>
                 </Container>
@@ -231,7 +213,7 @@ export default function Landing() {
                                                 : '0 16px 40px rgba(15,23,42,.08)',
                                         } }}>
                                         <CardActionArea component={RouterLink}
-                                            to={m.label === 'Data Center' ? '/data-center' : '/login'}
+                                            to="/login"
                                             sx={{ p: 2.5, height: '100%',
                                                 display: 'flex', flexDirection: 'column',
                                                 alignItems: 'flex-start', gap: 1 }}>
@@ -359,12 +341,6 @@ export default function Landing() {
                             &copy; {new Date().getFullYear()} British International School, NOC Gerji Campus
                             &nbsp;·&nbsp; Internal Staff Use Only
                         </Typography>
-                        <Button component={RouterLink} to="/data-center" size="small"
-                            sx={{ fontSize: 12, color: 'primary.main', fontWeight: 700,
-                                textTransform: 'none',
-                                '&:hover': { bgcolor: 'transparent' } }}>
-                            Public Data Center →
-                        </Button>
                     </Box>
                 </Container>
             </Box>
