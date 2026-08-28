@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import {
     AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
@@ -14,21 +14,15 @@ import FactCheckIcon from '@mui/icons-material/FactCheck';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
-import LocalLibraryIcon from '@mui/icons-material/LocalLibrary';
-import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import BadgeIcon from '@mui/icons-material/Badge';
-import ForumIcon from '@mui/icons-material/Forum';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TodayIcon from '@mui/icons-material/Today';
 import GradeIcon from '@mui/icons-material/Grade';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import StorefrontIcon from '@mui/icons-material/Storefront';
 import FolderIcon from '@mui/icons-material/Folder';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
-import { threadApi } from '../api/endpoints';
 
 const DRAWER_WIDTH = 248;
 
@@ -54,10 +48,11 @@ const NAV_SECTIONS = [
         items: [
             { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
             { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
-            { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
             { label: 'Files', to: '/app/files', icon: <FolderIcon /> },
-            { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
-            { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
+            // v1.1 — dormant for term start, revived by re-adding these items:
+            // { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
+            // { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
+            // { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
         ],
     },
     {
@@ -120,21 +115,8 @@ export default function AppLayout() {
     const theme = useTheme();
     const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-    const [unread, setUnread] = useState(0);
-
-    // Poll unread messages
-    useEffect(() => {
-        let active = true;
-        const poll = async () => {
-            try {
-                const { count } = await threadApi.unreadCount();
-                if (active) setUnread(count || 0);
-            } catch { }
-        };
-        poll();
-        const id = setInterval(poll, 60000);
-        return () => { active = false; clearInterval(id); };
-    }, []);
+    // Messages/Notices are dormant in v1.0 — no unread polling until they
+    // return. (NavButton badge code stays intact; nothing populates it.)
 
     const handleLogout = () => {
         logout();
@@ -240,22 +222,8 @@ export default function AppLayout() {
                         >
                             <EventNoteIcon />
                         </IconButton>
-                        <IconButton
-                            onClick={() => navigate('/app/messages')}
-                            sx={{ color: 'text.secondary' }}
-                            aria-label="Messages"
-                        >
-                            <Badge color="error" badgeContent={unread} invisible={!unread}>
-                                <ForumIcon />
-                            </Badge>
-                        </IconButton>
-                        <IconButton
-                            onClick={() => navigate('/app/notices')}
-                            sx={{ color: 'text.secondary' }}
-                            aria-label="Notifications"
-                        >
-                            <NotificationsIcon />
-                        </IconButton>
+                        {/* Messages & Notices dormant in v1.0 — restore the two
+                            IconButtons (and the unread polling) when they return. */}
                     </Box>
 
                     <Box sx={{ textAlign: 'right', mr: 1.5, display: { xs: 'none', sm: 'block' } }}>
