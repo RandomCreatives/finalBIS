@@ -26,7 +26,7 @@ describe('Landing Page', () => {
     test('renders welcome heading', () => {
         renderWithProviders(<Landing />);
         expect(
-            screen.getByText(/One place for everything/i)
+            screen.getByText(/Welcome to British International School, Gerji Primary II/i)
         ).toBeInTheDocument();
     });
 
@@ -40,8 +40,9 @@ describe('Landing Page', () => {
     test('renders role access entries', () => {
         renderWithProviders(<Landing />);
         expect(screen.getByText('Administrator')).toBeInTheDocument();
-        expect(screen.getAllByText('Clinic').length).toBeGreaterThan(0);
-        expect(screen.getByText('Store Manager')).toBeInTheDocument();
+        expect(screen.getByText('Main Teacher')).toBeInTheDocument();
+        expect(screen.getByText('Assistant Teacher')).toBeInTheDocument();
+        expect(screen.getByText('Subject Teacher')).toBeInTheDocument();
     });
 
     test('renders module cards', () => {

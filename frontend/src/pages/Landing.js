@@ -115,8 +115,9 @@ export default function Landing() {
                         </Box>
 
                         <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3 }}>
-                            <NavLink component={RouterLink} to="#modules">Modules</NavLink>
-                            <NavLink component={RouterLink} to="#roles">Staff Roles</NavLink>
+                            <NavLink component={RouterLink} to="/classes">Classes</NavLink>
+                            <NavLink component={RouterLink} to="/app/staff">Teachers</NavLink>
+                            <NavLink component={RouterLink} to="/app/students">Students</NavLink>
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -150,20 +151,12 @@ export default function Landing() {
             }}>
                 <Container maxWidth="lg">
                     <Box sx={{ maxWidth: 760, mx: 'auto', textAlign: 'center' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-                            <Pill>
-                                <SchoolIcon sx={{ fontSize: 14 }} />
-                                Staff Portal
-                            </Pill>
-                        </Box>
-
                         <Typography component="h1" sx={{
                             fontWeight: 800,
                             fontSize: { xs: '2.2rem', sm: '3.2rem', md: '3.8rem' },
                             lineHeight: 1.1, letterSpacing: '-.02em', mb: 2.5,
                         }}>
-                            One place for everything<br />
-                            your school runs on
+                            Welcome to British International School, Gerji Primary II.
                         </Typography>
 
                         <Typography sx={{ fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.7,
