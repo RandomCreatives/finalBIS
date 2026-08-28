@@ -1,107 +1,49 @@
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
-    Grid, Typography, useTheme,
+    Alert, Box, Button, Chip, CircularProgress, Container, Table, TableBody,
+    TableCell, TableContainer, TableHead, TableRow, Typography, useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import LoginIcon from '@mui/icons-material/Login';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SchoolIcon from '@mui/icons-material/School';
 import PersonIcon from '@mui/icons-material/Person';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import ClassIcon from '@mui/icons-material/Class';
 import { useColorScheme } from '../theme';
 
 const BASE_URL = process.env.REACT_APP_API_URL || '';
 
 /*
- * Public, login-free staff directory: main teachers and subject teachers.
+ * Public, login-free staff directory.
  *
- * Data comes live from GET /api/public/teachers, which exposes safe fields
- * only (names, homeroom classes, subjects taught) — no emails or account
- * details ever leave the backend.
+ * Main teachers are sourced from Year_3_and_Year_4_Class_Teachers.csv (the
+ * authoritative class → teacher mapping), listed as a table. Subject teachers
+ * come live from GET /api/public/teachers and list the subjects they carry,
+ * sorted alphabetically by name.
  */
 
-function TeacherCard({ teacher }) {
-    const theme = useTheme();
-    const dark = theme.palette.mode === 'dark';
-    const surface = dark ? theme.palette.background.paper : '#ffffff';
-    const border = dark ? theme.palette.divider : '#e2e8f0';
-    const isMain = teacher.role === 'main_teacher';
+const MAIN_TEACHERS = [
+    { className: 'Year 3 - Blue',    teacher: 'Ms. Yeabsira A.' },
+    { className: 'Year 3 - Yellow',  teacher: 'Ms. Meron A.' },
+    { className: 'Year 3 - Red',     teacher: null },
+    { className: 'Year 3 - Green',   teacher: 'Mr. Deginet' },
+    { className: 'Year 4 - Blue',    teacher: 'Mr. Mulugeta J.' },
+    { className: 'Year 4 - Purple',  teacher: 'Ms. Mekdelawit A.' },
+    { className: 'Year 4 - Lavender', teacher: 'Ms. Selam G.' },
+    { className: 'Year 4 - Crimson', teacher: 'Ms. Simegn Y.' },
+    { className: 'Year 4 - Green',   teacher: null },
+    { className: 'Year 4 - Yellow',  teacher: 'Ms. Mariamawait B.' },
+    { className: 'Year 4 - Magenta', teacher: 'Ms. Abigail A.' },
+    { className: 'Year 4 - Red',     teacher: 'Ms. Denebe A.' },
+    { className: 'Year 4 - Violet',  teacher: 'Ms. Abigiya T.' },
+    { className: 'Year 4 - Orange',  teacher: 'Ms. Mekdelawit N.' },
+];
 
-    return (
-        <Card variant="outlined" sx={{ height: '100%', borderRadius: 3, bgcolor: surface,
-            borderColor: border,
-            transition: 'transform .18s, border-color .18s, box-shadow .18s',
-            '&:hover': {
-                transform: 'translateY(-4px)', borderColor: 'primary.main',
-                boxShadow: dark ? '0 16px 40px rgba(0,0,0,.4)' : '0 16px 40px rgba(15,23,42,.08)',
-            } }}>
-            <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
-                    <Box sx={{ width: 42, height: 42, borderRadius: '50%',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main',
-                        fontWeight: 800, fontSize: 16 }}>
-                        {(teacher.name || '?').trim().charAt(0).toUpperCase()}
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 800, fontSize: 16, lineHeight: 1.2 }} noWrap>
-                            {teacher.name}
-                        </Typography>
-                        <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary',
-                            textTransform: 'uppercase', letterSpacing: .5 }}>
-                            {isMain ? 'Main Teacher' : 'Subject Teacher'}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                {isMain ? (
-                    teacher.classes.length > 0 ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-                            <ClassIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                                {teacher.classes.map((c) => (
-                                    <Chip key={c} label={c} size="small" sx={{ fontWeight: 600 }} />
-                                ))}
-                            </Box>
-                        </Box>
-                    ) : (
-                        <Typography sx={{ fontSize: 13, color: 'text.secondary', fontStyle: 'italic' }}>
-                            Class assignment pending
-                        </Typography>
-                    )
-                ) : (
-                    teacher.subjects.length > 0 ? (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-                                <MenuBookIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                                    {teacher.subjects.map((s) => (
-                                        <Chip key={s.name} label={s.name} size="small" sx={{ fontWeight: 600 }} />
-                                    ))}
-                                </Box>
-                            </Box>
-                            {teacher.subjects.length > 0 && (
-                                <Typography sx={{ fontSize: 12, color: 'text.secondary', pl: 3.8 }}>
-                                    {teacher.subjects
-                                        .map((s) => `${s.name} — ${s.classCount} class${s.classCount === 1 ? '' : 'es'}`)
-                                        .join('  ·  ')}
-                                </Typography>
-                            )}
-                        </Box>
-                    ) : (
-                        <Typography sx={{ fontSize: 13, color: 'text.secondary', fontStyle: 'italic' }}>
-                            Subject assignments pending
-                        </Typography>
-                    )
-                )}
-            </CardContent>
-        </Card>
-    );
-}
+// Skip obvious seed/test placeholders so the subject list stays meaningful.
+const PLACEHOLDER = /(^|[^a-z])teacher$|^test\b|^clinic\s*nurse$|^main\s*teacher$/i;
 
 export default function PublicTeachers() {
     const theme = useTheme();
@@ -110,44 +52,66 @@ export default function PublicTeachers() {
     const surface = dark ? theme.palette.background.paper : '#ffffff';
     const border = dark ? theme.palette.divider : '#e2e8f0';
 
-    const [teachers, setTeachers] = useState(null);
+    const [subjectTeachers, setSubjectTeachers] = useState(null);
     const [error, setError] = useState('');
 
     const load = () => {
         setError('');
-        setTeachers(null);
+        setSubjectTeachers(null);
         fetch(`${BASE_URL}/api/public/teachers`)
             .then((r) => {
                 if (!r.ok) throw new Error(`Request failed (${r.status})`);
                 return r.json();
             })
-            .then((data) => setTeachers(data.teachers || []))
+            .then((data) => {
+                const list = (data.teachers || [])
+                    .filter((t) => t.role === 'subject_teacher' && !PLACEHOLDER.test(t.name))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                setSubjectTeachers(list);
+            })
             .catch((err) => setError(err.message || 'Could not load the staff directory'));
     };
 
     useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const mains = (teachers || []).filter((t) => t.role === 'main_teacher');
-    const subjectTeachers = (teachers || []).filter((t) => t.role === 'subject_teacher');
+    const mainTeachers = [...MAIN_TEACHERS].sort((a, b) => a.className.localeCompare(b.className));
 
-    const renderGroup = (title, icon, list) => (
+    const renderTable = (title, icon, headers, rows) => (
         <Box sx={{ mb: { xs: 6, md: 8 } }}>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 3 }}>
                 {icon}
                 <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-.02em' }}>
                     {title}
                 </Typography>
-                <Chip label={`${list.length} teacher${list.length === 1 ? '' : 's'}`} size="small"
-                    sx={{ fontWeight: 700, bgcolor: alpha(theme.palette.primary.main, 0.1),
+                <Chip label={`${rows.length}`} size="small"
+                    sx={{ fontWeight: 700, borderRadius: 1, bgcolor: alpha(theme.palette.primary.main, 0.1),
                         color: 'primary.main' }} />
             </Box>
-            <Grid container spacing={2.5}>
-                {list.map((t) => (
-                    <Grid item xs={12} sm={6} md={4} lg={3} key={t.name}>
-                        <TeacherCard teacher={t} />
-                    </Grid>
-                ))}
-            </Grid>
+            <TableContainer sx={{ borderRadius: 1, border: `1px solid ${border}`, bgcolor: surface,
+                overflow: 'hidden' }}>
+                <Table sx={{ minWidth: 420 }}>
+                    <TableHead>
+                        <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.06) }}>
+                            {headers.map((h) => (
+                                <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12,
+                                    textTransform: 'uppercase', letterSpacing: .5, color: 'text.secondary' }}>
+                                    {h}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {rows.map((cells, i) => (
+                            <TableRow key={i} sx={{ '&:last-child td, &:last-child th': { border: 0 },
+                                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.04) } }}>
+                                {cells.map((c, j) => (
+                                    <TableCell key={j} sx={{ fontSize: 14, py: 1.6 }}>{c}</TableCell>
+                                ))}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
         </Box>
     );
 
@@ -188,8 +152,9 @@ export default function PublicTeachers() {
                                     : <DarkModeIcon  sx={{ fontSize: 18 }} />}
                             </Box>
                             <Button component={RouterLink} to="/" variant="outlined" size="small"
-                                sx={{ fontWeight: 700, borderRadius: 2, px: 2.5, textTransform: 'none' }}>
-                                Home
+                                startIcon={<ArrowBackIcon />}
+                                sx={{ fontWeight: 700, borderRadius: 1, px: 2, textTransform: 'none' }}>
+                                Back
                             </Button>
                             <Button component={RouterLink} to="/login" variant="contained" size="small"
                                 startIcon={<LoginIcon />} sx={{ fontWeight: 700, borderRadius: 2, px: 2.5,
@@ -209,12 +174,28 @@ export default function PublicTeachers() {
                     </Typography>
                     <Typography sx={{ mt: 1.5, color: 'text.secondary', maxWidth: 620 }}>
                         The teaching team at British International School, Gerji Primary II —
-                        main teachers lead a homeroom class; subject teachers carry their subject
-                        across several classes.
+                        {mainTeachers.length} homeroom main teachers and the subject teachers who
+                        carry their lessons across the classes.
                     </Typography>
                 </Box>
 
-                {teachers === null && !error && (
+                {renderTable('Year 3 — Main Teachers',
+                    <PersonIcon sx={{ color: 'primary.main' }} />,
+                    ['Main Teacher', 'Class'],
+                    mainTeachers.filter((m) => m.className.startsWith('Year 3')).map((m) => [
+                        m.teacher || <Box component="span" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>To be Assigned</Box>,
+                        <Chip key="c" label={m.className} size="small" sx={{ fontWeight: 600, borderRadius: 1 }} />,
+                    ]))}
+
+                {renderTable('Year 4 — Main Teachers',
+                    <PersonIcon sx={{ color: 'primary.main' }} />,
+                    ['Main Teacher', 'Class'],
+                    mainTeachers.filter((m) => m.className.startsWith('Year 4')).map((m) => [
+                        m.teacher || <Box component="span" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>To be Assigned</Box>,
+                        <Chip key="c" label={m.className} size="small" sx={{ fontWeight: 600, borderRadius: 1 }} />,
+                    ]))}
+
+                {subjectTeachers === null && !error && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
                         <CircularProgress />
                     </Box>
@@ -227,19 +208,24 @@ export default function PublicTeachers() {
                     </Alert>
                 )}
 
-                {teachers !== null && !error && teachers.length === 0 && (
+                {subjectTeachers !== null && !error && subjectTeachers.length === 0 && (
                     <Alert severity="info">
-                        The teaching team has not been published yet — check back soon.
+                        The subject teachers have not been published yet — check back soon.
                     </Alert>
                 )}
 
-                {teachers !== null && !error && teachers.length > 0 && (
-                    <>
-                        {renderGroup('Main Teachers',
-                            <PersonIcon sx={{ color: 'primary.main' }} />, mains)}
-                        {renderGroup('Subject Teachers',
-                            <MenuBookIcon sx={{ color: 'primary.main' }} />, subjectTeachers)}
-                    </>
+                {subjectTeachers !== null && !error && subjectTeachers.length > 0 && (
+                    renderTable('Subject Teachers',
+                        <MenuBookIcon sx={{ color: 'primary.main' }} />,
+                        ['Subject Teacher', 'Subjects'],
+                        subjectTeachers.map((t) => [
+                            t.name,
+                            t.subjects.length > 0
+                                ? t.subjects
+                                    .map((s) => `${s.name} — ${s.classCount} class${s.classCount === 1 ? '' : 'es'}`)
+                                    .join('  ·  ')
+                                : <Box component="span" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>Subject assignments pending</Box>,
+                        ]))
                 )}
             </Container>
 

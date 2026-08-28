@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import LoginIcon from '@mui/icons-material/Login';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SchoolIcon from '@mui/icons-material/School';
@@ -19,22 +20,22 @@ import { useColorScheme } from '../theme';
  * `classApi.list()` rows so this can later be swapped for a live fetch.
  */
 const CLASSES = [
-    // Year 3 — 4 homerooms
-    { id: 1, name: 'Year 3 Blue',   yearLevel: 3, mainTeacher: 'Mr. Abebe',     assistantTeacher: null, studentCount: 26 },
-    { id: 2, name: 'Year 3 Red',    yearLevel: 3, mainTeacher: 'Ms. Hana',      assistantTeacher: null, studentCount: 24 },
-    { id: 3, name: 'Year 3 Green',  yearLevel: 3, mainTeacher: 'Mr. Daniel',    assistantTeacher: null, studentCount: 25 },
-    { id: 4, name: 'Year 3 Yellow', yearLevel: 3, mainTeacher: 'Ms. Sara',      assistantTeacher: null, studentCount: 23 },
+    // Year 3 — 4 homerooms (names + main teachers match Year_3_and_Year_4_Class_Teachers.csv)
+    { id: 1,  name: 'Year 3 - Blue',    yearLevel: 3, mainTeacher: 'Ms. Yeabsira A.', assistantTeacher: null, studentCount: 26 },
+    { id: 2,  name: 'Year 3 - Yellow',  yearLevel: 3, mainTeacher: 'Ms. Meron A.',    assistantTeacher: null, studentCount: 24 },
+    { id: 3,  name: 'Year 3 - Red',     yearLevel: 3, mainTeacher: null,              assistantTeacher: null, studentCount: 25 },
+    { id: 4,  name: 'Year 3 - Green',   yearLevel: 3, mainTeacher: 'Mr. Deginet',     assistantTeacher: null, studentCount: 23 },
     // Year 4 — 10 homerooms
-    { id: 5,  name: 'Year 4 Blue',   yearLevel: 4, mainTeacher: 'Mr. Kebede',   assistantTeacher: null, studentCount: 29 },
-    { id: 6,  name: 'Year 4 Red',    yearLevel: 4, mainTeacher: 'Ms. Ruth',     assistantTeacher: null, studentCount: 28 },
-    { id: 7,  name: 'Year 4 Green',  yearLevel: 4, mainTeacher: 'Mr. Thomas',   assistantTeacher: null, studentCount: 30 },
-    { id: 8,  name: 'Year 4 Yellow', yearLevel: 4, mainTeacher: 'Ms. Lydia',    assistantTeacher: null, studentCount: 27 },
-    { id: 9,  name: 'Year 4 Orange', yearLevel: 4, mainTeacher: 'Mr. Samuel',   assistantTeacher: null, studentCount: 28 },
-    { id: 10, name: 'Year 4 Purple', yearLevel: 4, mainTeacher: 'Ms. Helen',    assistantTeacher: null, studentCount: 26 },
-    { id: 11, name: 'Year 4 Pink',   yearLevel: 4, mainTeacher: 'Mr. Yonas',    assistantTeacher: null, studentCount: 29 },
-    { id: 12, name: 'Year 4 Teal',   yearLevel: 4, mainTeacher: 'Ms. Frehiwot', assistantTeacher: null, studentCount: 25 },
-    { id: 13, name: 'Year 4 Indigo', yearLevel: 4, mainTeacher: 'Mr. Elias',    assistantTeacher: null, studentCount: 30 },
-    { id: 14, name: 'Year 4 Cyan',   yearLevel: 4, mainTeacher: 'Ms. Betelehem',assistantTeacher: null, studentCount: 27 },
+    { id: 5,  name: 'Year 4 - Blue',    yearLevel: 4, mainTeacher: 'Mr. Mulugeta J.', assistantTeacher: null, studentCount: 29 },
+    { id: 6,  name: 'Year 4 - Purple',  yearLevel: 4, mainTeacher: 'Ms. Mekdelawit A.',assistantTeacher: null, studentCount: 28 },
+    { id: 7,  name: 'Year 4 - Lavender',yearLevel: 4, mainTeacher: 'Ms. Selam G.',    assistantTeacher: null, studentCount: 30 },
+    { id: 8,  name: 'Year 4 - Crimson', yearLevel: 4, mainTeacher: 'Ms. Simegn Y.',   assistantTeacher: null, studentCount: 27 },
+    { id: 9,  name: 'Year 4 - Green',   yearLevel: 4, mainTeacher: null,              assistantTeacher: null, studentCount: 28 },
+    { id: 10, name: 'Year 4 - Yellow',  yearLevel: 4, mainTeacher: 'Ms. Mariamawait B.',assistantTeacher: null, studentCount: 26 },
+    { id: 11, name: 'Year 4 - Magenta', yearLevel: 4, mainTeacher: 'Ms. Abigail A.',  assistantTeacher: null, studentCount: 29 },
+    { id: 12, name: 'Year 4 - Red',     yearLevel: 4, mainTeacher: 'Ms. Denebe A.',    assistantTeacher: null, studentCount: 25 },
+    { id: 13, name: 'Year 4 - Violet',  yearLevel: 4, mainTeacher: 'Ms. Abigiya T.',   assistantTeacher: null, studentCount: 30 },
+    { id: 14, name: 'Year 4 - Orange',  yearLevel: 4, mainTeacher: 'Ms. Mekdelawit N.',assistantTeacher: null, studentCount: 27 },
 ];
 
 function ClassCard({ klass }) {
@@ -44,7 +45,7 @@ function ClassCard({ klass }) {
     const border = dark ? theme.palette.divider : '#e2e8f0';
 
     return (
-        <Card variant="outlined" sx={{ height: '100%', borderRadius: 3, bgcolor: surface,
+        <Card variant="outlined" sx={{ height: '100%', borderRadius: 1, bgcolor: surface,
             borderColor: border,
             transition: 'transform .18s, border-color .18s, box-shadow .18s',
             '&:hover': {
@@ -70,7 +71,7 @@ function ClassCard({ klass }) {
                                 Main Teacher
                             </Typography>
                             <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-                                {klass.mainTeacher}
+                                {klass.mainTeacher || 'Not assigned'}
                             </Typography>
                         </Box>
                     </Box>
@@ -163,6 +164,11 @@ export default function PublicClasses() {
                             </Box>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Button component={RouterLink} to="/" variant="outlined" size="small"
+                                startIcon={<ArrowBackIcon />} sx={{ fontWeight: 700, borderRadius: 1,
+                                    px: 2, textTransform: 'none' }}>
+                                Back
+                            </Button>
                             <Box onClick={toggleColorScheme} sx={{ display: 'flex', alignItems: 'center',
                                 justifyContent: 'center', width: 38, height: 38, borderRadius: 2,
                                 border: `1px solid ${border}`, cursor: 'pointer', color: 'text.secondary',
