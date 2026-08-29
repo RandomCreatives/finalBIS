@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Container, Divider, Grid, IconButton,
@@ -26,6 +26,7 @@ import {
     classBySlug, readClassLogin, clearClassLogin, demoRoster, CLASS_SUBJECTS,
 } from '../data/classes';
 import StudentIdCard from '../components/StudentIdCard';
+import WordEditor from '../components/WordEditor';
 import { CLASSES } from '../data/classes';
 
 /*
@@ -41,7 +42,12 @@ import { CLASSES } from '../data/classes';
 const STORE = {
     attendance: 'bisnoc.demo.attendance',
     marks: 'bisnoc.demo.marks',
-    plans: 'bisnoc.demo.plans',
+    planning: 'bisnoc.demo.planningDocs',
+};
+
+const rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
 const readStore = (key) => {
@@ -84,7 +90,7 @@ const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: DashboardIcon },
     { id: 'attendance', label: 'Attendance', icon: FactCheckIcon },
     { id: 'marks', label: 'Marksheets', icon: GradeIcon },
-    { id: 'plans', label: 'Lesson Plans', icon: MenuBookOutlinedIcon },
+    { id: 'plans', label: 'Planning', icon: MenuBookOutlinedIcon },
     { id: 'students', label: 'Students', icon: GroupsIcon },
     { id: 'timetable', label: 'Timetable', icon: CalendarMonthIcon, soon: true },
 ];
@@ -342,100 +348,207 @@ function MarksSection({ klass, roster, onToast }) {
 
 /* ── lesson plans section ─────────────────────────────────── */
 
-function PlansSection({ klass, onToast }) {
-    const theme = useTheme();
-    const [plans, setPlans] = useState(() =>
-        (readStore(STORE.plans)[klass.name] || []).sort((a, b) => b.week - a.week));
-    const [form, setForm] = useState({ week: termWeekOf(today()), subject: CLASS_SUBJECTS[0], objectives: '', activities: '' });
+/* ── planning section (Word-like) ─────────────────────────── */
 
-    const persist = (next) => {
-        setPlans(next);
-        const all = readStore(STORE.plans);
-        all[klass.name] = next;
-        writeStore(STORE.plans, all);
+const PLANNING_TEMPLATES = {
+    blank: {
+        label: 'Blank page',
+        title: (k) => `Planning — ${k.name}`,
+        html: '<p><br></p>',
+    },
+    scheme: {
+        label: 'Scheme of Work',
+        title: (k) => `Scheme of Work — ${k.name}`,
+        html: `
+<h1>Scheme of Work</h1>
+<p><strong>School:</strong> British International School — NOC Gerji<br>
+<strong>Class:</strong> ____________ &nbsp;&nbsp; <strong>Subject:</strong> ____________ &nbsp;&nbsp; <strong>Term:</strong> ____________ (2026/27)<br>
+<strong>Teacher:</strong> ____________</p>
+<table class="doc-table"><tbody>
+<tr><th>Week</th><th>Unit / Topic</th><th>Learning objectives</th><th>Activities &amp; resources</th><th>Reflection</th></tr>
+${'<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>'.repeat(12)}
+</tbody></table>
+<p><br></p>`,
+    },
+    lesson: {
+        label: 'Lesson Plan',
+        title: (k) => `Lesson Plan — ${k.name}`,
+        html: `
+<h1>Lesson Plan</h1>
+<p><strong>Date:</strong> ____________ &nbsp;&nbsp; <strong>Week:</strong> ____________ &nbsp;&nbsp;
+<strong>Class:</strong> ____________ &nbsp;&nbsp; <strong>Subject:</strong> ____________ &nbsp;&nbsp;
+<strong>Period:</strong> ____________</p>
+<h2>1. Objectives</h2>
+<p>By the end of the lesson, learners will be able to…</p>
+<h2>2. Materials &amp; resources</h2>
+<p><br></p>
+<h2>3. Introduction (5–10 min)</h2>
+<p><br></p>
+<h2>4. Lesson development</h2>
+<p><br></p>
+<h2>5. Closure &amp; summary</h2>
+<p><br></p>
+<h2>6. Assessment / evidence of learning</h2>
+<p><br></p>
+<h2>7. Reflection (complete after teaching)</h2>
+<p><br></p>`,
+    },
+};
+
+const DOC_TYPE_META = {
+    scheme: { label: 'Scheme of Work', color: '#7c3aed' },
+    lesson: { label: 'Lesson Plan', color: '#2563eb' },
+    blank: { label: 'Document', color: '#64748b' },
+};
+
+function DocEditor({ doc, klass, onBack, onPatch, onToast }) {
+    const saveTimer = useRef(null);
+    const [status, setStatus] = useState('saved');
+
+    const handleHtml = (html) => {
+        setStatus('saving');
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+            onPatch({ html });
+            setStatus('saved');
+        }, 600);
     };
 
-    const addPlan = () => {
-        if (!form.objectives.trim()) return;
-        const plan = { id: Date.now(), week: Number(form.week), subject: form.subject,
-            objectives: form.objectives.trim(), activities: form.activities.trim(), createdAt: today() };
-        persist([plan, ...plans].sort((a, b) => b.week - a.week));
-        setForm({ week: form.week, subject: form.subject, objectives: '', activities: '' });
-        onToast('Lesson plan added');
-    };
+    useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-    const removePlan = (id) => {
-        persist(plans.filter((p) => p.id !== id));
-        onToast('Lesson plan removed');
-    };
+    const meta = DOC_TYPE_META[doc.type] || DOC_TYPE_META.blank;
 
     return (
         <Box>
-            <Card variant="outlined" sx={{ borderRadius: 1.5, mb: 3 }}>
-                <CardContent sx={{ p: 2.5 }}>
-                    <Typography sx={{ fontWeight: 800, fontSize: 14, mb: 1.75 }}>New lesson plan</Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 200px 1fr' }, gap: 1.5 }}>
-                        <TextField select label="Week" size="small" value={form.week}
-                            onChange={(e) => setForm((f) => ({ ...f, week: e.target.value }))}>
-                            {Array.from({ length: 17 }, (_, i) => i + 1).map((w) => (
-                                <MenuItem key={w} value={w}>Week {w}</MenuItem>
-                            ))}
-                        </TextField>
-                        <TextField select label="Subject" size="small" value={form.subject}
-                            onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}>
-                            {CLASS_SUBJECTS.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                        </TextField>
-                        <TextField label="Objectives" size="small" value={form.objectives}
-                            onChange={(e) => setForm((f) => ({ ...f, objectives: e.target.value }))}
-                            placeholder="What students will learn this week" />
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1.5, mt: 1.5, alignItems: { sm: 'center' } }}>
-                        <TextField label="Activities & resources" size="small" fullWidth value={form.activities}
-                            onChange={(e) => setForm((f) => ({ ...f, activities: e.target.value }))}
-                            placeholder="How it will be taught (optional)" />
-                        <Button variant="contained" disableElevation startIcon={<AddIcon />}
-                            onClick={addPlan} disabled={!form.objectives.trim()}
-                            sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1, flexShrink: 0 }}>
-                            Add plan
-                        </Button>
-                    </Box>
-                </CardContent>
-            </Card>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2, flexWrap: 'wrap' }}>
+                <Button size="small" onClick={onBack}
+                    sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                    ← All documents
+                </Button>
+                <Chip size="small" label={meta.label}
+                    sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11,
+                        bgcolor: rgba(meta.color, 0.1), color: meta.color }} />
+                <TextField size="small" value={doc.title} sx={{ flexGrow: 1, maxWidth: 460,
+                    '& .MuiInputBase-input': { fontSize: 14, fontWeight: 700 } }}
+                    onChange={(e) => onPatch({ title: e.target.value })} />
+                <Typography sx={{ fontSize: 12, fontWeight: 700, ml: 'auto',
+                    color: status === 'saving' ? 'text.secondary' : '#16a34a' }}>
+                    {status === 'saving' ? 'Saving…' : '✓ Saved'}
+                </Typography>
+            </Box>
+            <WordEditor
+                key={doc.id}
+                initialHtml={doc.html}
+                onHtmlChange={handleHtml}
+                printHeader={`${meta.label} · ${klass.name}`}
+            />
+            <Snackbar open={false} message="" />
+        </Box>
+    );
+}
 
-            {plans.length === 0 ? (
-                <Alert severity="info">No lesson plans yet — add the first one above.</Alert>
+function PlanningSection({ klass, onToast }) {
+    const [docs, setDocs] = useState(() => readStore(STORE.planning)[klass.name] || []);
+    const [openId, setOpenId] = useState(null);
+
+    const persist = (next) => {
+        setDocs(next);
+        const all = readStore(STORE.planning);
+        all[klass.name] = next;
+        writeStore(STORE.planning, all);
+    };
+
+    const createDoc = (type) => {
+        const tpl = PLANNING_TEMPLATES[type];
+        const doc = {
+            id: `doc-${Date.now()}`,
+            type,
+            title: tpl.title(klass),
+            html: tpl.html,
+            updatedAt: Date.now(),
+        };
+        persist([doc, ...docs]);
+        setOpenId(doc.id);
+        onToast(`${tpl.label} created`);
+    };
+
+    const patchDoc = (id, patch) => {
+        persist(docs.map((d) => (d.id === id ? { ...d, ...patch, updatedAt: Date.now() } : d)));
+    };
+
+    const deleteDoc = (id) => {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm('Delete this document? This cannot be undone.')) return;
+        persist(docs.filter((d) => d.id !== id));
+        if (openId === id) setOpenId(null);
+        onToast('Document deleted');
+    };
+
+    const openDoc = docs.find((d) => d.id === openId);
+    if (openDoc) {
+        return (
+            <DocEditor doc={openDoc} klass={klass}
+                onBack={() => setOpenId(null)}
+                onPatch={(patch) => patchDoc(openDoc.id, patch)}
+                onToast={onToast} />
+        );
+    }
+
+    return (
+        <Box>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Typography sx={{ fontSize: 13, color: 'text.secondary', flexGrow: 1 }}>
+                    Write your schemes of work and lesson plans on a simple Word-like page —
+                    formatted text, tables, and printing included.
+                </Typography>
+                {Object.entries(PLANNING_TEMPLATES).map(([type, tpl]) => (
+                    <Button key={type} size="small" variant={type === 'blank' ? 'outlined' : 'contained'}
+                        disableElevation startIcon={<AddIcon sx={{ fontSize: 15 }} />}
+                        onClick={() => createDoc(type)}
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                        New {tpl.label}
+                    </Button>
+                ))}
+            </Box>
+
+            {docs.length === 0 ? (
+                <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                    No planning documents yet — start with a <strong>Scheme of Work</strong> for the term,
+                    then add weekly <strong>Lesson Plans</strong>.
+                </Alert>
             ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {plans.map((p) => (
-                        <Card key={p.id} variant="outlined" sx={{ borderRadius: 1.5 }}>
-                            <CardContent sx={{ p: 2.25, display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                                <Box sx={{ width: 52, height: 52, borderRadius: 1.25, flexShrink: 0,
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                    bgcolor: alpha(theme.palette.primary.main, 0.08), color: 'primary.main' }}>
-                                    <Typography sx={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Week</Typography>
-                                    <Typography sx={{ fontSize: 18, fontWeight: 800, lineHeight: 1 }}>{p.week}</Typography>
-                                </Box>
-                                <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                        <Typography sx={{ fontWeight: 800, fontSize: 14 }}>{p.subject}</Typography>
-                                        <Chip label={p.createdAt} size="small" sx={{ height: 18, fontSize: 10,
-                                            fontWeight: 600, color: 'text.secondary', bgcolor: 'rgba(100,116,139,.08)' }} />
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.75 }}>
+                    {docs.map((d) => {
+                        const meta = DOC_TYPE_META[d.type] || DOC_TYPE_META.blank;
+                        return (
+                            <Card key={d.id} variant="outlined"
+                                sx={{ borderRadius: 1.5, cursor: 'pointer', transition: 'border-color .15s, transform .15s',
+                                    '&:hover': { borderColor: 'primary.main', transform: 'translateY(-2px)' } }}
+                                onClick={() => setOpenId(d.id)}>
+                                <CardContent sx={{ p: 2.25 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Chip size="small" label={meta.label}
+                                            sx={{ fontWeight: 700, borderRadius: 1, height: 20, fontSize: 10.5,
+                                                bgcolor: rgba(meta.color, 0.1), color: meta.color }} />
+                                        <Box sx={{ ml: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                                            <Tooltip title="Delete">
+                                                <IconButton size="small" onClick={() => deleteDoc(d.id)}>
+                                                    <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Box>
                                     </Box>
-                                    <Typography sx={{ fontSize: 13, mt: .5 }}>{p.objectives}</Typography>
-                                    {p.activities && (
-                                        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: .35 }}>
-                                            {p.activities}
-                                        </Typography>
-                                    )}
-                                </Box>
-                                <Tooltip title="Delete plan">
-                                    <IconButton size="small" onClick={() => removePlan(p.id)}>
-                                        <DeleteOutlineIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </CardContent>
-                        </Card>
-                    ))}
+                                    <Typography sx={{ fontWeight: 800, fontSize: 14.5, lineHeight: 1.3 }}>
+                                        {d.title}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .75 }}>
+                                        Last edited {new Date(d.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}{' '}
+                                        at {new Date(d.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
                 </Box>
             )}
         </Box>
@@ -519,7 +632,7 @@ function StudentsSection({ klass, roster }) {
 function OverviewSection({ klass, roster, goTo }) {
     const attendanceStore = readStore(STORE.attendance)[klass.name] || {};
     const marksStore = readStore(STORE.marks)[klass.name] || {};
-    const plans = readStore(STORE.plans)[klass.name] || [];
+    const plans = readStore(STORE.planning)[klass.name] || [];
 
     const attendanceDays = Object.keys(attendanceStore).length;
     const subjectsGraded = Object.keys(marksStore).filter(
@@ -541,8 +654,8 @@ function OverviewSection({ klass, roster, goTo }) {
                         hint={`of ${CLASS_SUBJECTS.length} subjects`} color="#ca8a04" />
                 </Grid>
                 <Grid item xs={6} md={3}>
-                    <StatCard icon={MenuBookOutlinedIcon} label="Lesson plans" value={plans.length}
-                        hint={plans.length ? `Latest: week ${Math.max(...plans.map((p) => p.week))}` : 'None yet'} color="#0284c7" />
+                    <StatCard icon={MenuBookOutlinedIcon} label="Planning docs" value={plans.length}
+                        hint={plans.length ? 'Schemes & lesson plans' : 'None yet'} color="#0284c7" />
                 </Grid>
             </Grid>
 
@@ -558,7 +671,7 @@ function OverviewSection({ klass, roster, goTo }) {
                 </Button>
                 <Button variant="outlined" startIcon={<MenuBookOutlinedIcon />}
                     onClick={() => goTo('plans')} sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                    Plan a lesson
+                    Write planning
                 </Button>
             </Box>
 
@@ -723,7 +836,7 @@ export default function ClassHome() {
                         {section === 'overview' && <OverviewSection klass={klass} roster={roster} goTo={setSection} />}
                         {section === 'attendance' && <AttendanceSection klass={klass} roster={roster} onToast={() => {}} />}
                         {section === 'marks' && <MarksSection klass={klass} roster={roster} onToast={() => {}} />}
-                        {section === 'plans' && <PlansSection klass={klass} onToast={() => {}} />}
+                        {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
                         {section === 'students' && <StudentsSection klass={klass} roster={roster} />}
                         {section === 'timetable' && <Alert severity="info">The weekly timetable arrives in a later version.</Alert>}
                     </Box>
