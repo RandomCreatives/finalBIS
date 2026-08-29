@@ -1,6 +1,8 @@
-import { Link as RouterLink } from 'react-router-dom';
+import { useState } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-    Box, Button, Card, CardContent, Container, Typography, useTheme, Grid, Chip,
+    Alert, Box, Button, Card, CardContent, Container, Dialog, DialogActions,
+    DialogContent, InputAdornment, TextField, Typography, useTheme, Grid, Chip, IconButton,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import LoginIcon from '@mui/icons-material/Login';
@@ -10,35 +12,25 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SchoolIcon from '@mui/icons-material/School';
 import GroupsIcon from '@mui/icons-material/Groups';
 import PersonIcon from '@mui/icons-material/Person';
+import LockIcon from '@mui/icons-material/Lock';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useColorScheme } from '../theme';
+import {
+    CLASSES, passwordFor, saveClassLogin, slugFor,
+} from '../data/classes';
 
 /*
  * Public, login-free view of the school's classes.
  *
- * For now the 14 classes are seeded locally (the backend API requires a JWT,
- * and sign-in is being redesigned separately). The shape mirrors the real
- * `classApi.list()` rows so this can later be swapped for a live fetch.
+ * The roster mirrors Year_3_and_Year_4_Class_Teachers.csv and lives in
+ * src/data/classes.js. Each class card carries a main-teacher login: a
+ * popup dialog welcomes the teacher by name, and — for now, while the real
+ * sign-in is being redesigned — the password is the class name itself
+ * (e.g. "year 3 blue"). A correct password opens the class's teacher home.
  */
-const CLASSES = [
-    // Year 3 — 4 homerooms (names + main teachers match Year_3_and_Year_4_Class_Teachers.csv)
-    { id: 1,  name: 'Year 3 - Blue',    yearLevel: 3, mainTeacher: 'Ms. Yeabsira A.', assistantTeacher: null, studentCount: 26 },
-    { id: 2,  name: 'Year 3 - Yellow',  yearLevel: 3, mainTeacher: 'Ms. Meron A.',    assistantTeacher: null, studentCount: 24 },
-    { id: 3,  name: 'Year 3 - Red',     yearLevel: 3, mainTeacher: null,              assistantTeacher: null, studentCount: 25 },
-    { id: 4,  name: 'Year 3 - Green',   yearLevel: 3, mainTeacher: 'Mr. Deginet',     assistantTeacher: null, studentCount: 23 },
-    // Year 4 — 10 homerooms
-    { id: 5,  name: 'Year 4 - Blue',    yearLevel: 4, mainTeacher: 'Mr. Mulugeta J.', assistantTeacher: null, studentCount: 29 },
-    { id: 6,  name: 'Year 4 - Purple',  yearLevel: 4, mainTeacher: 'Ms. Mekdelawit A.',assistantTeacher: null, studentCount: 28 },
-    { id: 7,  name: 'Year 4 - Lavender',yearLevel: 4, mainTeacher: 'Ms. Selam G.',    assistantTeacher: null, studentCount: 30 },
-    { id: 8,  name: 'Year 4 - Crimson', yearLevel: 4, mainTeacher: 'Ms. Simegn Y.',   assistantTeacher: null, studentCount: 27 },
-    { id: 9,  name: 'Year 4 - Green',   yearLevel: 4, mainTeacher: null,              assistantTeacher: null, studentCount: 28 },
-    { id: 10, name: 'Year 4 - Yellow',  yearLevel: 4, mainTeacher: 'Ms. Mariamawait B.',assistantTeacher: null, studentCount: 26 },
-    { id: 11, name: 'Year 4 - Magenta', yearLevel: 4, mainTeacher: 'Ms. Abigail A.',  assistantTeacher: null, studentCount: 29 },
-    { id: 12, name: 'Year 4 - Red',     yearLevel: 4, mainTeacher: 'Ms. Denebe A.',    assistantTeacher: null, studentCount: 25 },
-    { id: 13, name: 'Year 4 - Violet',  yearLevel: 4, mainTeacher: 'Ms. Abigiya T.',   assistantTeacher: null, studentCount: 30 },
-    { id: 14, name: 'Year 4 - Orange',  yearLevel: 4, mainTeacher: 'Ms. Mekdelawit N.',assistantTeacher: null, studentCount: 27 },
-];
 
-function ClassCard({ klass }) {
+function ClassCard({ klass, onLogin }) {
     const theme = useTheme();
     const dark = theme.palette.mode === 'dark';
     const surface = dark ? theme.palette.background.paper : '#ffffff';
@@ -102,6 +94,14 @@ function ClassCard({ klass }) {
                         </Box>
                     </Box>
                 </Box>
+
+                <Button
+                    fullWidth size="small" variant="outlined"
+                    startIcon={<LockIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => onLogin(klass)}
+                    sx={{ mt: 2.5, fontWeight: 700, borderRadius: 1, textTransform: 'none' }}>
+                    {klass.mainTeacher ? 'Main Teacher Login' : 'Teacher Login'}
+                </Button>
             </CardContent>
         </Card>
     );
@@ -113,6 +113,34 @@ export default function PublicClasses() {
     const { toggleColorScheme } = useColorScheme();
     const surface = dark ? theme.palette.background.paper : '#ffffff';
     const border = dark ? theme.palette.divider : '#e2e8f0';
+    const navigate = useNavigate();
+
+    // Per-class main-teacher login dialog state.
+    const [loginClass, setLoginClass] = useState(null);
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [loginError, setLoginError] = useState('');
+
+    const openLogin = (klass) => {
+        setLoginClass(klass);
+        setPassword('');
+        setShowPassword(false);
+        setLoginError('');
+    };
+
+    const closeLogin = () => setLoginClass(null);
+
+    const submitLogin = (e) => {
+        e.preventDefault();
+        if (!loginClass) return;
+
+        if (password.trim().toLowerCase() === passwordFor(loginClass.name)) {
+            saveClassLogin(loginClass);
+            navigate(`/class-home/${slugFor(loginClass.name)}`);
+        } else {
+            setLoginError('That password is not correct for this class.');
+        }
+    };
 
     const year3 = CLASSES.filter((c) => c.yearLevel === 3);
     const year4 = CLASSES.filter((c) => c.yearLevel === 4);
@@ -130,7 +158,7 @@ export default function PublicClasses() {
             <Grid container spacing={2.5}>
                 {list.map((klass) => (
                     <Grid item xs={12} sm={6} md={4} lg={3} key={klass.id}>
-                        <ClassCard klass={klass} />
+                        <ClassCard klass={klass} onLogin={openLogin} />
                     </Grid>
                 ))}
             </Grid>
@@ -203,6 +231,78 @@ export default function PublicClasses() {
                 {renderGroup('Year 3', year3)}
                 {renderGroup('Year 4', year4)}
             </Container>
+
+            {/* ── main-teacher login dialog ── */}
+            <Dialog open={Boolean(loginClass)} onClose={closeLogin} maxWidth="xs" fullWidth
+                PaperProps={{ sx: { borderRadius: 2, p: 1 } }}>
+                {loginClass && (loginClass.mainTeacher ? (
+                    <form onSubmit={submitLogin}>
+                        <DialogContent sx={{ pt: 3.5, textAlign: 'center' }}>
+                            <Box sx={{ width: 56, height: 56, borderRadius: '50%', mx: 'auto', mb: 2,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }}>
+                                <SchoolIcon />
+                            </Box>
+                            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                                Welcome, {loginClass.mainTeacher}
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: .5 }}>
+                                Main Teacher · {loginClass.name}
+                            </Typography>
+
+                            <TextField
+                                autoFocus type={showPassword ? 'text' : 'password'}
+                                label="Class password" fullWidth size="small" sx={{ mt: 2.5 }}
+                                value={password}
+                                onChange={(e) => { setPassword(e.target.value); setLoginError(''); }}
+                                error={Boolean(loginError)}
+                                helperText={loginError || 'Hint (for now): the password is the class name — e.g. “year 3 blue”.'}
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton size="small" onClick={() => setShowPassword((v) => !v)}
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                                                {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+                            <Button onClick={closeLogin} sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" variant="contained" disableElevation
+                                disabled={!password.trim()}
+                                sx={{ fontWeight: 700, textTransform: 'none', px: 3 }}>
+                                Sign In
+                            </Button>
+                        </DialogActions>
+                    </form>
+                ) : (
+                    <>
+                        <DialogContent sx={{ pt: 3.5, textAlign: 'center' }}>
+                            <Box sx={{ width: 56, height: 56, borderRadius: '50%', mx: 'auto', mb: 2,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                bgcolor: alpha(theme.palette.warning.main, 0.12), color: 'warning.main' }}>
+                                <PersonIcon />
+                            </Box>
+                            <Typography variant="h6" sx={{ fontWeight: 800 }}>{loginClass.name}</Typography>
+                            <Alert severity="info" sx={{ mt: 2, textAlign: 'left' }}>
+                                No main teacher has been assigned to this class yet. The teacher login
+                                opens as soon as the school assigns one.
+                            </Alert>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                            <Button onClick={closeLogin} variant="contained" disableElevation
+                                sx={{ fontWeight: 700, textTransform: 'none', px: 3 }}>
+                                Close
+                            </Button>
+                        </DialogActions>
+                    </>
+                ))}
+            </Dialog>
 
             {/* ── footer ── */}
             <Box sx={{ py: 4, borderTop: `1px solid ${border}`, bgcolor: surface, mt: 'auto' }}>
