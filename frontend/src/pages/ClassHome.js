@@ -92,14 +92,16 @@ const SECTIONS = [
 /* ── small pieces ─────────────────────────────────────────── */
 
 function StatCard({ icon: Icon, label, value, hint, color = 'primary.main' }) {
+    const theme = useTheme();
+    const resolved = color === 'primary.main' ? theme.palette.primary.main : color;
     return (
         <Card variant="outlined" sx={{ borderRadius: 1.5, height: '100%' }}>
             <CardContent sx={{ p: 2.25 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
                     <Box sx={{ width: 38, height: 38, borderRadius: 1, display: 'flex',
                         alignItems: 'center', justifyContent: 'center',
-                        bgcolor: alpha(color === 'primary.main' ? 'primary.main' : color, 0.1),
-                        color }}>
+                        bgcolor: alpha(resolved, 0.1),
+                        color: resolved }}>
                         <Icon sx={{ fontSize: 19 }} />
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
@@ -341,6 +343,7 @@ function MarksSection({ klass, roster, onToast }) {
 /* ── lesson plans section ─────────────────────────────────── */
 
 function PlansSection({ klass, onToast }) {
+    const theme = useTheme();
     const [plans, setPlans] = useState(() =>
         (readStore(STORE.plans)[klass.name] || []).sort((a, b) => b.week - a.week));
     const [form, setForm] = useState({ week: termWeekOf(today()), subject: CLASS_SUBJECTS[0], objectives: '', activities: '' });
@@ -408,7 +411,7 @@ function PlansSection({ klass, onToast }) {
                             <CardContent sx={{ p: 2.25, display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                                 <Box sx={{ width: 52, height: 52, borderRadius: 1.25, flexShrink: 0,
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                    bgcolor: alpha('primary.main', 0.08), color: 'primary.main' }}>
+                                    bgcolor: alpha(theme.palette.primary.main, 0.08), color: 'primary.main' }}>
                                     <Typography sx={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Week</Typography>
                                     <Typography sx={{ fontSize: 18, fontWeight: 800, lineHeight: 1 }}>{p.week}</Typography>
                                 </Box>
@@ -642,7 +645,7 @@ export default function ClassHome() {
 
             {/* ── welcome header ── */}
             <Box sx={{ borderBottom: `1px solid ${border}`,
-                bgcolor: dark ? alpha('primary.main', 0.06) : alpha('primary.main', 0.04) }}>
+                bgcolor: dark ? alpha(theme.palette.primary.main, 0.06) : alpha(theme.palette.primary.main, 0.04) }}>
                 <Container maxWidth="xl">
                     <Box sx={{ py: { xs: 3, md: 3.5 }, display: 'flex', flexWrap: 'wrap',
                         alignItems: 'center', gap: 2 }}>
@@ -690,7 +693,7 @@ export default function ClassHome() {
                                         whiteSpace: 'nowrap', minWidth: { xs: 'auto', md: 0 },
                                         color: active ? '#fff' : s.soon ? 'text.disabled' : 'text.primary',
                                         bgcolor: active ? 'primary.main' : 'transparent',
-                                        '&:hover': active ? { bgcolor: 'primary.dark' } : { bgcolor: alpha('primary.main', 0.06) } }}>
+                                        '&:hover': active ? { bgcolor: 'primary.dark' } : { bgcolor: alpha(theme.palette.primary.main, 0.06) } }}>
                                     {s.label}
                                     {s.soon && (
                                         <Chip label="soon" size="small" sx={{ ml: 1, height: 16, fontSize: 9,
@@ -707,7 +710,7 @@ export default function ClassHome() {
                             {(() => { const Icon = activeSection.icon; return (
                                 <Box sx={{ width: 36, height: 36, borderRadius: 1, display: 'flex',
                                     alignItems: 'center', justifyContent: 'center',
-                                    bgcolor: alpha('primary.main', 0.1), color: 'primary.main' }}>
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }}>
                                     <Icon sx={{ fontSize: 18 }} />
                                 </Box>
                             ); })()}
