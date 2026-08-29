@@ -27,6 +27,10 @@ import {
  * Public academic calendar 2026/27 — seeded from the approved calendar PDF,
  * editable by everyone (demo-stage persistence in the browser, with a
  * one-click reset back to the approved version).
+ *
+ * `CalendarBoard` is the reusable body (month grid + upcoming + day popup);
+ * it is embedded both on the standalone /calendar page and inside the main
+ * teacher dashboard. `PublicCalendar` is the full-page wrapper.
  */
 
 const toStr = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -176,12 +180,11 @@ function EventRow({ event, onEdit, onDelete }) {
     );
 }
 
-/* ── page ─────────────────────────────────────────────────── */
+/* ── reusable calendar board (no page chrome) ────────────── */
 
-export default function PublicCalendar() {
+export function CalendarBoard() {
     const theme = useTheme();
     const dark = theme.palette.mode === 'dark';
-    const { toggleColorScheme } = useColorScheme();
     const surface = dark ? theme.palette.background.paper : '#ffffff';
     const border = dark ? theme.palette.divider : '#e2e8f0';
 
@@ -194,7 +197,7 @@ export default function PublicCalendar() {
     const today = todayStr();
     const [monthIdx, setMonthIdx] = useState(() => {
         const ym = today.slice(0, 7);
-        const idx = CALENDAR_MONTHS.findIndex(({ year, month }) => `${year}-${String(month + 1).padStart(2, '0')}` === ym);
+        const idx = CALENDAR_MONTHS.findIndex(({ year, month }) => `${year}-${String(m + 1).padStart(2, '0')}` === ym);
         return idx >= 0 ? idx : 0;
     });
     const [dialogDay, setDialogDay] = useState(null);
@@ -264,6 +267,244 @@ export default function PublicCalendar() {
     /* ── render ── */
 
     return (
+        <>
+            <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' },
+                alignItems: 'flex-start' }}>
+                {/* ── month grid ── */}
+                <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+                    {/* toolbar */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                        <IconButton size="small" disabled={monthIdx === 0}
+                            onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
+                            sx={{ border: `1px solid ${border}`, borderRadius: 1 }}>
+                            <ChevronLeftIcon fontSize="small" />
+                        </IconButton>
+                        <Typography sx={{ fontWeight: 800, fontSize: 17, minWidth: 165, textAlign: 'center' }}>
+                            {monthLabel}
+                        </Typography>
+                        <IconButton size="small" disabled={monthIdx === CALENDAR_MONTHS.length - 1}
+                            onClick={() => setMonthIdx((i) => Math.min(CALENDAR_MONTHS.length - 1, i + 1))}
+                            sx={{ border: `1px solid ${border}`, borderRadius: 1 }}>
+                            <ChevronRightIcon fontSize="small" />
+                        </IconButton>
+                        <Button size="small" onClick={() => {
+                            const idx = CALENDAR_MONTHS.findIndex(({ year: y, month: m }) =>
+                                `${y}-${String(m + 1).padStart(2, '0')}` === today.slice(0, 7));
+                            if (idx >= 0) setMonthIdx(idx);
+                        }} sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                            Today
+                        </Button>
+                        <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                            <Button size="small" startIcon={<RestartAltIcon sx={{ fontSize: 15 }} />}
+                                onClick={resetCalendar}
+                                sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                                Reset to approved
+                            </Button>
+                            <Button size="small" variant="contained" disableElevation
+                                startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                                onClick={() => openAdd(today)}
+                                sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                                Add event
+                            </Button>
+                        </Box>
+                    </Box>
+
+                    {/* weekday header */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: .75, mb: .75 }}>
+                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                            <Typography key={d} sx={{ fontSize: 11, fontWeight: 800, color: 'text.secondary',
+                                textTransform: 'uppercase', letterSpacing: .6, textAlign: 'center' }}>
+                                {d}
+                            </Typography>
+                        ))}
+                    </Box>
+
+                    {/* cells */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: .75 }}>
+                        {cells.map((day, i) => {
+                            if (!day) return <Box key={`b-${i}`} sx={{ minHeight: { xs: 56, md: 96 } }} />;
+                            const evts = eventsOnDay(day);
+                            const term = termForDay(day);
+                            const isToday = day === today;
+                            return (
+                                <Paper key={day} variant="outlined" onClick={() => setDialogDay(day)}
+                                    sx={{ minHeight: { xs: 56, md: 96 }, p: .75, borderRadius: 1, cursor: 'pointer',
+                                        bgcolor: term ? rgba(term.color, dark ? 0.1 : 0.05) : surface,
+                                        borderColor: isToday ? 'primary.main' : border,
+                                        borderWidth: isToday ? 2 : 1,
+                                        transition: 'border-color .15s, transform .15s',
+                                        '&:hover': { borderColor: 'primary.main', transform: 'translateY(-1px)' } }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: .5 }}>
+                                        <Typography sx={{ fontSize: 12, fontWeight: isToday ? 800 : 700,
+                                            color: isToday ? 'primary.main' : 'text.secondary' }}>
+                                            {Number(day.slice(8))}
+                                        </Typography>
+                                        {isToday && (
+                                            <Chip label="Today" size="small" sx={{ height: 14, fontSize: 8.5,
+                                                fontWeight: 800, bgcolor: 'primary.main', color: '#fff' }} />
+                                        )}
+                                    </Box>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: .35, mt: .4, overflow: 'hidden' }}>
+                                        {evts.slice(0, 2).map((e) => {
+                                            const cat = CATEGORIES[e.category] || CATEGORIES.milestone;
+                                            return (
+                                                <Box key={`${day}-${e.id}`} sx={{ display: 'flex', alignItems: 'center',
+                                                    gap: .5, minWidth: 0 }}>
+                                                    <Box sx={{ width: 6, height: 6, borderRadius: '50%',
+                                                        bgcolor: cat.color, flexShrink: 0 }} />
+                                                    <Typography sx={{ fontSize: 10, fontWeight: 600, lineHeight: 1.2,
+                                                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {e.title}
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        })}
+                                        {evts.length > 2 && (
+                                            <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: 'text.secondary' }}>
+                                                +{evts.length - 2} more
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Paper>
+                            );
+                        })}
+                    </Box>
+
+                    {/* term legend */}
+                    <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+                        {TERM_SPANS.map((t) => (
+                            <Chip key={t.name} size="small"
+                                label={`${t.name}: ${fmtDay(t.startsOn)} → ${fmtDay(t.endsOn)}`}
+                                sx={{ fontWeight: 700, borderRadius: 1, height: 24, fontSize: 11,
+                                    bgcolor: rgba(t.color, 0.1), color: t.color }} />
+                        ))}
+                    </Box>
+                </Box>
+
+                {/* ── upcoming events ── */}
+                <Paper variant="outlined" sx={{ borderRadius: 1.5, p: 2.25, flexShrink: 0,
+                    width: { lg: 320 }, maxWidth: '100%' }}>
+                    <Typography sx={{ fontWeight: 800, fontSize: 15, mb: 1.75 }}>Upcoming</Typography>
+                    {upcoming.length === 0 ? (
+                        <Alert severity="info" sx={{ borderRadius: 1.25 }}>No upcoming events.</Alert>
+                    ) : upcoming.map((e) => {
+                        const cat = CATEGORIES[e.category] || CATEGORIES.milestone;
+                        return (
+                            <Box key={e.id} onClick={() => setDialogDay(e.date)}
+                                sx={{ display: 'flex', gap: 1.25, py: 1.1, cursor: 'pointer',
+                                    borderBottom: `1px solid ${border}`,
+                                    '&:last-of-type': { borderBottom: 'none' },
+                                    '&:hover .ev-title': { color: 'primary.main' } }}>
+                                <Box sx={{ width: 44, flexShrink: 0, textAlign: 'center', borderRadius: 1,
+                                    py: .5, bgcolor: rgba(cat.color, 0.08), alignSelf: 'flex-start' }}>
+                                    <Typography sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.1, color: cat.color }}>
+                                        {Number(e.date.slice(8))}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: cat.color,
+                                        textTransform: 'uppercase' }}>
+                                        {new Date(`${e.date}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography className="ev-title" sx={{ fontSize: 13, fontWeight: 700,
+                                        lineHeight: 1.25, transition: 'color .15s' }}>
+                                        {e.title}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: .5, mt: .4, flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: cat.color,
+                                            textTransform: 'uppercase', letterSpacing: .4 }}>
+                                            {cat.label}
+                                        </Typography>
+                                        {e.closed && (
+                                            <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#dc2626' }}>
+                                                · School closed
+                                            </Typography>
+                                        )}
+                                        {e.tentative && (
+                                            <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.secondary' }}>
+                                                · Tentative
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+                            </Box>
+                        );
+                    })}
+                </Paper>
+            </Box>
+
+            {/* ── day popup ── */}
+            <Dialog open={Boolean(dialogDay)} onClose={closeDialog} maxWidth="sm" fullWidth
+                PaperProps={{ sx: { borderRadius: 2, p: .5 } }}>
+                {dialogDay && (
+                    <Box sx={{ p: 2.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: .5, flexWrap: 'wrap' }}>
+                            <Typography sx={{ fontWeight: 800, fontSize: 17 }}>{fmtLong(dialogDay)}</Typography>
+                            {termForDay(dialogDay) && (
+                                <Chip size="small" label={termForDay(dialogDay).name}
+                                    sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11,
+                                        bgcolor: rgba(termForDay(dialogDay).color, 0.1),
+                                        color: termForDay(dialogDay).color }} />
+                            )}
+                            <IconButton size="small" onClick={closeDialog} sx={{ ml: 'auto' }} aria-label="Close">
+                                <CloseIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                        </Box>
+
+                        {!adding && !editingId && (
+                            <>
+                                <Divider sx={{ mb: 1.5 }} />
+                                {eventsOnDay(dialogDay).length === 0 ? (
+                                    <Alert severity="info" sx={{ borderRadius: 1.25, mb: 1.5 }}>
+                                        Nothing scheduled on this day.
+                                    </Alert>
+                                ) : eventsOnDay(dialogDay).map((e) => (
+                                    <EventRow key={e.id} event={e}
+                                        onEdit={() => { setEditingId(e.id); setAdding(false); }}
+                                        onDelete={() => deleteEvent(e.id)} />
+                                ))}
+                                <Button size="small" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 15 }} />}
+                                    onClick={() => { setAdding(true); setEditingId(null); }}
+                                    sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                                    Add event on this day
+                                </Button>
+                            </>
+                        )}
+
+                        {(adding || editingId) && (
+                            <Box sx={{ mt: 1 }}>
+                                <EventForm
+                                    initial={editingId
+                                        ? (() => {
+                                            const e = events.find((x) => x.id === editingId);
+                                            return { ...EMPTY_FORM, ...e };
+                                        })()
+                                        : { ...EMPTY_FORM, date: addDefault || dialogDay }}
+                                    onSave={saveEvent}
+                                    onCancel={() => { setAdding(false); setEditingId(null); }}
+                                />
+                            </Box>
+                        )}
+                    </Box>
+                )}
+            </Dialog>
+
+            <Snackbar open={Boolean(toast)} autoHideDuration={3000}
+                onClose={() => setToast('')} message={toast} />
+        </>
+    );
+}
+
+/* ── standalone page (used at /calendar) ─────────────────── */
+
+export default function PublicCalendar() {
+    const theme = useTheme();
+    const dark = theme.palette.mode === 'dark';
+    const { toggleColorScheme } = useColorScheme();
+    const surface = dark ? theme.palette.background.paper : '#ffffff';
+    const border = dark ? theme.palette.divider : '#e2e8f0';
+
+    return (
         <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
             bgcolor: 'background.default', color: 'text.primary' }}>
             {/* ── header ── */}
@@ -327,230 +568,8 @@ export default function PublicCalendar() {
                     </Box>
                 </Box>
 
-                <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' },
-                    alignItems: 'flex-start' }}>
-                    {/* ── month grid ── */}
-                    <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
-                        {/* toolbar */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                            <IconButton size="small" disabled={monthIdx === 0}
-                                onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
-                                sx={{ border: `1px solid ${border}`, borderRadius: 1 }}>
-                                <ChevronLeftIcon fontSize="small" />
-                            </IconButton>
-                            <Typography sx={{ fontWeight: 800, fontSize: 17, minWidth: 165, textAlign: 'center' }}>
-                                {monthLabel}
-                            </Typography>
-                            <IconButton size="small" disabled={monthIdx === CALENDAR_MONTHS.length - 1}
-                                onClick={() => setMonthIdx((i) => Math.min(CALENDAR_MONTHS.length - 1, i + 1))}
-                                sx={{ border: `1px solid ${border}`, borderRadius: 1 }}>
-                                <ChevronRightIcon fontSize="small" />
-                            </IconButton>
-                            <Button size="small" onClick={() => {
-                                const idx = CALENDAR_MONTHS.findIndex(({ year: y, month: m }) =>
-                                    `${y}-${String(m + 1).padStart(2, '0')}` === today.slice(0, 7));
-                                if (idx >= 0) setMonthIdx(idx);
-                            }} sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
-                                Today
-                            </Button>
-                            <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-                                <Button size="small" startIcon={<RestartAltIcon sx={{ fontSize: 15 }} />}
-                                    onClick={resetCalendar}
-                                    sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
-                                    Reset to approved
-                                </Button>
-                                <Button size="small" variant="contained" disableElevation
-                                    startIcon={<AddIcon sx={{ fontSize: 16 }} />}
-                                    onClick={() => openAdd(today)}
-                                    sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                                    Add event
-                                </Button>
-                            </Box>
-                        </Box>
-
-                        {/* weekday header */}
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: .75, mb: .75 }}>
-                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-                                <Typography key={d} sx={{ fontSize: 11, fontWeight: 800, color: 'text.secondary',
-                                    textTransform: 'uppercase', letterSpacing: .6, textAlign: 'center' }}>
-                                    {d}
-                                </Typography>
-                            ))}
-                        </Box>
-
-                        {/* cells */}
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: .75 }}>
-                            {cells.map((day, i) => {
-                                if (!day) return <Box key={`b-${i}`} sx={{ minHeight: { xs: 56, md: 96 } }} />;
-                                const evts = eventsOnDay(day);
-                                const term = termForDay(day);
-                                const isToday = day === today;
-                                return (
-                                    <Paper key={day} variant="outlined" onClick={() => setDialogDay(day)}
-                                        sx={{ minHeight: { xs: 56, md: 96 }, p: .75, borderRadius: 1, cursor: 'pointer',
-                                            bgcolor: term ? rgba(term.color, dark ? 0.1 : 0.05) : surface,
-                                            borderColor: isToday ? 'primary.main' : border,
-                                            borderWidth: isToday ? 2 : 1,
-                                            transition: 'border-color .15s, transform .15s',
-                                            '&:hover': { borderColor: 'primary.main', transform: 'translateY(-1px)' } }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: .5 }}>
-                                            <Typography sx={{ fontSize: 12, fontWeight: isToday ? 800 : 700,
-                                                color: isToday ? 'primary.main' : 'text.secondary' }}>
-                                                {Number(day.slice(8))}
-                                            </Typography>
-                                            {isToday && (
-                                                <Chip label="Today" size="small" sx={{ height: 14, fontSize: 8.5,
-                                                    fontWeight: 800, bgcolor: 'primary.main', color: '#fff' }} />
-                                            )}
-                                        </Box>
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: .35, mt: .4, overflow: 'hidden' }}>
-                                            {evts.slice(0, 2).map((e) => {
-                                                const cat = CATEGORIES[e.category] || CATEGORIES.milestone;
-                                                return (
-                                                    <Box key={`${day}-${e.id}`} sx={{ display: 'flex', alignItems: 'center',
-                                                        gap: .5, minWidth: 0 }}>
-                                                        <Box sx={{ width: 6, height: 6, borderRadius: '50%',
-                                                            bgcolor: cat.color, flexShrink: 0 }} />
-                                                        <Typography sx={{ fontSize: 10, fontWeight: 600, lineHeight: 1.2,
-                                                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                            {e.title}
-                                                        </Typography>
-                                                    </Box>
-                                                );
-                                            })}
-                                            {evts.length > 2 && (
-                                                <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: 'text.secondary' }}>
-                                                    +{evts.length - 2} more
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                    </Paper>
-                                );
-                            })}
-                        </Box>
-
-                        {/* term legend */}
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
-                            {TERM_SPANS.map((t) => (
-                                <Chip key={t.name} size="small"
-                                    label={`${t.name}: ${fmtDay(t.startsOn)} → ${fmtDay(t.endsOn)}`}
-                                    sx={{ fontWeight: 700, borderRadius: 1, height: 24, fontSize: 11,
-                                        bgcolor: rgba(t.color, 0.1), color: t.color }} />
-                            ))}
-                        </Box>
-                    </Box>
-
-                    {/* ── upcoming events ── */}
-                    <Paper variant="outlined" sx={{ borderRadius: 1.5, p: 2.25, flexShrink: 0,
-                        width: { lg: 320 }, maxWidth: '100%' }}>
-                        <Typography sx={{ fontWeight: 800, fontSize: 15, mb: 1.75 }}>Upcoming</Typography>
-                        {upcoming.length === 0 ? (
-                            <Alert severity="info" sx={{ borderRadius: 1.25 }}>No upcoming events.</Alert>
-                        ) : upcoming.map((e) => {
-                            const cat = CATEGORIES[e.category] || CATEGORIES.milestone;
-                            return (
-                                <Box key={e.id} onClick={() => setDialogDay(e.date)}
-                                    sx={{ display: 'flex', gap: 1.25, py: 1.1, cursor: 'pointer',
-                                        borderBottom: `1px solid ${border}`,
-                                        '&:last-of-type': { borderBottom: 'none' },
-                                        '&:hover .ev-title': { color: 'primary.main' } }}>
-                                    <Box sx={{ width: 44, flexShrink: 0, textAlign: 'center', borderRadius: 1,
-                                        py: .5, bgcolor: rgba(cat.color, 0.08), alignSelf: 'flex-start' }}>
-                                        <Typography sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.1, color: cat.color }}>
-                                            {Number(e.date.slice(8))}
-                                        </Typography>
-                                        <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: cat.color,
-                                            textTransform: 'uppercase' }}>
-                                            {new Date(`${e.date}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}
-                                        </Typography>
-                                    </Box>
-                                    <Box sx={{ minWidth: 0 }}>
-                                        <Typography className="ev-title" sx={{ fontSize: 13, fontWeight: 700,
-                                            lineHeight: 1.25, transition: 'color .15s' }}>
-                                            {e.title}
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', gap: .5, mt: .4, flexWrap: 'wrap', alignItems: 'center' }}>
-                                            <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: cat.color,
-                                                textTransform: 'uppercase', letterSpacing: .4 }}>
-                                                {cat.label}
-                                            </Typography>
-                                            {e.closed && (
-                                                <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#dc2626' }}>
-                                                    · School closed
-                                                </Typography>
-                                            )}
-                                            {e.tentative && (
-                                                <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.secondary' }}>
-                                                    · Tentative
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                    </Box>
-                                </Box>
-                            );
-                        })}
-                    </Paper>
-                </Box>
+                <CalendarBoard />
             </Container>
-
-            {/* ── day popup ── */}
-            <Dialog open={Boolean(dialogDay)} onClose={closeDialog} maxWidth="sm" fullWidth
-                PaperProps={{ sx: { borderRadius: 2, p: .5 } }}>
-                {dialogDay && (
-                    <Box sx={{ p: 2.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: .5, flexWrap: 'wrap' }}>
-                            <Typography sx={{ fontWeight: 800, fontSize: 17 }}>{fmtLong(dialogDay)}</Typography>
-                            {termForDay(dialogDay) && (
-                                <Chip size="small" label={termForDay(dialogDay).name}
-                                    sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11,
-                                        bgcolor: rgba(termForDay(dialogDay).color, 0.1),
-                                        color: termForDay(dialogDay).color }} />
-                            )}
-                            <IconButton size="small" onClick={closeDialog} sx={{ ml: 'auto' }} aria-label="Close">
-                                <CloseIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-                        </Box>
-
-                        {!adding && !editingId && (
-                            <>
-                                <Divider sx={{ mb: 1.5 }} />
-                                {eventsOnDay(dialogDay).length === 0 ? (
-                                    <Alert severity="info" sx={{ borderRadius: 1.25, mb: 1.5 }}>
-                                        Nothing scheduled on this day.
-                                    </Alert>
-                                ) : eventsOnDay(dialogDay).map((e) => (
-                                    <EventRow key={e.id} event={e}
-                                        onEdit={() => { setEditingId(e.id); setAdding(false); }}
-                                        onDelete={() => deleteEvent(e.id)} />
-                                ))}
-                                <Button size="small" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 15 }} />}
-                                    onClick={() => { setAdding(true); setEditingId(null); }}
-                                    sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                                    Add event on this day
-                                </Button>
-                            </>
-                        )}
-
-                        {(adding || editingId) && (
-                            <Box sx={{ mt: 1 }}>
-                                <EventForm
-                                    initial={editingId
-                                        ? (() => {
-                                            const e = events.find((x) => x.id === editingId);
-                                            return { ...EMPTY_FORM, ...e };
-                                        })()
-                                        : { ...EMPTY_FORM, date: addDefault || dialogDay }}
-                                    onSave={saveEvent}
-                                    onCancel={() => { setAdding(false); setEditingId(null); }}
-                                />
-                            </Box>
-                        )}
-                    </Box>
-                )}
-            </Dialog>
-
-            <Snackbar open={Boolean(toast)} autoHideDuration={3000}
-                onClose={() => setToast('')} message={toast} />
 
             {/* ── footer ── */}
             <Box sx={{ py: 4, borderTop: `1px solid ${border}`, bgcolor: surface, mt: 'auto' }}>
