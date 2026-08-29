@@ -29,6 +29,7 @@ import {
 import StudentIdCard from '../components/StudentIdCard';
 import { CalendarBoard } from './PublicCalendar';
 import WordEditor from '../components/WordEditor';
+import Spreadsheet, { makeModel } from '../components/Spreadsheet';
 import { CLASSES } from '../data/classes';
 
 /*
@@ -359,6 +360,11 @@ const PLANNING_TEMPLATES = {
         title: (k) => `Planning — ${k.name}`,
         html: '<p><br></p>',
     },
+    sheet: {
+        label: 'Spreadsheet',
+        title: (k) => `Spreadsheet — ${k.name}`,
+        sheet: true,
+    },
     scheme: {
         label: 'Scheme of Work',
         title: (k) => `Scheme of Work — ${k.name}`,
@@ -399,6 +405,7 @@ ${'<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</t
 };
 
 const DOC_TYPE_META = {
+    sheet: { label: 'Spreadsheet', color: '#0891b2' },
     scheme: { label: 'Scheme of Work', color: '#7c3aed' },
     lesson: { label: 'Lesson Plan', color: '#2563eb' },
     blank: { label: 'Document', color: '#64748b' },
@@ -413,6 +420,15 @@ function DocEditor({ doc, klass, onBack, onPatch, onToast }) {
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
             onPatch({ html });
+            setStatus('saved');
+        }, 600);
+    };
+
+    const handleModel = (model) => {
+        setStatus('saving');
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+            onPatch({ model });
             setStatus('saved');
         }, 600);
     };
@@ -439,12 +455,20 @@ function DocEditor({ doc, klass, onBack, onPatch, onToast }) {
                     {status === 'saving' ? 'Saving…' : '✓ Saved'}
                 </Typography>
             </Box>
-            <WordEditor
-                key={doc.id}
-                initialHtml={doc.html}
-                onHtmlChange={handleHtml}
-                printHeader={`${meta.label} · ${klass.name}`}
-            />
+            {doc.type === 'sheet' ? (
+                <Spreadsheet
+                    key={doc.id}
+                    value={doc.model || makeModel()}
+                    onChange={handleModel}
+                />
+            ) : (
+                <WordEditor
+                    key={doc.id}
+                    initialHtml={doc.html}
+                    onHtmlChange={handleHtml}
+                    printHeader={`${meta.label} · ${klass.name}`}
+                />
+            )}
             <Snackbar open={false} message="" />
         </Box>
     );
@@ -467,7 +491,8 @@ function PlanningSection({ klass, onToast }) {
             id: `doc-${Date.now()}`,
             type,
             title: tpl.title(klass),
-            html: tpl.html,
+            html: tpl.sheet ? undefined : tpl.html,
+            model: tpl.sheet ? makeModel() : undefined,
             updatedAt: Date.now(),
         };
         persist([doc, ...docs]);
@@ -501,8 +526,8 @@ function PlanningSection({ klass, onToast }) {
         <Box>
             <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap', alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 13, color: 'text.secondary', flexGrow: 1 }}>
-                    Write your schemes of work and lesson plans on a simple Word-like page —
-                    formatted text, tables, and printing included.
+                    Build your planning as a Word-like page (formatted text, tables, printing) or an
+                    Excel-like spreadsheet — schemes of work, weekly plans, grade trackers, anything.
                 </Typography>
                 {Object.entries(PLANNING_TEMPLATES).map(([type, tpl]) => (
                     <Button key={type} size="small" variant={type === 'blank' ? 'outlined' : 'contained'}
