@@ -197,7 +197,7 @@ export function CalendarBoard() {
     const today = todayStr();
     const [monthIdx, setMonthIdx] = useState(() => {
         const ym = today.slice(0, 7);
-        const idx = CALENDAR_MONTHS.findIndex(({ year, month }) => `${year}-${String(m + 1).padStart(2, '0')}` === ym);
+        const idx = CALENDAR_MONTHS.findIndex(({ year, month }) => `${year}-${String(month + 1).padStart(2, '0')}` === ym);
         return idx >= 0 ? idx : 0;
     });
     const [dialogDay, setDialogDay] = useState(null);
