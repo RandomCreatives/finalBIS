@@ -62,3 +62,73 @@ export const readClassLogin = () => {
 };
 
 export const clearClassLogin = () => localStorage.removeItem(CLASS_LOGIN_KEY);
+
+// Sample students shown when the live directory is empty, so the page is
+// demonstrable. Real records carry the same fields server-side.
+export const SAMPLE_STUDENTS = [
+    {
+        name: 'Yonas Bekele',
+        className: 'Year 3 - Blue',
+        gender: 'Male',
+        admissionNumber: 'BIS2026-001',
+        dateOfBirth: '2018-04-12',
+        guardianName: 'Mrs. Meseret Bekele',
+        guardianRelation: 'Mother',
+        guardianPhone: '+251 91 123 4567',
+        address: 'Gerji, Addis Ababa',
+        previousSchool: 'Gerji Neighborhood School',
+        medicalNotes: 'No known allergies',
+        enrolmentDate: '2026-09-01',
+        status: 'Active',
+    },
+    {
+        name: 'Hana Getachew',
+        className: 'Year 4 - Red',
+        gender: 'Female',
+        admissionNumber: 'BIS2026-002',
+        dateOfBirth: '2017-09-03',
+        guardianName: 'Mr. Getachew Tesfaye',
+        guardianRelation: 'Father',
+        guardianPhone: '+251 92 234 5678',
+        address: 'Gerji, Addis Ababa',
+        previousSchool: 'BIS NOC Gerji (Year 3)',
+        medicalNotes: 'Mild asthma — inhaler kept in the clinic',
+        enrolmentDate: '2026-09-01',
+        status: 'Active',
+    },
+];
+
+/* ── demo teaching data ─────────────────────────────────────
+ * Subjects a main teacher's class takes. Maths & Science are delivered by
+ * the class's own main teacher; the rest by subject teachers. Mirrors the
+ * real subjects catalogue.
+ */
+export const CLASS_SUBJECTS = [
+    'Mathematics', 'Science', 'English', 'Amharic', 'French',
+    'Arts', 'Music', 'Physical Education',
+];
+
+/** Demo roster generator — deterministic per class, for the demo stage only. */
+const FIRST = ['Abel', 'Sara', 'Daniel', 'Hanna', 'Yosef', 'Liya', 'Meron', 'Bereket',
+    'Tsion', 'Nahom', 'Ruth', 'Elias', 'Martha', 'Samuel', 'Bethelhem', 'Dawit',
+    'Selam', 'Henok', 'Kidist', 'Yared', 'Fikir', 'Robel', 'Amanuel', 'Mahi'];
+const LAST = ['Tesfaye', 'Alemu', 'Bekele', 'Girma', 'Tadesse', 'Haile', 'Worku',
+    'Mekonnen', 'Abebe', 'Fikru', 'Negash', 'Kassa', 'Demissie', 'Assefa', 'Baye'];
+
+export const demoRoster = (klass) => {
+    const count = Math.min(klass?.studentCount ?? 25, 30);
+    const seed = klass?.id ?? 1;
+    const roster = [];
+    for (let i = 0; i < count; i += 1) {
+        const first = FIRST[(seed * 7 + i * 3) % FIRST.length];
+        const last = LAST[(seed * 5 + i * 2) % LAST.length];
+        roster.push({
+            name: `${first} ${last}`,
+            className: klass.name,
+            gender: i % 2 === 0 ? 'Female' : 'Male',
+            admissionNumber: `BIS2026-${String(seed * 100 + i + 1).padStart(3, '0')}`,
+            rollNum: i + 1,
+        });
+    }
+    return roster.sort((a, b) => a.rollNum - b.rollNum);
+};
