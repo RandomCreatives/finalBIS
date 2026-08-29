@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import PublicClasses from './pages/PublicClasses';
 import PublicTeachers from './pages/PublicTeachers';
 import PublicStudents from './pages/PublicStudents';
+import ClassHome from './pages/ClassHome';
 
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -83,6 +84,7 @@ export default function App() {
                         <Route path="/classes" element={<PublicClasses />} />
                         <Route path="/teachers" element={<PublicTeachers />} />
                         <Route path="/students" element={<PublicStudents />} />
+                        <Route path="/class-home/:slug" element={<ClassHome />} />
                         {/* Data Center dormant in v1.0 (was public). */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
