@@ -118,6 +118,7 @@ export default function Landing() {
                             <NavLink component={RouterLink} to="/classes">Classes</NavLink>
                             <NavLink component={RouterLink} to="/teachers">Teachers</NavLink>
                             <NavLink component={RouterLink} to="/students">Students</NavLink>
+                            <NavLink component={RouterLink} to="/calendar">Calendar</NavLink>
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
