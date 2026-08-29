@@ -17,6 +17,7 @@ import GradeIcon from '@mui/icons-material/Grade';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import GroupsIcon from '@mui/icons-material/Groups';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import EventIcon from '@mui/icons-material/Event';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
@@ -26,6 +27,7 @@ import {
     classBySlug, readClassLogin, clearClassLogin, demoRoster, CLASS_SUBJECTS,
 } from '../data/classes';
 import StudentIdCard from '../components/StudentIdCard';
+import { CalendarBoard } from './PublicCalendar';
 import WordEditor from '../components/WordEditor';
 import { CLASSES } from '../data/classes';
 
@@ -91,8 +93,9 @@ const SECTIONS = [
     { id: 'attendance', label: 'Attendance', icon: FactCheckIcon },
     { id: 'marks', label: 'Marksheets', icon: GradeIcon },
     { id: 'plans', label: 'Planning', icon: MenuBookOutlinedIcon },
+    { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'students', label: 'Students', icon: GroupsIcon },
-    { id: 'timetable', label: 'Timetable', icon: CalendarMonthIcon, soon: true },
+    { id: 'timetable', label: 'Timetable', icon: EventIcon, soon: true },
 ];
 
 /* ── small pieces ─────────────────────────────────────────── */
@@ -837,6 +840,7 @@ export default function ClassHome() {
                         {section === 'attendance' && <AttendanceSection klass={klass} roster={roster} onToast={() => {}} />}
                         {section === 'marks' && <MarksSection klass={klass} roster={roster} onToast={() => {}} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
+{section === 'calendar' && <CalendarBoard />}
                         {section === 'students' && <StudentsSection klass={klass} roster={roster} />}
                         {section === 'timetable' && <Alert severity="info">The weekly timetable arrives in a later version.</Alert>}
                     </Box>
