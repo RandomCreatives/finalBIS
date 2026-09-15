@@ -144,3 +144,34 @@ describe('GET /api/public/students (login-free roster)', () => {
         }
     });
 });
+
+describe('public directory resilience (paused/unreachable database)', () => {
+    test('degrades to an empty teachers list instead of 500', async () => {
+        const originalFrom = supabaseStub.from;
+        // Simulate a paused/unreachable Supabase project.
+        supabaseStub.from = () => { throw new Error('fetch failed: project paused'); };
+
+        try {
+            const res = await request(app).get('/api/public/teachers');
+            assert.equal(res.status, 200);
+            assert.deepEqual(res.body.teachers, []);
+            assert.equal(res.body.degraded, true);
+        } finally {
+            supabaseStub.from = originalFrom;
+        }
+    });
+
+    test('degrades to an empty students list instead of 500', async () => {
+        const originalFrom = supabaseStub.from;
+        supabaseStub.from = () => { throw new Error('fetch failed: project paused'); };
+
+        try {
+            const res = await request(app).get('/api/public/students');
+            assert.equal(res.status, 200);
+            assert.deepEqual(res.body.students, []);
+            assert.equal(res.body.degraded, true);
+        } finally {
+            supabaseStub.from = originalFrom;
+        }
+    });
+});
