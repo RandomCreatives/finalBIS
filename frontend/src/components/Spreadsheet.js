@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     Box, Button, Divider, IconButton, Menu, MenuItem, Tooltip, Typography,
 } from '@mui/material';
@@ -157,8 +157,9 @@ function CellToolbar({ cell, onApply }) {
 /* ── spreadsheet ──────────────────────────────────────────── */
 
 export default function Spreadsheet({ value, onChange }) {
-    const initial = useMemo(() => (value && value.data ? clone(value) : makeModel()), []);
-    const [grid, setGrid] = useState(initial);
+    // Lazy initializer: the grid seeds once from the incoming document on
+    // mount; afterwards it is fully user-driven (autosave flows outward).
+    const [grid, setGrid] = useState(() => (value && value.data ? clone(value) : makeModel()));
     const [sel, setSel] = useState({ r: 0, c: 0 });
     const saveTimer = useRef(null);
     const inputRefs = useRef(new Map());
