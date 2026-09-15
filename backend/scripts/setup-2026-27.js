@@ -40,26 +40,24 @@ const supabase = require('../config/supabase');
 // Edit this block to match the school's final roster.
 // ---------------------------------------------------------------------------
 
-// Last year's 12 color-named Year 3 classes: Blue, Green, Red, Yellow,
-// Orange, Magenta, Violet, Lavender, Cyan, Maroon, Crimson, Purple.
-// Ten of them carry forward into Year 4 — adjust the list if the school
-// merges or renames any sections.
+// Approved 2026/27 roster (see Academic Calendar Approved.pdf and the
+// Year_3_and_Year_4_Class_Teachers.csv mapping).
 const DEFAULT_YEAR4_CLASSES = [
-    'Blue', 'Green', 'Red', 'Yellow', 'Orange',
-    'Magenta', 'Violet', 'Lavender', 'Cyan', 'Maroon',
+    'Blue', 'Purple', 'Lavender', 'Crimson', 'Green',
+    'Yellow', 'Magenta', 'Red', 'Violet', 'Orange',
 ];
 
-// Four new Year 3 sections. Replace these color names with whatever the
-// school picks for the new intake.
-const DEFAULT_YEAR3_CLASSES = ['Coral', 'Teal', 'Amber', 'Indigo'];
+// Four new Year 3 sections.
+const DEFAULT_YEAR3_CLASSES = ['Blue', 'Yellow', 'Red', 'Green'];
 
 const DEFAULT_CAPACITY = 30; // max-average students per class
 
-// Term dates from BIS_School_Calendar_2026_2027.csv
+// Term dates from the approved 2026/27 academic calendar
+// (Academic Calendar Approved.pdf). Override via env if the school adjusts.
 const DEFAULT_TERMS = [
-    { term_index: 1, name: 'Term 1', starts_on: '2026-08-24', ends_on: '2026-12-21' },
+    { term_index: 1, name: 'Term 1', starts_on: '2026-09-21', ends_on: '2026-12-21' },
     { term_index: 2, name: 'Term 2', starts_on: '2027-01-11', ends_on: '2027-04-30' },
-    { term_index: 3, name: 'Term 3', starts_on: '2027-05-10', ends_on: '2027-07-12' },
+    { term_index: 3, name: 'Term 3', starts_on: '2027-05-06', ends_on: '2027-07-12' },
 ];
 
 // ---------------------------------------------------------------------------
