@@ -6,6 +6,21 @@ A staff-facing school management system for the British International School, NO
 
 ---
 
+## Pipeline (CI/CD)
+
+| Stage | What happens | Where |
+|---|---|---|
+| **Every PR** | Backend test suite (212 tests, offline) + frontend ESLint, build & unit tests | `.github/workflows/ci.yml` (GitHub Actions) |
+| **Every PR** | Preview deployment with its own URL | Vercel GitHub integration |
+| **Merge to `main`** | Automatic production deployment | Vercel |
+
+Workflow: branch → PR → CI + preview checks → merge → live. No manual
+deployments, no file copying. Vercel environment variables live in the
+Vercel project settings (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`JWT_SECRET`, `CORS_ORIGINS`, optional SMTP/Telegram/Drive credentials).
+
+---
+
 ## What it does
 
 | Module | Capability |
