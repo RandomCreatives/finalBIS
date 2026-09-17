@@ -14,6 +14,7 @@ const assignments = require('../controllers/assignment.controller');
 const students = require('../controllers/student.controller');
 const attendance = require('../controllers/attendance.controller');
 const marksheets = require('../controllers/marksheet.controller');
+const assessments = require('../controllers/assessment.controller');
 const library = require('../controllers/library.controller');
 const clinic = require('../controllers/clinic.controller');
 const terms = require('../controllers/term.controller');
@@ -506,6 +507,50 @@ router.post(
 );
 router.get('/marksheets/student/:studentId', authenticate, authorize(...TEACHING), uuid('studentId'), validate, marksheets.getStudentMarksheet);
 router.delete('/marksheets/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, marksheets.deleteMarksheet);
+
+// =============================================================================
+// ASSESSMENTS — multiple marked components per subject (Quiz 1, Classwork…)
+// =============================================================================
+router.post(
+    '/assessments',
+    authenticate,
+    authorize(...TEACHING),
+    body('classId').isUUID(),
+    body('subjectId').isUUID(),
+    body('termId').optional().isUUID(),
+    body('label').isString().trim().notEmpty().withMessage('A label is required'),
+    body('maxMarks').optional().isFloat({ gt: 0 }).withMessage('maxMarks must be greater than zero'),
+    validate,
+    assessments.createAssessment
+);
+
+router.get(
+    '/assessments',
+    authenticate,
+    authorize(...TEACHING),
+    query('classId').isUUID(),
+    query('subjectId').isUUID(),
+    query('termId').optional().isUUID(),
+    validate,
+    assessments.listAssessments
+);
+
+router.post(
+    '/assessments/marks/bulk',
+    authenticate,
+    authorize(...TEACHING),
+    body('classId').isUUID(),
+    body('subjectId').isUUID(),
+    body('termId').optional().isUUID(),
+    body('entries').isArray({ min: 1 }).withMessage('entries must be a non-empty array'),
+    body('entries.*.assessmentId').isUUID(),
+    body('entries.*.studentId').isUUID(),
+    body('entries.*.marks').isFloat({ min: 0 }).withMessage('Marks must be zero or greater'),
+    validate,
+    assessments.bulkSaveAssessmentMarks
+);
+
+router.delete('/assessments/:id', authenticate, authorize(...TEACHING), uuid('id'), validate, assessments.deleteAssessment);
 
 // =============================================================================
 // LIBRARY

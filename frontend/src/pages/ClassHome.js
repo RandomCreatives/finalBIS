@@ -32,7 +32,7 @@ import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
-import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi } from '../api/endpoints';
+import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi } from '../api/endpoints';
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
@@ -581,16 +581,21 @@ function AttendanceSection({ klass, classId, roster }) {
 
 function MarksSection({ klass, classId, roster }) {
     const [subjectId, setSubjectId] = useState('');
-    const [entries, setEntries] = useState({});
-    const [baseline, setBaseline] = useState('{}');
+    const [edits, setEdits] = useState({});
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState('');
 
-    // Current term — marks are stored per term.
+    // Create-assessment dialog state
+    const [createOpen, setCreateOpen] = useState(false);
+    const [newLabel, setNewLabel] = useState('');
+    const [newMax, setNewMax] = useState('10');
+    const [creating, setCreating] = useState(false);
+    const [createError, setCreateError] = useState('');
+
     const currentTerm = useApi(() => termApi.current().then((d) => d.term), []);
     const termId = currentTerm.data?.id ?? null;
 
-    // Subjects offered in this class (from this year's assignments).
+    // Subjects offered in this class.
     const classSubjects = useApi(
         () => (classId
             ? assignmentApi.subjects({ classId }).then((d) => d.assignments)
@@ -605,81 +610,122 @@ function MarksSection({ klass, classId, roster }) {
         return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
     }, [classSubjects.data]);
 
-    // Default to the first subject once known.
     useEffect(() => {
         if (!subjectId && subjects.length > 0) setSubjectId(subjects[0].id);
     }, [subjects, subjectId]);
 
-    // Existing marks for (class, subject, term).
-    const existing = useApi(
+    // Assessment columns + their marks for (class, subject, term).
+    const assessmentsApi = useApi(
         () => (classId && subjectId && termId
-            ? marksheetApi.list({ classId, subjectId, termId })
+            ? assessmentApi.list({ classId, subjectId, termId })
             : Promise.resolve([])),
         [classId, subjectId, termId]
     );
+    const assessments = assessmentsApi.data || [];
 
-    // Seed editable entries from the loaded marks.
-    useEffect(() => {
-        const next = {};
-        (existing.data || []).forEach((m) => {
-            if (m.student?.id) {
-                next[m.student.id] = { marks: String(m.marks), maxMarks: String(m.maxMarks) };
-            }
-        });
-        setEntries(next);
-        setBaseline(JSON.stringify(next));
-    }, [existing.data]);
+    // Reset local edits when the loaded columns change.
+    useEffect(() => { setEdits({}); }, [assessmentsApi.data]);
 
-    const setField = (studentId, field, value) => {
-        setEntries((prev) => ({
-            ...prev,
-            [studentId]: { marks: '', maxMarks: '100', ...prev[studentId], [field]: value },
-        }));
+    const loadedValue = (aid, sid) => {
+        const a = assessments.find((x) => x.id === aid);
+        const v = a?.marks?.[sid];
+        return v === undefined || v === null ? '' : String(v);
+    };
+    const currentValue = (aid, sid) => {
+        const key = `${aid}|${sid}`;
+        return key in edits ? edits[key] : loadedValue(aid, sid);
     };
 
-    const dirtyIds = roster
-        .filter((s) => {
-            const e = entries[s.id];
-            if (!e || e.marks === '' || e.marks === undefined) return false;
-            const base = JSON.parse(baseline)[s.id];
-            return JSON.stringify(e) !== JSON.stringify(base);
-        })
-        .map((s) => s.id);
+    // Cells the teacher changed (only entered, non-empty values are saved).
+    const dirtyEntries = useMemo(() => {
+        const out = [];
+        assessments.forEach((a) => roster.forEach((s) => {
+            const cur = currentValue(a.id, s.id);
+            if (cur !== loadedValue(a.id, s.id) && cur !== '') {
+                out.push({ assessmentId: a.id, studentId: s.id, value: cur });
+            }
+        }));
+        return out;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [edits, assessments, roster]);
 
-    const invalidIds = roster.filter((s) => {
-        const e = entries[s.id];
-        if (!e || e.marks === '') return false;
-        const marks = Number(e.marks);
-        const max = Number(e.maxMarks) || 100;
-        return Number.isNaN(marks) || marks < 0 || marks > max;
-    }).map((s) => s.id);
+    // Invalid = entered value exceeds the assessment max.
+    const invalidCells = useMemo(() => {
+        const set = new Set();
+        assessments.forEach((a) => roster.forEach((s) => {
+            const cur = currentValue(a.id, s.id);
+            if (cur !== '' && (Number.isNaN(Number(cur)) || Number(cur) > a.maxMarks)) {
+                set.add(`${a.id}|${s.id}`);
+            }
+        }));
+        return set;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [edits, assessments, roster]);
 
-    const graded = roster.filter((s) => entries[s.id]?.marks !== '' && entries[s.id]?.marks !== undefined);
-    const average = graded.length
-        ? graded.reduce((sum, s) => {
-            const e = entries[s.id];
-            const max = Number(e.maxMarks) || 100;
-            return sum + (Number(e.marks) / max) * 100;
-        }, 0) / graded.length
-        : null;
+    // Running final per student = sum of entered marks / sum of their maxes.
+    const finalFor = (sid) => {
+        let marks = 0;
+        let max = 0;
+        assessments.forEach((a) => {
+            const v = currentValue(a.id, sid);
+            if (v !== '' && !Number.isNaN(Number(v))) {
+                marks += Number(v);
+                max += a.maxMarks;
+            }
+        });
+        if (max === 0) return null;
+        return { marks, max, pct: (marks / max) * 100 };
+    };
+
+    const createAssessment = async () => {
+        const max = Number(newMax);
+        if (!newLabel.trim()) { setCreateError('Give the assessment a name.'); return; }
+        if (!(max > 0)) { setCreateError('The mark must be greater than zero.'); return; }
+        setCreating(true);
+        setCreateError('');
+        try {
+            await assessmentApi.create({ classId, subjectId, termId, label: newLabel.trim(), maxMarks: max });
+            await assessmentsApi.reload();
+            setCreateOpen(false);
+            setNewLabel('');
+            setNewMax('10');
+            setToast('Assessment column added');
+        } catch (err) {
+            setCreateError(err.message || 'Could not create the assessment');
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    const deleteAssessment = async (a) => {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`Delete "${a.label}" and all its marks?`)) return;
+        try {
+            await assessmentApi.remove(a.id);
+            await assessmentsApi.reload();
+            setToast('Assessment column removed');
+        } catch (err) {
+            setToast(err.message || 'Could not delete the assessment');
+        }
+    };
 
     const save = async () => {
-        if (dirtyIds.length === 0 || invalidIds.length > 0) return;
+        if (dirtyEntries.length === 0 || invalidCells.size > 0) return;
         setSaving(true);
         try {
-            const payload = {
+            await assessmentApi.saveMarks({
                 classId,
+                subjectId,
                 termId,
-                entries: dirtyIds.map((studentId) => ({
-                    studentId,
-                    subjectId,
-                    marks: Number(entries[studentId].marks),
-                    maxMarks: Number(entries[studentId].maxMarks) || 100,
+                entries: dirtyEntries.map((e) => ({
+                    assessmentId: e.assessmentId,
+                    studentId: e.studentId,
+                    marks: Number(e.value),
                 })),
-            };
-            await marksheetApi.bulkSave(payload);
-            await existing.reload();
-            setToast('Marks saved — grades computed by the system');
+            });
+            await assessmentsApi.reload();
+            setEdits({});
+            setToast('Marks saved — final computed automatically');
         } catch (err) {
             setToast(err.message || 'Could not save marks');
         } finally {
@@ -687,96 +733,105 @@ function MarksSection({ klass, classId, roster }) {
         }
     };
 
-
     return (
         <Box>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2.5 }}>
                 <TextField select label="Subject" size="small" value={subjectId}
-                    onChange={(e) => setSubjectId(e.target.value)} sx={{ minWidth: 200 }}>
+                    onChange={(e) => setSubjectId(e.target.value)} sx={{ minWidth: 180 }}>
                     {subjects.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
                 </TextField>
                 {currentTerm.data && (
-                    <Chip size="small" label={currentTerm.data.name}
-                        sx={{ fontWeight: 700, borderRadius: 1 }} />
+                    <Chip size="small" label={currentTerm.data.name} sx={{ fontWeight: 700, borderRadius: 1 }} />
                 )}
-                {average !== null && (
-                    <Chip size="small" label={`Average ${average.toFixed(1)}% · ${gradeFor(average)}`}
-                        sx={{ fontWeight: 700, borderRadius: 1,
-                            bgcolor: alpha(GRADE_COLORS[gradeFor(average)], 0.12),
-                            color: GRADE_COLORS[gradeFor(average)] }} />
-                )}
-                <Chip size="small" label={`${graded.length}/${roster.length} graded`}
-                    sx={{ fontWeight: 700, borderRadius: 1 }} />
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}>
-                    {invalidIds.length > 0 && (
-                        <Chip size="small" color="error" label={`${invalidIds.length} invalid`}
+                    {invalidCells.size > 0 && (
+                        <Chip size="small" color="error" label={`${invalidCells.size} over max`}
                             sx={{ fontWeight: 700, borderRadius: 1 }} />
                     )}
+                    <Button size="small" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => setCreateOpen(true)} disabled={!subjectId}
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                        Create assessment
+                    </Button>
                     <Button size="small" variant="contained" disableElevation startIcon={<SaveIcon />}
                         onClick={save}
-                        disabled={saving || dirtyIds.length === 0 || invalidIds.length > 0 || !subjectId}
+                        disabled={saving || dirtyEntries.length === 0 || invalidCells.size > 0}
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                        {saving ? 'Saving…' : `Save ${dirtyIds.length || ''} mark${dirtyIds.length === 1 ? '' : 's'}`.trim()}
+                        {saving ? 'Saving…' : `Save ${dirtyEntries.length || ''} mark${dirtyEntries.length === 1 ? '' : 's'}`.trim()}
                     </Button>
                 </Box>
             </Box>
 
-            {!subjectId && subjects.length === 0 && !classSubjects.loading && (
+            {subjects.length === 0 && !classSubjects.loading && (
                 <Alert severity="info" sx={{ borderRadius: 1.5 }}>
                     No subjects are assigned to {klass.name} yet — an admin assigns them under
                     Assignments → Subject teaching.
                 </Alert>
             )}
 
-            {subjectId && (
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
+            {subjectId && assessments.length === 0 && !assessmentsApi.loading && (
+                <Alert severity="info" sx={{ borderRadius: 1.5, mb: 2 }}>
+                    No assessments yet. Click <strong>Create assessment</strong> to add one
+                    (for example "Quiz 1" out of 10).
+                </Alert>
+            )}
+
+            {subjectId && assessments.length > 0 && (
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, overflow: 'auto' }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
                                 <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
-                                <TableCell sx={{ fontWeight: 700 }}>Student</TableCell>
-                                <TableCell sx={{ width: 110, fontWeight: 700 }}>Marks</TableCell>
-                                <TableCell sx={{ width: 100, fontWeight: 700 }}>Max</TableCell>
-                                <TableCell sx={{ width: 80, fontWeight: 700 }} align="right">%</TableCell>
-                                <TableCell sx={{ width: 80, fontWeight: 700 }} align="center">Grade</TableCell>
+                                <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Student</TableCell>
+                                {assessments.map((a) => (
+                                    <TableCell key={a.id} align="center" sx={{ minWidth: 110 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: .5 }}>
+                                            <Box>
+                                                <Typography sx={{ fontWeight: 700, fontSize: 13, lineHeight: 1.2 }}>{a.label}</Typography>
+                                                <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>out of {a.maxMarks}</Typography>
+                                            </Box>
+                                            <Tooltip title="Delete assessment">
+                                                <IconButton size="small" onClick={() => deleteAssessment(a)}>
+                                                    <DeleteOutlineIcon sx={{ fontSize: 15 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Box>
+                                    </TableCell>
+                                ))}
+                                <TableCell align="right" sx={{ fontWeight: 700, minWidth: 80 }}>Final %</TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 700, minWidth: 70 }}>Grade</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {roster.map((s) => {
-                                const e = entries[s.id] || { marks: '', maxMarks: '100' };
-                                const marksOk = e.marks !== '' && !Number.isNaN(Number(e.marks));
-                                const maxOk = e.maxMarks !== '' && Number(e.maxMarks) > 0;
-                                const invalid = marksOk && maxOk && Number(e.marks) > Number(e.maxMarks);
-                                const pct = marksOk && maxOk && !invalid
-                                    ? (Number(e.marks) / Number(e.maxMarks)) * 100
-                                    : null;
+                                const fin = finalFor(s.id);
                                 return (
                                     <TableRow key={s.id} hover>
                                         <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
                                         <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
-                                        <TableCell>
-                                            <TextField type="number" size="small" value={e.marks} placeholder="—"
-                                                error={invalid}
-                                                onChange={(ev) => setField(s.id, 'marks', ev.target.value)}
-                                                inputProps={{ min: 0, step: '0.5', style: { textAlign: 'right' } }}
-                                                fullWidth />
-                                        </TableCell>
-                                        <TableCell>
-                                            <TextField type="number" size="small" value={e.maxMarks}
-                                                error={invalid}
-                                                onChange={(ev) => setField(s.id, 'maxMarks', ev.target.value)}
-                                                inputProps={{ min: 1, step: 1, style: { textAlign: 'right' } }}
-                                                fullWidth />
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            {pct === null ? '—' : `${pct.toFixed(1)}%`}
+                                        {assessments.map((a) => {
+                                            const key = `${a.id}|${s.id}`;
+                                            const val = currentValue(a.id, s.id);
+                                            const invalid = invalidCells.has(key);
+                                            return (
+                                                <TableCell key={a.id} align="center" sx={{ px: 0.75 }}>
+                                                    <TextField type="number" size="small" value={val} placeholder="—"
+                                                        error={invalid}
+                                                        onChange={(ev) => setEdits((p) => ({ ...p, [key]: ev.target.value }))}
+                                                        inputProps={{ min: 0, max: a.maxMarks, step: '0.5', style: { textAlign: 'right' } }}
+                                                        sx={{ width: 84 }} />
+                                                </TableCell>
+                                            );
+                                        })}
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                            {fin ? `${fin.pct.toFixed(1)}%` : '—'}
                                         </TableCell>
                                         <TableCell align="center">
-                                            {pct === null ? '—' : (
-                                                <Chip size="small" label={gradeFor(pct)}
+                                            {fin ? (
+                                                <Chip size="small" label={gradeFor(fin.pct)}
                                                     sx={{ fontWeight: 800, minWidth: 42, borderRadius: 1,
-                                                        bgcolor: GRADE_COLORS[gradeFor(pct)], color: '#fff' }} />
-                                            )}
+                                                        bgcolor: GRADE_COLORS[gradeFor(fin.pct)], color: '#fff' }} />
+                                            ) : '—'}
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -785,6 +840,41 @@ function MarksSection({ klass, classId, roster }) {
                     </Table>
                 </TableContainer>
             )}
+
+            {/* Create-assessment dialog */}
+            <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth
+                PaperProps={{ sx: { borderRadius: 2 } }}>
+                <Box sx={{ p: 2.75 }}>
+                    <Typography sx={{ fontWeight: 800, fontSize: 16, mb: .5 }}>Create assessment</Typography>
+                    <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mb: 2 }}>
+                        Add a marked column for {subjects.find((s) => s.id === subjectId)?.name || 'this subject'}.
+                        The whole subject is out of 100, so a column "out of 10" is worth 10%.
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1.5, mb: 1 }}>
+                        <TextField label="Name" size="small" fullWidth value={newLabel}
+                            onChange={(e) => setNewLabel(e.target.value)}
+                            placeholder="e.g. Quiz 1" autoFocus />
+                        <TextField label="Out of" type="number" size="small" value={newMax}
+                            onChange={(e) => setNewMax(e.target.value)}
+                            inputProps={{ min: 1, step: 1, style: { textAlign: 'right' } }}
+                            sx={{ width: 110 }} />
+                    </Box>
+                    {createError && (
+                        <Typography sx={{ fontSize: 12.5, color: 'error.main', mb: 1 }}>{createError}</Typography>
+                    )}
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
+                        <Button size="small" onClick={() => setCreateOpen(false)}
+                            sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                            Cancel
+                        </Button>
+                        <Button size="small" variant="contained" disableElevation onClick={createAssessment}
+                            disabled={creating}
+                            sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                            {creating ? 'Adding…' : 'Add column'}
+                        </Button>
+                    </Box>
+                </Box>
+            </Dialog>
 
             <Snackbar open={Boolean(toast)} autoHideDuration={3500}
                 onClose={() => setToast('')} message={toast} />
