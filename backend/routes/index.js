@@ -411,6 +411,54 @@ router.get(
 );
 
 router.get('/attendance/summary', authenticate, attendance.getAttendanceSummary);
+
+// Monthly review & submission workflow
+router.get(
+    '/attendance/monthly',
+    authenticate,
+    query('classId').isUUID().withMessage('classId is required'),
+    query('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.getMonthlySummary
+);
+
+router.post(
+    '/attendance/submit',
+    authenticate,
+    authorize(...STAFF),
+    body('classId').isUUID().withMessage('classId is required'),
+    body('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.submitMonth
+);
+
+router.post(
+    '/attendance/return',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    body('classId').isUUID().withMessage('classId is required'),
+    body('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.returnMonth
+);
+
+router.get(
+    '/attendance/submissions',
+    authenticate,
+    query('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.listSubmissions
+);
+
+router.get(
+    '/attendance/report.csv',
+    authenticate,
+    query('classId').isUUID().withMessage('classId is required'),
+    query('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.exportCsv
+);
+
 router.get('/attendance/student/:studentId', authenticate, uuid('studentId'), validate, attendance.getStudentAttendance);
 
 // =============================================================================

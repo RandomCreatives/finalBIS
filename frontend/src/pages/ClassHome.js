@@ -3,7 +3,7 @@ import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-rout
 import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Divider, Grid,
     IconButton, InputAdornment, MenuItem, Paper, Snackbar, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup,
+    TableContainer, TableHead, TableRow, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
     Tooltip, Typography, useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
@@ -21,6 +21,9 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventIcon from '@mui/icons-material/Event';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
+import DownloadIcon from '@mui/icons-material/Download';
+import SendIcon from '@mui/icons-material/Send';
+import LockIcon from '@mui/icons-material/Lock';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -28,7 +31,7 @@ import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
-import { studentApi, classApi } from '../api/endpoints';
+import { studentApi, classApi, attendanceApi } from '../api/endpoints';
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
@@ -47,7 +50,6 @@ import Spreadsheet, { makeModel } from '../components/Spreadsheet';
  */
 
 const STORE = {
-    attendance: 'bisnoc.demo.attendance',
     marks: 'bisnoc.demo.marks',
     planning: 'bisnoc.demo.planningDocs',
 };
@@ -132,58 +134,84 @@ function StatCard({ icon: Icon, label, value, hint, color = 'primary.main' }) {
 
 /* ── attendance section ───────────────────────────────────── */
 
-function AttendanceSection({ klass, roster, onToast }) {
+function DailyRegister({ klass, classId, roster, monthSubmission, onToast }) {
     const [date, setDate] = useState(today());
-    const all = readStore(STORE.attendance)[klass.name] || {};
-    const [records, setRecords] = useState(all[date] || {});
-    const [saved, setSaved] = useState(Boolean(all[date]));
+    const [records, setRecords] = useState({});
+    const [saving, setSaving] = useState(false);
 
+    const locked = monthSubmission?.status === 'submitted';
+
+    const existing = useApi(
+        () => (classId
+            ? attendanceApi.forClass({ classId, date })
+            : Promise.resolve([])),
+        [classId, date]
+    );
+
+    // Seed the toggles from whatever is already recorded.
     useEffect(() => {
-        const store = readStore(STORE.attendance)[klass.name] || {};
-        setRecords(store[date] || {});
-        setSaved(Boolean(store[date]));
-    }, [date, klass.name]);
+        const next = {};
+        (existing.data || []).forEach((r) => {
+            if (r.student?.id) next[r.student.id] = r.status;
+        });
+        setRecords(next);
+    }, [existing.data]);
 
-    const setStatus = (name, status) => {
-        setRecords((r) => ({ ...r, [name]: status }));
-        setSaved(false);
-    };
+    const setStatus = (id, status) => setRecords((r) => ({ ...r, [id]: status }));
 
     const markAllPresent = () => {
         const next = {};
-        roster.forEach((s) => { next[s.name] = 'present'; });
+        roster.forEach((s) => { next[s.id] = 'present'; });
         setRecords(next);
-        setSaved(false);
     };
 
-    const save = () => {
-        const store = readStore(STORE.attendance);
-        store[klass.name] = { ...(store[klass.name] || {}), [date]: records };
-        writeStore(STORE.attendance, store);
-        setSaved(true);
-        onToast('Attendance saved');
+    const save = async () => {
+        setSaving(true);
+        try {
+            const payload = roster.map((s) => ({
+                studentId: s.id,
+                status: records[s.id] || 'present',
+            }));
+            await attendanceApi.mark({ classId, date, records: payload });
+            existing.reload();
+            onToast(`Register saved for ${date}`);
+        } catch (err) {
+            onToast(err.message || 'Could not save the register');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const tally = ATTENDANCE_STATUSES.map((s) => ({
-        ...s, count: Object.values(records).filter((v) => v === s.key).length,
+    const tally = ATTENDANCE_STATUSES.map((st) => ({
+        ...st,
+        count: roster.filter((s) => (records[s.id] || 'present') === st.key).length,
     }));
 
     return (
         <Box>
+            {locked && (
+                <Alert severity="warning" icon={<LockIcon />} sx={{ mb: 2, borderRadius: 1.5 }}>
+                    This month has been submitted and is locked. Ask an admin to return it for
+                    correction if something needs fixing.
+                </Alert>
+            )}
+
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2.5 }}>
                 <TextField label="Date" type="date" size="small" value={date}
                     onChange={(e) => setDate(e.target.value)}
                     InputLabelProps={{ shrink: true }} sx={{ width: 170 }} />
                 <Chip label={`Week ${termWeekOf(date)} · Term 1`} size="small"
                     sx={{ fontWeight: 700, borderRadius: 1, bgcolor: 'rgba(2,132,199,.1)', color: '#0284c7' }} />
+                {existing.loading && <CircularProgress size={16} />}
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-                    <Button size="small" onClick={markAllPresent}
+                    <Button size="small" onClick={markAllPresent} disabled={locked}
                         sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
                         Mark all present
                     </Button>
                     <Button size="small" variant="contained" disableElevation startIcon={<SaveIcon />}
-                        onClick={save} sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                        Save register
+                        onClick={save} disabled={locked || saving || roster.length === 0}
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                        {saving ? 'Saving…' : 'Save register'}
                     </Button>
                 </Box>
             </Box>
@@ -193,11 +221,6 @@ function AttendanceSection({ klass, roster, onToast }) {
                     <Chip key={t.key} size="small" label={`${t.full}: ${t.count}`}
                         sx={{ fontWeight: 700, borderRadius: 1, bgcolor: alpha(t.color, 0.1), color: t.color }} />
                 ))}
-                {saved && (
-                    <Chip size="small" icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />}
-                        label="Saved" sx={{ fontWeight: 700, borderRadius: 1,
-                            bgcolor: 'rgba(22,163,74,.1)', color: '#16a34a' }} />
-                )}
             </Box>
 
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
@@ -211,13 +234,13 @@ function AttendanceSection({ klass, roster, onToast }) {
                     </TableHead>
                     <TableBody>
                         {roster.map((s) => (
-                            <TableRow key={s.name} hover>
-                                <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum}</TableCell>
+                            <TableRow key={s.id} hover>
+                                <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
                                 <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
                                 <TableCell>
-                                    <ToggleButtonGroup size="small" exclusive
-                                        value={records[s.name] || 'present'}
-                                        onChange={(_, v) => v && setStatus(s.name, v)}>
+                                    <ToggleButtonGroup size="small" exclusive disabled={locked}
+                                        value={records[s.id] || 'present'}
+                                        onChange={(_, v) => v && setStatus(s.id, v)}>
                                         {ATTENDANCE_STATUSES.map((st) => (
                                             <ToggleButton key={st.key} value={st.key}
                                                 sx={{ px: 1.4, py: .3, minWidth: 40, fontWeight: 800, fontSize: 12 }}>
@@ -231,6 +254,176 @@ function AttendanceSection({ klass, roster, onToast }) {
                     </TableBody>
                 </Table>
             </TableContainer>
+        </Box>
+    );
+}
+
+function MonthlyReview({ klass, classId, onToast }) {
+    const [month, setMonth] = useState(today().slice(0, 7));
+    const [submitting, setSubmitting] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+
+    const summary = useApi(
+        () => (classId
+            ? attendanceApi.monthly({ classId, month })
+            : Promise.resolve(null)),
+        [classId, month]
+    );
+
+    const submission = summary.data?.submission ?? null;
+    const locked = submission?.status === 'submitted';
+
+    const submit = async () => {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`Submit ${month} attendance for ${klass.name} to the admin? The month will be locked until the admin returns it.`)) return;
+        setSubmitting(true);
+        try {
+            await attendanceApi.submitMonth({ classId, month });
+            await summary.reload();
+            onToast(`${month} submitted to the admin`);
+        } catch (err) {
+            onToast(err.message || 'Could not submit the month');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const downloadCsv = async () => {
+        setDownloading(true);
+        try {
+            const blob = await attendanceApi.reportCsv({ classId, month });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `attendance_${klass.name.replace(/[^a-z0-9]+/gi, '-')}_${month}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            onToast('Monthly report downloaded');
+        } catch (err) {
+            onToast(err.message || 'Could not download the report');
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    return (
+        <Box>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
+                <TextField label="Month" type="month" size="small" value={month}
+                    onChange={(e) => setMonth(e.target.value)}
+                    InputLabelProps={{ shrink: true }} sx={{ width: 170 }} />
+                {summary.data && (
+                    <>
+                        <Chip size="small" label={`${summary.data.daysMarked}/${summary.data.schoolDays} school days marked`}
+                            sx={{ fontWeight: 700, borderRadius: 1 }} />
+                        {submission && (
+                            <Chip size="small"
+                                label={submission.status === 'submitted'
+                                    ? `Submitted ${new Date(submission.submittedAt).toLocaleDateString('en-GB')}`
+                                    : 'Returned for correction'}
+                                color={submission.status === 'submitted' ? 'success' : 'warning'}
+                                sx={{ fontWeight: 700, borderRadius: 1 }} />
+                        )}
+                    </>
+                )}
+                <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                    <Button size="small" variant="outlined" startIcon={<DownloadIcon />}
+                        onClick={downloadCsv} disabled={downloading || !summary.data}
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                        {downloading ? 'Preparing…' : 'Download CSV'}
+                    </Button>
+                    {!locked && (
+                        <Button size="small" variant="contained" disableElevation startIcon={<SendIcon />}
+                            onClick={submit} disabled={submitting || !summary.data}
+                            sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                            {submitting ? 'Submitting…' : 'Submit month to admin'}
+                        </Button>
+                    )}
+                </Box>
+            </Box>
+
+            {submission?.status === 'returned' && submission.note && (
+                <Alert severity="warning" sx={{ mb: 2, borderRadius: 1.5 }}>
+                    Admin note: {submission.note} — fix the registers and submit again.
+                </Alert>
+            )}
+
+            {summary.loading && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+            )}
+            {summary.error && (
+                <Alert severity="error" sx={{ borderRadius: 1.5 }}
+                    action={<Button size="small" onClick={summary.reload}>Retry</Button>}>
+                    {summary.error}
+                </Alert>
+            )}
+
+            {summary.data && (
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ fontWeight: 700 }}>Student</TableCell>
+                                <TableCell sx={{ width: 70 }} align="center">P</TableCell>
+                                <TableCell sx={{ width: 70 }} align="center">L</TableCell>
+                                <TableCell sx={{ width: 70 }} align="center">A</TableCell>
+                                <TableCell sx={{ width: 70 }} align="center">E</TableCell>
+                                <TableCell sx={{ width: 90 }} align="right">Rate</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {summary.data.students.map((s) => (
+                                <TableRow key={s.id} hover>
+                                    <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
+                                    <TableCell align="center" sx={{ color: '#16a34a', fontWeight: 700 }}>{s.present}</TableCell>
+                                    <TableCell align="center" sx={{ color: '#d97706', fontWeight: 700 }}>{s.late}</TableCell>
+                                    <TableCell align="center" sx={{ color: '#dc2626', fontWeight: 700 }}>{s.absent}</TableCell>
+                                    <TableCell align="center" sx={{ color: '#0284c7', fontWeight: 700 }}>{s.excused}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                        {s.attendanceRate === null ? '—' : `${s.attendanceRate}%`}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
+        </Box>
+    );
+}
+
+function AttendanceSection({ klass, classId, roster }) {
+    const [tab, setTab] = useState('daily');
+    const [toast, setToast] = useState('');
+
+    const monthSubmissionApi = useApi(
+        () => (classId
+            ? attendanceApi.monthly({ classId, month: today().slice(0, 7) })
+                .then((d) => d.submission)
+            : Promise.resolve(null)),
+        [classId]
+    );
+
+    return (
+        <Box>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2.5, minHeight: 36,
+                '& .MuiTab-root': { minHeight: 36, fontWeight: 700, textTransform: 'none' } }}>
+                <Tab value="daily" label="Daily register" />
+                <Tab value="monthly" label="Monthly review & submission" />
+            </Tabs>
+
+            {tab === 'daily' && (
+                <DailyRegister klass={klass} classId={classId} roster={roster}
+                    monthSubmission={monthSubmissionApi.data} onToast={setToast} />
+            )}
+            {tab === 'monthly' && (
+                <MonthlyReview klass={klass} classId={classId} onToast={setToast} />
+            )}
+
+            <Snackbar open={Boolean(toast)} autoHideDuration={3500}
+                onClose={() => setToast('')} message={toast} />
         </Box>
     );
 }
@@ -958,7 +1151,7 @@ export default function ClassHome() {
                         <Divider sx={{ mb: 2.5 }} />
 
                         {section === 'overview' && <OverviewSection klass={klass} roster={roster} goTo={setSection} />}
-                        {section === 'attendance' && <AttendanceSection klass={klass} roster={roster} onToast={() => {}} />}
+                        {section === 'attendance' && <AttendanceSection klass={klass} classId={session.classId} roster={roster} />}
                         {section === 'marks' && <MarksSection klass={klass} roster={roster} onToast={() => {}} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
 {section === 'calendar' && <CalendarBoard />}

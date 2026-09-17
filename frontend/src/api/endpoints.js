@@ -164,6 +164,12 @@ export const attendanceApi = {
     forClass: (params) => client.get('/attendance', { params }).then((r) => r.data.attendance),
     forStudent: (studentId, params) =>
         client.get(`/attendance/student/${studentId}`, { params }).then((r) => r.data),
+    monthly: (params) => client.get('/attendance/monthly', { params }).then((r) => r.data),
+    submitMonth: (payload) => client.post('/attendance/submit', payload).then((r) => r.data),
+    returnMonth: (payload) => client.post('/attendance/return', payload).then((r) => r.data),
+    submissions: (params) => client.get('/attendance/submissions', { params }).then((r) => r.data),
+    reportCsv: (params) =>
+        client.get('/attendance/report.csv', { params, responseType: 'blob' }).then((r) => r.data),
 };
 
 export const marksheetApi = {

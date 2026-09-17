@@ -1,5 +1,5 @@
 const supabase = require('../config/supabase');
-const { BadRequestError, NotFoundError, asyncHandler } = require('../utils/errors');
+const { BadRequestError, NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
 
 /**
  * Attendance in two modes:
@@ -23,6 +23,9 @@ const markAttendance = asyncHandler(async (req, res) => {
     if (!Array.isArray(records) || records.length === 0) {
         throw new BadRequestError('records must be a non-empty array');
     }
+
+    // Submitted months are frozen for everyone except admins.
+    await assertMonthEditable(req, classId, date);
 
     const { data, error } = await supabase.rpc('mark_attendance', {
         p_school_id: req.user.school_id,
@@ -128,4 +131,339 @@ const getAttendanceSummary = asyncHandler(async (req, res) => {
     res.json({ total: data.length, byStatus });
 });
 
-module.exports = { markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary };
+
+/*
+ * Monthly review & submission workflow.
+ *
+ * A main teacher reviews the month's registers and submits them; submission
+ * locks the month (status 'submitted') so registers can no longer change.
+ * An admin can return a month for correction (status 'returned'), unlocking
+ * it until the teacher resubmits.
+ *
+ * Attendance-rate convention (matches getStudentAttendance): Late counts as
+ * attending; excused absences are removed from the denominator.
+ */
+
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+const assertMonthFormat = (month) => {
+    if (!MONTH_RE.test(month || '')) {
+        throw new BadRequestError('month must be YYYY-MM');
+    }
+};
+
+const lastDayOf = (month) => {
+    const [y, m] = month.split('-').map(Number);
+    return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+
+/** Monday–Friday days of the month up to (and including) today. */
+const schoolDaysSoFar = (month, todayIso) => {
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = lastDayOf(month);
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d += 1) {
+        const iso = `${month}-${String(d).padStart(2, '0')}`;
+        if (iso > todayIso) break;
+        const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+        if (dow >= 1 && dow <= 5) count += 1;
+    }
+    return count;
+};
+
+const getSubmission = async (classId, month) => {
+    const { data, error } = await supabase
+        .from('attendance_submissions')
+        .select('id, class_id, month, status, submitted_by, submitted_at, note')
+        .eq('class_id', classId)
+        .eq('month', month)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
+};
+
+const assertMonthEditable = async (req, classId, dateStr) => {
+    if (req.user.role === 'admin') return;
+    const month = String(dateStr || '').slice(0, 7);
+    const sub = await getSubmission(classId, month);
+    if (sub && sub.status === 'submitted') {
+        throw new ConflictError(
+            'This month has been submitted and is locked. Ask an admin to return it for correction.'
+        );
+    }
+};
+
+/** Non-admins must be attached to the class (staff seat or teaching assignment). */
+const assertClassAccess = async (req, classId) => {
+    if (req.user.role === 'admin') return;
+
+    const { data: year, error: yearError } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', req.user.school_id)
+        .eq('is_current', true)
+        .maybeSingle();
+
+    if (yearError) throw yearError;
+    if (!year) throw new ForbiddenError('No current academic year');
+
+    const [staffRes, subjRes] = await Promise.all([
+        supabase.from('class_staff')
+            .select('id')
+            .eq('academic_year_id', year.id)
+            .eq('class_id', classId)
+            .eq('user_id', req.user.id)
+            .maybeSingle(),
+        supabase.from('class_subjects')
+            .select('id')
+            .eq('academic_year_id', year.id)
+            .eq('class_id', classId)
+            .eq('teacher_id', req.user.id)
+            .maybeSingle(),
+    ]);
+
+    if (staffRes.error) throw staffRes.error;
+    if (subjRes.error) throw subjRes.error;
+
+    if (!staffRes.data && !subjRes.data) {
+        throw new ForbiddenError('That class is not one of yours');
+    }
+};
+
+/** Shared builder for the review screen and the CSV export. */
+const buildMonthlySummary = async (schoolId, classId, month) => {
+    const daysInMonth = lastDayOf(month);
+
+    const [{ data: klass }, { data: roster }, { data: rows }, { data: submission }] =
+        await Promise.all([
+            supabase.from('classes').select('id, name').eq('id', classId)
+                .eq('school_id', schoolId).maybeSingle(),
+            supabase.from('students')
+                .select('id, name, admission_no, roll_num')
+                .eq('school_id', schoolId)
+                .eq('class_id', classId)
+                .eq('is_active', true)
+                .order('name'),
+            supabase.from('attendance')
+                .select('student_id, date, status')
+                .eq('school_id', schoolId)
+                .eq('class_id', classId)
+                .is('subject_id', null)
+                .gte('date', `${month}-01`)
+                .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
+            supabase.from('attendance_submissions')
+                .select('id, class_id, month, status, submitted_by, submitted_at, note')
+                .eq('class_id', classId)
+                .eq('month', month)
+                .maybeSingle(),
+        ]);
+
+    if (!klass) throw new NotFoundError('Class not found');
+
+    const perStudent = {};
+    const markedDates = new Set();
+    for (const r of rows || []) {
+        markedDates.add(r.date);
+        const s = (perStudent[r.student_id] ||= { present: 0, late: 0, absent: 0, excused: 0 });
+        if (s[r.status] !== undefined) s[r.status] += 1;
+    }
+
+    const students = (roster || []).map((st) => {
+        const counts = perStudent[st.id] || { present: 0, late: 0, absent: 0, excused: 0 };
+        const marked = counts.present + counts.late + counts.absent + counts.excused;
+        const denominator = marked - counts.excused;
+        return {
+            id: st.id,
+            name: st.name,
+            admissionNo: st.admission_no,
+            rollNum: st.roll_num,
+            ...counts,
+            markedDays: marked,
+            // Late counts as attending; excused leaves the denominator.
+            attendanceRate: denominator > 0
+                ? Number((((counts.present + counts.late) / denominator) * 100).toFixed(1))
+                : null,
+        };
+    });
+
+    return {
+        classId: klass.id,
+        className: klass.name,
+        month,
+        schoolDays: schoolDaysSoFar(month, new Date().toISOString().slice(0, 10)),
+        daysMarked: markedDates.size,
+        submission: submission
+            ? {
+                status: submission.status,
+                submittedAt: submission.submitted_at,
+                submittedBy: submission.submitted_by,
+                note: submission.note,
+            }
+            : null,
+        students,
+    };
+};
+
+/** GET /api/attendance/monthly?classId=&month=YYYY-MM */
+const getMonthlySummary = asyncHandler(async (req, res) => {
+    const { classId, month } = req.query;
+    assertMonthFormat(month);
+    await assertClassAccess(req, classId);
+    res.json(await buildMonthlySummary(req.user.school_id, classId, month));
+});
+
+/** POST /api/attendance/submit — teacher submits the month (locks it). */
+const submitMonth = asyncHandler(async (req, res) => {
+    const { classId, month } = req.body;
+    assertMonthFormat(month);
+    await assertClassAccess(req, classId);
+
+    const { data, error } = await supabase
+        .from('attendance_submissions')
+        .upsert({
+            school_id: req.user.school_id,
+            class_id: classId,
+            month,
+            status: 'submitted',
+            submitted_by: req.user.id,
+            submitted_at: new Date().toISOString(),
+            note: null,
+        }, { onConflict: 'class_id,month' })
+        .select('id, class_id, month, status, submitted_at, note')
+        .maybeSingle();
+
+    if (error) throw error;
+    res.json({ message: `Attendance for ${month} submitted`, submission: data });
+});
+
+/** POST /api/attendance/return — admin unlocks a submitted month. */
+const returnMonth = asyncHandler(async (req, res) => {
+    const { classId, month, note } = req.body;
+    assertMonthFormat(month);
+
+    const existing = await getSubmission(classId, month);
+    if (!existing) throw new NotFoundError('No submission found for that month');
+
+    const { data, error } = await supabase
+        .from('attendance_submissions')
+        .update({ status: 'returned', note: note ?? null, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select('id, class_id, month, status, note')
+        .maybeSingle();
+
+    if (error) throw error;
+    res.json({ message: `Attendance for ${month} returned for correction`, submission: data });
+});
+
+/** GET /api/attendance/submissions?month=YYYY-MM — admin: all, teacher: own classes. */
+const listSubmissions = asyncHandler(async (req, res) => {
+    const { month } = req.query;
+    assertMonthFormat(month);
+
+    let classIds = null;
+    if (req.user.role !== 'admin') {
+        const { data: year, error: yearError } = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('school_id', req.user.school_id)
+            .eq('is_current', true)
+            .maybeSingle();
+
+        if (yearError) throw yearError;
+        if (!year) return res.json({ submissions: [] });
+
+        const [staffRes, subjRes] = await Promise.all([
+            supabase.from('class_staff')
+                .select('class_id')
+                .eq('academic_year_id', year.id)
+                .eq('user_id', req.user.id),
+            supabase.from('class_subjects')
+                .select('class_id')
+                .eq('academic_year_id', year.id)
+                .eq('teacher_id', req.user.id),
+        ]);
+
+        if (staffRes.error) throw staffRes.error;
+        if (subjRes.error) throw subjRes.error;
+
+        classIds = [...new Set([
+            ...(staffRes.data || []).map((r) => r.class_id),
+            ...(subjRes.data || []).map((r) => r.class_id),
+        ])];
+        if (classIds.length === 0) return res.json({ submissions: [] });
+    }
+
+    let classQuery = supabase.from('classes')
+        .select('id, name')
+        .eq('school_id', req.user.school_id)
+        .order('name');
+    if (classIds) classQuery = classQuery.in('id', classIds);
+
+    let subQuery = supabase.from('attendance_submissions')
+        .select('class_id, month, status, submitted_at, submitted_by, note')
+        .eq('school_id', req.user.school_id)
+        .eq('month', month);
+    if (classIds) subQuery = subQuery.in('class_id', classIds);
+
+    const [{ data: classes, error: cErr }, { data: subs, error: sErr }] =
+        await Promise.all([classQuery, subQuery]);
+
+    if (cErr) throw cErr;
+    if (sErr) throw sErr;
+
+    const byClass = new Map((subs || []).map((s) => [s.class_id, s]));
+
+    res.json({
+        submissions: (classes || []).map((cl) => {
+            const s = byClass.get(cl.id);
+            return {
+                classId: cl.id,
+                className: cl.name,
+                month,
+                status: s?.status ?? 'pending',
+                submittedAt: s?.submitted_at ?? null,
+                note: s?.note ?? null,
+            };
+        }),
+    });
+});
+
+const csvEscape = (v) => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/** GET /api/attendance/report.csv?classId=&month=YYYY-MM */
+const exportCsv = asyncHandler(async (req, res) => {
+    const { classId, month } = req.query;
+    assertMonthFormat(month);
+    await assertClassAccess(req, classId);
+
+    const summary = await buildMonthlySummary(req.user.school_id, classId, month);
+
+    const header = [
+        'Class', 'Month', 'Admission No', 'Roll', 'Student Name',
+        'Days Marked', 'Present', 'Late', 'Absent', 'Excused', 'Attendance %',
+    ];
+    const lines = [header.map(csvEscape).join(',')];
+
+    for (const s of summary.students) {
+        lines.push([
+            summary.className, summary.month, s.admissionNo, s.rollNum, s.name,
+            s.markedDays, s.present, s.late, s.absent, s.excused,
+            s.attendanceRate === null ? '' : s.attendanceRate,
+        ].map(csvEscape).join(','));
+    }
+
+    const safeName = summary.className.replace(/[^a-z0-9]+/gi, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition',
+        `attachment; filename="attendance_${safeName}_${month}.csv"`);
+    res.send(`${lines.join('\n')}\n`);
+});
+
+module.exports = {
+    markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary,
+    getMonthlySummary, submitMonth, returnMonth, listSubmissions, exportCsv,
+};
