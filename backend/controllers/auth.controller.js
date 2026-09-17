@@ -444,8 +444,92 @@ const unlinkTelegram = asyncHandler(async (req, res) => {
     res.json({ user: publicUser(data), message: 'Telegram account unlinked' });
 });
 
+/**
+ * POST /api/auth/class-login — demo-stage class-card sign-in.
+ *
+ * Each class has its own login: the password is the class name itself
+ * (compared case-insensitively, punctuation-insensitive, so "year 4 blue"
+ * matches "Year 4 - Blue"). A correct password signs in the class's main
+ * teacher — issuing a real JWT — so the class dashboard can use the full
+ * teacher-scoped API (rosters, edits, transfers).
+ *
+ * This gate is explicitly temporary; the sign-in redesign supersedes it.
+ */
+const normalizeClassPassword = (s) =>
+    String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const classLogin = asyncHandler(async (req, res) => {
+    const { className, password } = req.body;
+
+    const { data: school, error: schoolError } = await supabase
+        .from('schools')
+        .select('id')
+        .maybeSingle();
+
+    if (schoolError) throw schoolError;
+    if (!school) throw new NotFoundError('School not found');
+
+    const { data: klass, error: classError } = await supabase
+        .from('classes')
+        .select('id, name, year_level, capacity')
+        .eq('school_id', school.id)
+        .ilike('name', className)
+        .maybeSingle();
+
+    if (classError) throw classError;
+    if (!klass) throw new NotFoundError('Class not found');
+
+    if (normalizeClassPassword(password) !== normalizeClassPassword(klass.name)) {
+        throw new UnauthorizedError('Incorrect class password');
+    }
+
+    // The class's main teacher for the current year becomes the identity.
+    const { data: year, error: yearError } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', school.id)
+        .eq('is_current', true)
+        .maybeSingle();
+
+    if (yearError) throw yearError;
+    if (!year) throw new NotFoundError('No current academic year is set');
+
+    const { data: seat, error: seatError } = await supabase
+        .from('class_staff')
+        .select('user_id')
+        .eq('academic_year_id', year.id)
+        .eq('class_id', klass.id)
+        .eq('position', 'main')
+        .maybeSingle();
+
+    if (seatError) throw seatError;
+    if (!seat) throw new UnauthorizedError('This class has no main teacher assigned yet');
+
+    const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', seat.user_id)
+        .maybeSingle();
+
+    if (userError) throw userError;
+    if (!user) throw new UnauthorizedError('Teacher account not found');
+    if (!user.is_active) throw new UnauthorizedError('This teacher account is deactivated');
+
+    await supabase
+        .from('users')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+    res.json({
+        token: signToken(user),
+        user: publicUser(user),
+        class: { id: klass.id, name: klass.name, yearLevel: klass.year_level, capacity: klass.capacity },
+    });
+});
+
 module.exports = {
     login,
+    classLogin,
     me,
     changePassword,
     updateProfile,
