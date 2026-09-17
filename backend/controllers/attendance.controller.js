@@ -208,25 +208,25 @@ const assertClassAccess = async (req, classId) => {
     if (yearError) throw yearError;
     if (!year) throw new ForbiddenError('No current academic year');
 
+    // Plain selects (not maybeSingle): a teacher legitimately has several
+    // class_subjects rows per class — one per subject they teach there.
     const [staffRes, subjRes] = await Promise.all([
         supabase.from('class_staff')
             .select('id')
             .eq('academic_year_id', year.id)
             .eq('class_id', classId)
-            .eq('user_id', req.user.id)
-            .maybeSingle(),
+            .eq('user_id', req.user.id),
         supabase.from('class_subjects')
             .select('id')
             .eq('academic_year_id', year.id)
             .eq('class_id', classId)
-            .eq('teacher_id', req.user.id)
-            .maybeSingle(),
+            .eq('teacher_id', req.user.id),
     ]);
 
     if (staffRes.error) throw staffRes.error;
     if (subjRes.error) throw subjRes.error;
 
-    if (!staffRes.data && !subjRes.data) {
+    if ((staffRes.data || []).length === 0 && (subjRes.data || []).length === 0) {
         throw new ForbiddenError('That class is not one of yours');
     }
 };
