@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Divider, Grid,
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, Divider, Grid,
     IconButton, InputAdornment, MenuItem, Paper, Snackbar, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
     Tooltip, Typography, useTheme,
@@ -23,6 +23,7 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import DownloadIcon from '@mui/icons-material/Download';
 import GridViewIcon from '@mui/icons-material/GridView';
+import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import LockIcon from '@mui/icons-material/Lock';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -145,102 +146,129 @@ const GRID_STATUS_META = {
 const monthLabel = (month) => new Date(`${month}-01T00:00:00`)
     .toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
-function MonthlyGrid({ classId, month }) {
+function MonthlyGridDialog({ classId, month, klassName, open, onClose }) {
     const theme = useTheme();
     const surface = theme.palette.mode === 'dark' ? theme.palette.background.paper : '#ffffff';
 
     const grid = useApi(
-        () => (classId
+        () => (open && classId
             ? attendanceApi.monthlyGrid({ classId, month })
             : Promise.resolve(null)),
-        [classId, month]
+        [open, classId, month]
     );
 
-    if (grid.loading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>;
-    }
-    if (grid.error) {
-        return (
-            <Alert severity="error" sx={{ borderRadius: 1.5 }}
-                action={<Button size="small" onClick={grid.reload}>Retry</Button>}>
-                {grid.error}
-            </Alert>
-        );
-    }
-    if (!grid.data) return null;
-
-    const { days, students } = grid.data;
+    const days = grid.data?.days || [];
+    const students = grid.data?.students || [];
 
     return (
-        <Box sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 1.5 }}>
-                <Typography sx={{ fontWeight: 800, fontSize: 15 }}>
-                    {monthLabel(month)} — attendance at a glance
+        <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth
+            PaperProps={{ sx: { borderRadius: 2, overflow: 'hidden' } }}>
+            {/* header stripe */}
+            <Box sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25,
+                bgcolor: 'primary.main', color: '#fff' }}>
+                <GridViewIcon sx={{ fontSize: 18 }} />
+                <Typography sx={{ fontWeight: 800, fontSize: 13.5, letterSpacing: .6, textTransform: 'uppercase' }}>
+                    {monthLabel(month)} · {klassName} · Attendance at a glance
                 </Typography>
-                {Object.entries(GRID_STATUS_META).map(([key, meta]) => (
-                    <Chip key={key} size="small"
-                        label={`${meta.label} = ${key}`}
-                        sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11,
-                            bgcolor: alpha(meta.color, 0.12), color: meta.color }} />
-                ))}
+                <IconButton size="small" onClick={onClose} sx={{ color: '#fff', ml: 'auto' }} aria-label="Close">
+                    <CloseIcon sx={{ fontSize: 17 }} />
+                </IconButton>
             </Box>
 
-            {days.length === 0 ? (
-                <Alert severity="info" sx={{ borderRadius: 1.5 }}>
-                    No school days yet this month.
-                </Alert>
-            ) : (
-                <TableContainer component={Paper} variant="outlined"
-                    sx={{ borderRadius: 1.5, maxHeight: 480, overflow: 'auto' }}>
-                    <Table size="small" stickyHeader>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell sx={{ fontWeight: 700, minWidth: 160, bgcolor: surface,
-                                    position: 'sticky', left: 0, zIndex: 3 }}>
-                                    Student
-                                </TableCell>
-                                {days.map((d) => (
-                                    <TableCell key={d} align="center"
-                                        sx={{ minWidth: 34, p: 0.75, fontWeight: 700, bgcolor: surface }}>
-                                        {Number(d.slice(8))}
+            <Box sx={{ p: 2.5 }}>
+                {/* legend */}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 1.75 }}>
+                    {Object.entries(GRID_STATUS_META).map(([key, meta]) => (
+                        <Chip key={key} size="small"
+                            label={`${meta.label} = ${key}`}
+                            sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11,
+                                bgcolor: alpha(meta.color, 0.12), color: meta.color }} />
+                    ))}
+                    {grid.data && (
+                        <Chip size="small" label={`${days.length} school days`}
+                            sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11 }} />
+                    )}
+                </Box>
+
+                {grid.loading && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                        <CircularProgress />
+                    </Box>
+                )}
+                {grid.error && (
+                    <Alert severity="error" sx={{ borderRadius: 1.5 }}
+                        action={<Button size="small" onClick={grid.reload}>Retry</Button>}>
+                        {grid.error}
+                    </Alert>
+                )}
+                {grid.data && days.length === 0 && (
+                    <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                        No school days yet this month.
+                    </Alert>
+                )}
+
+                {grid.data && days.length > 0 && (
+                    <TableContainer component={Paper} variant="outlined"
+                        sx={{ borderRadius: 1.5, maxHeight: '62vh', overflow: 'auto' }}>
+                        <Table size="small" stickyHeader>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 700, minWidth: 170, bgcolor: surface,
+                                        position: 'sticky', left: 0, zIndex: 3 }}>
+                                        Student
                                     </TableCell>
-                                ))}
-                                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: surface }}>Rate</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {students.map((s) => (
-                                <TableRow key={s.id} hover>
-                                    <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: surface,
-                                        fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                        {s.name}
-                                    </TableCell>
-                                    {days.map((d) => {
-                                        const status = s.marks[d];
-                                        const meta = status ? GRID_STATUS_META[status] : null;
-                                        return (
-                                            <TableCell key={d} align="center" sx={{ p: 0.5 }}>
-                                                {meta ? (
-                                                    <Box sx={{ bgcolor: alpha(meta.color, 0.16), color: meta.color,
-                                                        fontWeight: 800, fontSize: 11, borderRadius: 0.75, py: 0.4 }}>
-                                                        {meta.label}
-                                                    </Box>
-                                                ) : (
-                                                    <Box sx={{ color: 'divider' }}>·</Box>
-                                                )}
-                                            </TableCell>
-                                        );
-                                    })}
-                                    <TableCell align="right" sx={{ fontWeight: 800 }}>
-                                        {s.attendanceRate === null ? '—' : `${s.attendanceRate}%`}
+                                    {days.map((d) => (
+                                        <TableCell key={d} align="center"
+                                            sx={{ minWidth: 36, p: 0.75, fontWeight: 700, bgcolor: surface }}>
+                                            {Number(d.slice(8))}
+                                        </TableCell>
+                                    ))}
+                                    <TableCell align="right" sx={{ fontWeight: 700, bgcolor: surface, minWidth: 70 }}>
+                                        Rate
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            )}
-        </Box>
+                            </TableHead>
+                            <TableBody>
+                                {students.map((s) => (
+                                    <TableRow key={s.id} hover>
+                                        <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: surface,
+                                            fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {s.name}
+                                        </TableCell>
+                                        {days.map((d) => {
+                                            const status = s.marks[d];
+                                            const meta = status ? GRID_STATUS_META[status] : null;
+                                            return (
+                                                <TableCell key={d} align="center" sx={{ p: 0.5 }}>
+                                                    {meta ? (
+                                                        <Box sx={{ bgcolor: alpha(meta.color, 0.16), color: meta.color,
+                                                            fontWeight: 800, fontSize: 11, borderRadius: 0.75, py: 0.4 }}>
+                                                            {meta.label}
+                                                        </Box>
+                                                    ) : (
+                                                        <Box sx={{ color: 'divider' }}>·</Box>
+                                                    )}
+                                                </TableCell>
+                                            );
+                                        })}
+                                        <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                            {s.attendanceRate === null ? '—' : `${s.attendanceRate}%`}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
+
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                    <Button onClick={onClose} variant="contained" disableElevation
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1, px: 3 }}>
+                        Close
+                    </Button>
+                </Box>
+            </Box>
+        </Dialog>
     );
 }
 
@@ -374,7 +402,8 @@ function DailyRegister({ klass, classId, roster, monthSubmission, onToast }) {
                 </Table>
             </TableContainer>
 
-            {showGrid && <MonthlyGrid classId={classId} month={date.slice(0, 7)} />}
+            <MonthlyGridDialog classId={classId} month={date.slice(0, 7)}
+                klassName={klass.name} open={showGrid} onClose={() => setShowGrid(false)} />
         </Box>
     );
 }
