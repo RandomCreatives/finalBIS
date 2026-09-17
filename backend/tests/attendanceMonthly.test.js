@@ -236,3 +236,35 @@ describe('GET /api/attendance/report.csv', () => {
         assert.equal(res.status, 403);
     });
 });
+
+describe('GET /api/attendance/monthly-grid', () => {
+    test('returns school-day columns and per-student per-day marks', async () => {
+        const res = await request(app)
+            .get(`/api/attendance/monthly-grid?classId=${CLASS_A}&month=2025-01`)
+            .auth(tokenFor(MAIN_A));
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.className, 'Year 3A');
+        // Jan 2025 fully past → 23 weekdays
+        assert.equal(res.body.days.length, 23);
+        assert.ok(res.body.days.includes(D1));
+
+        const abel = res.body.students.find((s) => s.name === 'Abel T');
+        assert.equal(abel.marks[D1], 'present');
+        assert.equal(abel.marks[D2], 'late');
+        assert.equal(abel.marks[D3], 'absent');
+        assert.equal(abel.attendanceRate, 66.7);
+
+        const sara = res.body.students.find((s) => s.name === 'Sara K');
+        assert.equal(sara.marks[D2], 'excused');
+        assert.equal(sara.attendanceRate, 100);
+    });
+
+    test('a teacher cannot view another teacher\'s grid', async () => {
+        const res = await request(app)
+            .get(`/api/attendance/monthly-grid?classId=${CLASS_B}&month=2025-01`)
+            .auth(tokenFor(MAIN_A));
+
+        assert.equal(res.status, 403);
+    });
+});
