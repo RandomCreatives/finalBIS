@@ -29,41 +29,7 @@ const shape = (s) => ({
 });
 
 
-/*
- * Teacher scoping — non-admin users only reach students in classes they
- * actually belong to: a seat in class_staff (main/assistant) or a teaching
- * assignment in class_subjects for the current academic year.
- */
-const teacherClassIds = async (req) => {
-    const yearId = await resolveYearId(req);
-    const [staffRes, subjRes] = await Promise.all([
-        supabase.from('class_staff')
-            .select('class_id')
-            .eq('academic_year_id', yearId)
-            .eq('user_id', req.user.id),
-        supabase.from('class_subjects')
-            .select('class_id')
-            .eq('academic_year_id', yearId)
-            .eq('teacher_id', req.user.id),
-    ]);
-    if (staffRes.error) throw staffRes.error;
-    if (subjRes.error) throw subjRes.error;
-
-    return [...new Set([
-        ...(staffRes.data || []).map((r) => r.class_id),
-        ...(subjRes.data || []).map((r) => r.class_id),
-    ])];
-};
-
-const assertClassAccess = async (req, classId) => {
-    if (req.user.role === 'admin') return;
-    if (!classId) throw new ForbiddenError('Student has no class');
-
-    const ids = await teacherClassIds(req);
-    if (!ids.includes(classId)) {
-        throw new ForbiddenError('This student is not in one of your classes');
-    }
-};
+const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
 
 /** GET /api/students?classId=&specialNeeds=&search= */
 const listStudents = asyncHandler(async (req, res) => {

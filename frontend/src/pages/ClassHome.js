@@ -28,12 +28,11 @@ import SendIcon from '@mui/icons-material/Send';
 import LockIcon from '@mui/icons-material/Lock';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
-import { studentApi, classApi, attendanceApi } from '../api/endpoints';
+import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi } from '../api/endpoints';
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
@@ -580,50 +579,126 @@ function AttendanceSection({ klass, classId, roster }) {
 
 /* ── marksheets section ───────────────────────────────────── */
 
-function MarksSection({ klass, roster, onToast }) {
-    const [subject, setSubject] = useState(CLASS_SUBJECTS[0]);
-    const store = readStore(STORE.marks)[klass.name] || {};
-    const [entries, setEntries] = useState(store[subject] || {});
-    const [saved, setSaved] = useState(false);
+function MarksSection({ klass, classId, roster }) {
+    const [subjectId, setSubjectId] = useState('');
+    const [entries, setEntries] = useState({});
+    const [baseline, setBaseline] = useState('{}');
+    const [saving, setSaving] = useState(false);
+    const [toast, setToast] = useState('');
 
+    // Current term — marks are stored per term.
+    const currentTerm = useApi(() => termApi.current().then((d) => d.term), []);
+    const termId = currentTerm.data?.id ?? null;
+
+    // Subjects offered in this class (from this year's assignments).
+    const classSubjects = useApi(
+        () => (classId
+            ? assignmentApi.subjects({ classId }).then((d) => d.assignments)
+            : Promise.resolve([])),
+        [classId]
+    );
+    const subjects = useMemo(() => {
+        const seen = new Map();
+        (classSubjects.data || []).forEach((a) => {
+            if (a.subject?.id && !seen.has(a.subject.id)) seen.set(a.subject.id, a.subject);
+        });
+        return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }, [classSubjects.data]);
+
+    // Default to the first subject once known.
     useEffect(() => {
-        const s = readStore(STORE.marks)[klass.name] || {};
-        setEntries(s[subject] || {});
-        setSaved(false);
-    }, [subject, klass.name]);
+        if (!subjectId && subjects.length > 0) setSubjectId(subjects[0].id);
+    }, [subjects, subjectId]);
 
-    const setField = (name, field, value) => {
+    // Existing marks for (class, subject, term).
+    const existing = useApi(
+        () => (classId && subjectId && termId
+            ? marksheetApi.list({ classId, subjectId, termId })
+            : Promise.resolve([])),
+        [classId, subjectId, termId]
+    );
+
+    // Seed editable entries from the loaded marks.
+    useEffect(() => {
+        const next = {};
+        (existing.data || []).forEach((m) => {
+            if (m.student?.id) {
+                next[m.student.id] = { marks: String(m.marks), maxMarks: String(m.maxMarks) };
+            }
+        });
+        setEntries(next);
+        setBaseline(JSON.stringify(next));
+    }, [existing.data]);
+
+    const setField = (studentId, field, value) => {
         setEntries((prev) => ({
             ...prev,
-            [name]: { marks: '', maxMarks: '100', ...prev[name], [field]: value },
+            [studentId]: { marks: '', maxMarks: '100', ...prev[studentId], [field]: value },
         }));
-        setSaved(false);
     };
 
-    const save = () => {
-        const all = readStore(STORE.marks);
-        all[klass.name] = { ...(all[klass.name] || {}), [subject]: entries };
-        writeStore(STORE.marks, all);
-        setSaved(true);
-        onToast(`${subject} marks saved`);
-    };
+    const dirtyIds = roster
+        .filter((s) => {
+            const e = entries[s.id];
+            if (!e || e.marks === '' || e.marks === undefined) return false;
+            const base = JSON.parse(baseline)[s.id];
+            return JSON.stringify(e) !== JSON.stringify(base);
+        })
+        .map((s) => s.id);
 
-    const graded = roster.filter((s) => entries[s.name]?.marks !== '' && entries[s.name]?.marks !== undefined);
+    const invalidIds = roster.filter((s) => {
+        const e = entries[s.id];
+        if (!e || e.marks === '') return false;
+        const marks = Number(e.marks);
+        const max = Number(e.maxMarks) || 100;
+        return Number.isNaN(marks) || marks < 0 || marks > max;
+    }).map((s) => s.id);
+
+    const graded = roster.filter((s) => entries[s.id]?.marks !== '' && entries[s.id]?.marks !== undefined);
     const average = graded.length
         ? graded.reduce((sum, s) => {
-            const e = entries[s.name];
+            const e = entries[s.id];
             const max = Number(e.maxMarks) || 100;
             return sum + (Number(e.marks) / max) * 100;
         }, 0) / graded.length
         : null;
 
+    const save = async () => {
+        if (dirtyIds.length === 0 || invalidIds.length > 0) return;
+        setSaving(true);
+        try {
+            const payload = {
+                classId,
+                termId,
+                entries: dirtyIds.map((studentId) => ({
+                    studentId,
+                    subjectId,
+                    marks: Number(entries[studentId].marks),
+                    maxMarks: Number(entries[studentId].maxMarks) || 100,
+                })),
+            };
+            await marksheetApi.bulkSave(payload);
+            await existing.reload();
+            setToast('Marks saved — grades computed by the system');
+        } catch (err) {
+            setToast(err.message || 'Could not save marks');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+
     return (
         <Box>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2.5 }}>
-                <TextField select label="Subject" size="small" value={subject}
-                    onChange={(e) => setSubject(e.target.value)} sx={{ minWidth: 200 }}>
-                    {CLASS_SUBJECTS.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                <TextField select label="Subject" size="small" value={subjectId}
+                    onChange={(e) => setSubjectId(e.target.value)} sx={{ minWidth: 200 }}>
+                    {subjects.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
                 </TextField>
+                {currentTerm.data && (
+                    <Chip size="small" label={currentTerm.data.name}
+                        sx={{ fontWeight: 700, borderRadius: 1 }} />
+                )}
                 {average !== null && (
                     <Chip size="small" label={`Average ${average.toFixed(1)}% · ${gradeFor(average)}`}
                         sx={{ fontWeight: 700, borderRadius: 1,
@@ -631,75 +706,91 @@ function MarksSection({ klass, roster, onToast }) {
                             color: GRADE_COLORS[gradeFor(average)] }} />
                 )}
                 <Chip size="small" label={`${graded.length}/${roster.length} graded`}
-                    sx={{ fontWeight: 700, borderRadius: 1, bgcolor: 'rgba(2,132,199,.08)', color: '#0284c7' }} />
+                    sx={{ fontWeight: 700, borderRadius: 1 }} />
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}>
-                    {saved && (
-                        <Chip size="small" icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />}
-                            label="Saved" sx={{ fontWeight: 700, borderRadius: 1,
-                                bgcolor: 'rgba(22,163,74,.1)', color: '#16a34a' }} />
+                    {invalidIds.length > 0 && (
+                        <Chip size="small" color="error" label={`${invalidIds.length} invalid`}
+                            sx={{ fontWeight: 700, borderRadius: 1 }} />
                     )}
                     <Button size="small" variant="contained" disableElevation startIcon={<SaveIcon />}
-                        onClick={save} sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                        Save marks
+                        onClick={save}
+                        disabled={saving || dirtyIds.length === 0 || invalidIds.length > 0 || !subjectId}
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                        {saving ? 'Saving…' : `Save ${dirtyIds.length || ''} mark${dirtyIds.length === 1 ? '' : 's'}`.trim()}
                     </Button>
                 </Box>
             </Box>
 
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
-                            <TableCell sx={{ fontWeight: 700 }}>Student</TableCell>
-                            <TableCell sx={{ width: 110, fontWeight: 700 }}>Marks</TableCell>
-                            <TableCell sx={{ width: 100, fontWeight: 700 }}>Max</TableCell>
-                            <TableCell sx={{ width: 80, fontWeight: 700 }} align="right">%</TableCell>
-                            <TableCell sx={{ width: 80, fontWeight: 700 }} align="center">Grade</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {roster.map((s) => {
-                            const e = entries[s.name] || { marks: '', maxMarks: '100' };
-                            const marksOk = e.marks !== '' && !Number.isNaN(Number(e.marks));
-                            const maxOk = e.maxMarks !== '' && Number(e.maxMarks) > 0;
-                            const invalid = marksOk && maxOk && Number(e.marks) > Number(e.maxMarks);
-                            const pct = marksOk && maxOk && !invalid
-                                ? (Number(e.marks) / Number(e.maxMarks)) * 100 : null;
-                            return (
-                                <TableRow key={s.name} hover>
-                                    <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum}</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
-                                    <TableCell>
-                                        <TextField type="number" size="small" value={e.marks} placeholder="—"
-                                            error={invalid} onChange={(ev) => setField(s.name, 'marks', ev.target.value)}
-                                            inputProps={{ min: 0, step: '0.5', style: { textAlign: 'right' } }} fullWidth />
-                                    </TableCell>
-                                    <TableCell>
-                                        <TextField type="number" size="small" value={e.maxMarks}
-                                            error={invalid} onChange={(ev) => setField(s.name, 'maxMarks', ev.target.value)}
-                                            inputProps={{ min: 1, step: 1, style: { textAlign: 'right' } }} fullWidth />
-                                    </TableCell>
-                                    <TableCell align="right">{pct === null ? '—' : `${pct.toFixed(1)}%`}</TableCell>
-                                    <TableCell align="center">
-                                        {pct === null ? '—' : (
-                                            <Chip size="small" label={gradeFor(pct)}
-                                                sx={{ fontWeight: 800, minWidth: 42, borderRadius: 1,
-                                                    bgcolor: GRADE_COLORS[gradeFor(pct)], color: '#fff' }} />
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+            {!subjectId && subjects.length === 0 && !classSubjects.loading && (
+                <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                    No subjects are assigned to {klass.name} yet — an admin assigns them under
+                    Assignments → Subject teaching.
+                </Alert>
+            )}
+
+            {subjectId && (
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Student</TableCell>
+                                <TableCell sx={{ width: 110, fontWeight: 700 }}>Marks</TableCell>
+                                <TableCell sx={{ width: 100, fontWeight: 700 }}>Max</TableCell>
+                                <TableCell sx={{ width: 80, fontWeight: 700 }} align="right">%</TableCell>
+                                <TableCell sx={{ width: 80, fontWeight: 700 }} align="center">Grade</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {roster.map((s) => {
+                                const e = entries[s.id] || { marks: '', maxMarks: '100' };
+                                const marksOk = e.marks !== '' && !Number.isNaN(Number(e.marks));
+                                const maxOk = e.maxMarks !== '' && Number(e.maxMarks) > 0;
+                                const invalid = marksOk && maxOk && Number(e.marks) > Number(e.maxMarks);
+                                const pct = marksOk && maxOk && !invalid
+                                    ? (Number(e.marks) / Number(e.maxMarks)) * 100
+                                    : null;
+                                return (
+                                    <TableRow key={s.id} hover>
+                                        <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
+                                        <TableCell>
+                                            <TextField type="number" size="small" value={e.marks} placeholder="—"
+                                                error={invalid}
+                                                onChange={(ev) => setField(s.id, 'marks', ev.target.value)}
+                                                inputProps={{ min: 0, step: '0.5', style: { textAlign: 'right' } }}
+                                                fullWidth />
+                                        </TableCell>
+                                        <TableCell>
+                                            <TextField type="number" size="small" value={e.maxMarks}
+                                                error={invalid}
+                                                onChange={(ev) => setField(s.id, 'maxMarks', ev.target.value)}
+                                                inputProps={{ min: 1, step: 1, style: { textAlign: 'right' } }}
+                                                fullWidth />
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            {pct === null ? '—' : `${pct.toFixed(1)}%`}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            {pct === null ? '—' : (
+                                                <Chip size="small" label={gradeFor(pct)}
+                                                    sx={{ fontWeight: 800, minWidth: 42, borderRadius: 1,
+                                                        bgcolor: GRADE_COLORS[gradeFor(pct)], color: '#fff' }} />
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
+
+            <Snackbar open={Boolean(toast)} autoHideDuration={3500}
+                onClose={() => setToast('')} message={toast} />
         </Box>
     );
 }
-
-/* ── lesson plans section ─────────────────────────────────── */
-
-/* ── planning section (Word-like) ─────────────────────────── */
 
 const PLANNING_TEMPLATES = {
     blank: {
@@ -757,7 +848,6 @@ const DOC_TYPE_META = {
     lesson: { label: 'Lesson Plan', color: '#2563eb' },
     blank: { label: 'Document', color: '#64748b' },
 };
-
 function DocEditor({ doc, klass, onBack, onPatch, onToast }) {
     const saveTimer = useRef(null);
     const [status, setStatus] = useState('saved');
@@ -1067,14 +1157,27 @@ function StudentsSection({ klass, roster, loading, error, reload, classNames, cl
     );
 }
 
-function OverviewSection({ klass, roster, goTo }) {
-    const attendanceStore = readStore(STORE.attendance)[klass.name] || {};
-    const marksStore = readStore(STORE.marks)[klass.name] || {};
+function OverviewSection({ klass, classId, roster, goTo }) {
     const plans = readStore(STORE.planning)[klass.name] || [];
 
-    const attendanceDays = Object.keys(attendanceStore).length;
-    const subjectsGraded = Object.keys(marksStore).filter(
-        (subj) => Object.keys(marksStore[subj] || {}).length > 0).length;
+    // Live attendance: days marked so far this month.
+    const month = today().slice(0, 7);
+    const grid = useApi(
+        () => (classId
+            ? attendanceApi.monthlyGrid({ classId, month })
+            : Promise.resolve(null)),
+        [classId, month]
+    );
+    const attendanceDays = grid.data?.days?.length
+        ? new Set(grid.data.students.flatMap((s) => Object.keys(s.marks))).size
+        : 0;
+
+    // Live marks: distinct subjects that have any mark recorded.
+    const marks = useApi(
+        () => (classId ? marksheetApi.list({ classId }) : Promise.resolve([])),
+        [classId]
+    );
+    const subjectsGraded = new Set((marks.data || []).map((m) => m.subject?.id)).size;
 
     return (
         <Box>
@@ -1300,9 +1403,9 @@ export default function ClassHome() {
                         </Box>
                         <Divider sx={{ mb: 2.5 }} />
 
-                        {section === 'overview' && <OverviewSection klass={klass} roster={roster} goTo={setSection} />}
+                        {section === 'overview' && <OverviewSection klass={klass} classId={session.classId} roster={roster} goTo={setSection} />}
                         {section === 'attendance' && <AttendanceSection klass={klass} classId={session.classId} roster={roster} />}
-                        {section === 'marks' && <MarksSection klass={klass} roster={roster} onToast={() => {}} />}
+                        {section === 'marks' && <MarksSection klass={klass} classId={session.classId} roster={roster} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
 {section === 'calendar' && <CalendarBoard />}
                         {section === 'students' && (
