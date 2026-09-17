@@ -422,6 +422,15 @@ router.get(
     attendance.getMonthlySummary
 );
 
+router.get(
+    '/attendance/monthly-grid',
+    authenticate,
+    query('classId').isUUID().withMessage('classId is required'),
+    query('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.getMonthlyGrid
+);
+
 router.post(
     '/attendance/submit',
     authenticate,

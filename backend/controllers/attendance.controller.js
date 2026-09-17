@@ -325,6 +325,104 @@ const getMonthlySummary = asyncHandler(async (req, res) => {
     res.json(await buildMonthlySummary(req.user.school_id, classId, month));
 });
 
+/**
+ * GET /api/attendance/monthly-grid?classId=&month=YYYY-MM
+ *
+ * Month-at-a-glance: every school day (Mon–Fri) up to today as a column,
+ * every active student as a row, each cell the day's status. Powers the
+ * expandable grid in the daily register.
+ */
+const getMonthlyGrid = asyncHandler(async (req, res) => {
+    const { classId, month } = req.query;
+    assertMonthFormat(month);
+    await assertClassAccess(req, classId);
+
+    const daysInMonth = lastDayOf(month);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const [y, m] = month.split('-').map(Number);
+
+    // School days (Mon–Fri) up to today — future days have no data yet.
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d += 1) {
+        const iso = `${month}-${String(d).padStart(2, '0')}`;
+        if (iso > todayIso) break;
+        const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+        if (dow >= 1 && dow <= 5) days.push(iso);
+    }
+
+    const [klassRes, rosterRes, attRes, submissionRes] = await Promise.all([
+        supabase.from('classes').select('id, name').eq('id', classId)
+            .eq('school_id', req.user.school_id).maybeSingle(),
+        supabase.from('students')
+            .select('id, name, admission_no, roll_num')
+            .eq('school_id', req.user.school_id)
+            .eq('class_id', classId)
+            .eq('is_active', true)
+            .order('name'),
+        supabase.from('attendance')
+            .select('student_id, date, status')
+            .eq('school_id', req.user.school_id)
+            .eq('class_id', classId)
+            .is('subject_id', null)
+            .gte('date', `${month}-01`)
+            .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
+        supabase.from('attendance_submissions')
+            .select('status, submitted_at, note')
+            .eq('class_id', classId)
+            .eq('month', month)
+            .maybeSingle(),
+    ]);
+
+    for (const [label, r] of [['class', klassRes], ['students', rosterRes],
+                              ['attendance', attRes], ['submission', submissionRes]]) {
+        if (r.error) throw new BadRequestError(`Monthly grid (${label}): ${r.error.message}`);
+    }
+
+    const klass = klassRes.data;
+    if (!klass) throw new NotFoundError('Class not found');
+
+    const marksByStudent = {};
+    for (const r of attRes.data || []) {
+        (marksByStudent[r.student_id] ||= {})[r.date] = r.status;
+    }
+
+    const students = (rosterRes.data || []).map((st) => {
+        const marks = marksByStudent[st.id] || {};
+        let present = 0, late = 0, absent = 0, excused = 0;
+        for (const s of Object.values(marks)) {
+            if (s === 'present') present += 1;
+            else if (s === 'late') late += 1;
+            else if (s === 'absent') absent += 1;
+            else if (s === 'excused') excused += 1;
+        }
+        const marked = present + late + absent + excused;
+        const denominator = marked - excused;
+        return {
+            id: st.id,
+            name: st.name,
+            admissionNo: st.admission_no,
+            rollNum: st.roll_num,
+            marks,
+            present, late, absent, excused,
+            attendanceRate: denominator > 0
+                ? Number((((present + late) / denominator) * 100).toFixed(1))
+                : null,
+        };
+    });
+
+    const submission = submissionRes.data;
+    res.json({
+        classId: klass.id,
+        className: klass.name,
+        month,
+        days,
+        students,
+        submission: submission
+            ? { status: submission.status, submittedAt: submission.submitted_at, note: submission.note }
+            : null,
+    });
+});
+
 /** POST /api/attendance/submit — teacher submits the month (locks it). */
 const submitMonth = asyncHandler(async (req, res) => {
     const { classId, month } = req.body;
@@ -477,5 +575,5 @@ const exportCsv = asyncHandler(async (req, res) => {
 
 module.exports = {
     markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary,
-    getMonthlySummary, submitMonth, returnMonth, listSubmissions, exportCsv,
+    getMonthlySummary, getMonthlyGrid, submitMonth, returnMonth, listSubmissions, exportCsv,
 };
