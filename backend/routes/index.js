@@ -115,6 +115,17 @@ router.post(
 // exposes the bot's public username, never the token.
 router.get('/auth/telegram-config', auth.telegramConfig);
 
+// Demo-stage class-card login: class name doubles as the password and the
+// class's main teacher becomes the signed-in identity (real JWT).
+router.post(
+    '/auth/class-login',
+    authLimiter,
+    body('className').isString().trim().notEmpty().withMessage('Class name is required'),
+    body('password').isString().notEmpty().withMessage('Password is required'),
+    validate,
+    auth.classLogin
+);
+
 // =============================================================================
 // PUBLIC DIRECTORY — no login, safe fields only (names, classes, subjects).
 // =============================================================================

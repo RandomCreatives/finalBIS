@@ -38,6 +38,11 @@ const matches = (row, filters) =>
             case 'gte': return actual >= value;
             case 'lte': return actual <= value;
             case 'in': return value.includes(actual);
+            case 'ilike': {
+                // PostgREST ilike with no wildcards = case-insensitive equality.
+                const pattern = String(value).replace(/%/g, '').toLowerCase();
+                return String(actual).toLowerCase() === pattern;
+            }
             default: return true;
         }
     });
@@ -170,7 +175,7 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
         },
     };
 
-    for (const op of ['eq', 'neq', 'is', 'lt', 'gte', 'lte', 'in']) {
+    for (const op of ['eq', 'neq', 'is', 'lt', 'gte', 'lte', 'in', 'ilike']) {
         builder[op] = (column, value) => {
             filters.push({ op, column, value });
             return builder;

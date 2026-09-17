@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
-const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
+const { NotFoundError, ConflictError, BadRequestError, ForbiddenError, asyncHandler } = require('../utils/errors');
+const { resolveYearId } = require('./academicYear.controller');
 
 const XLSX = require('xlsx');
 
@@ -27,9 +28,58 @@ const shape = (s) => ({
     class: s.class ? { id: s.class.id, name: s.class.name } : null,
 });
 
+
+/*
+ * Teacher scoping — non-admin users only reach students in classes they
+ * actually belong to: a seat in class_staff (main/assistant) or a teaching
+ * assignment in class_subjects for the current academic year.
+ */
+const teacherClassIds = async (req) => {
+    const yearId = await resolveYearId(req);
+    const [staffRes, subjRes] = await Promise.all([
+        supabase.from('class_staff')
+            .select('class_id')
+            .eq('academic_year_id', yearId)
+            .eq('user_id', req.user.id),
+        supabase.from('class_subjects')
+            .select('class_id')
+            .eq('academic_year_id', yearId)
+            .eq('teacher_id', req.user.id),
+    ]);
+    if (staffRes.error) throw staffRes.error;
+    if (subjRes.error) throw subjRes.error;
+
+    return [...new Set([
+        ...(staffRes.data || []).map((r) => r.class_id),
+        ...(subjRes.data || []).map((r) => r.class_id),
+    ])];
+};
+
+const assertClassAccess = async (req, classId) => {
+    if (req.user.role === 'admin') return;
+    if (!classId) throw new ForbiddenError('Student has no class');
+
+    const ids = await teacherClassIds(req);
+    if (!ids.includes(classId)) {
+        throw new ForbiddenError('This student is not in one of your classes');
+    }
+};
+
 /** GET /api/students?classId=&specialNeeds=&search= */
 const listStudents = asyncHandler(async (req, res) => {
     const { classId, specialNeeds, search, includeInactive } = req.query;
+
+    // Teachers only ever see students of classes they are attached to.
+    if (req.user.role !== 'admin') {
+        const myClasses = await teacherClassIds(req);
+        if (classId) {
+            if (!myClasses.includes(classId)) {
+                throw new ForbiddenError('That class is not one of yours');
+            }
+        } else if (myClasses.length === 0) {
+            return res.json({ students: [] });
+        }
+    }
 
     let query = supabase
         .from('students')
@@ -37,7 +87,12 @@ const listStudents = asyncHandler(async (req, res) => {
         .eq('school_id', req.user.school_id)
         .order('name');
 
-    if (classId) query = query.eq('class_id', classId);
+    if (classId) {
+        query = query.eq('class_id', classId);
+    } else if (req.user.role !== 'admin') {
+        const myClasses = await teacherClassIds(req);
+        query = query.in('class_id', myClasses);
+    }
     if (specialNeeds === 'true') query = query.eq('special_needs', true);
     if (includeInactive !== 'true') query = query.eq('is_active', true);
     if (search) {
@@ -118,6 +173,8 @@ const getStudent = asyncHandler(async (req, res) => {
     if (error) throw error;
     if (!data) throw new NotFoundError('Student not found');
 
+    await assertClassAccess(req, data.class_id);
+
     res.json({ student: shape(data) });
 });
 
@@ -177,6 +234,22 @@ const updateStudent = asyncHandler(async (req, res) => {
         if (req.body[key] !== undefined) patch[column] = req.body[key];
     }
 
+    // Only admins move students between classes via patch — everyone else
+    // uses the audited transfer endpoint.
+    if (req.user.role !== 'admin') delete patch.class_id;
+
+    // Teachers may only edit students of their own classes.
+    const { data: target, error: targetError } = await supabase
+        .from('students')
+        .select('id, class_id')
+        .eq('id', req.params.id)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    if (targetError) throw targetError;
+    if (!target) throw new NotFoundError('Student not found');
+    await assertClassAccess(req, target.class_id);
+
     const { data, error } = await supabase
         .from('students')
         .update(patch)
@@ -188,6 +261,8 @@ const updateStudent = asyncHandler(async (req, res) => {
     if (error?.code === '23505') throw new ConflictError('Admission number is already in use');
     if (error) throw error;
     if (!data) throw new NotFoundError('Student not found');
+
+    await assertClassAccess(req, data.class_id);
 
     res.json({ student: shape(data) });
 });
@@ -206,6 +281,18 @@ const updateStudent = asyncHandler(async (req, res) => {
  */
 const transferStudent = asyncHandler(async (req, res) => {
     const { toClassId, reason } = req.body;
+
+    // Teachers may only transfer students out of their own classes.
+    const { data: source, error: sourceError } = await supabase
+        .from('students')
+        .select('id, class_id')
+        .eq('id', req.params.id)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    if (sourceError) throw sourceError;
+    if (!source) throw new NotFoundError('Student not found');
+    await assertClassAccess(req, source.class_id);
 
     const { data, error } = await supabase.rpc('transfer_student', {
         p_student_id: req.params.id,

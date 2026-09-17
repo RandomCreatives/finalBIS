@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import {
-    Box, Button, Chip, Dialog, Divider, IconButton, MenuItem, TextField, Typography, useTheme,
+    Box, Button, Checkbox, Chip, Dialog, Divider, FormControlLabel, IconButton,
+    MenuItem, TextField, Typography,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import SchoolIcon from '@mui/icons-material/School';
 import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CloseIcon from '@mui/icons-material/Close';
 
-/**
- * Student ID card popup with optional edit + transfer.
+/*
+ * Student ID card popup.
  *
- * Shared by the public Students directory and the main-teacher dashboard.
- * `canManage` gates the Edit/Transfer actions; the caller owns the data
- * (onSave / onTransfer receive the updates).
+ * Data-driven: the view shows whichever fields exist on the student object
+ * (rich sample records show more; live records show the database fields).
+ * The edit form only exposes fields that exist in the students table —
+ * name, gender, date of birth, guardian details and the special-needs note.
+ * Persistence is owned by the caller via onSave / onTransfer.
  */
 
 export const ageFromDob = (dob) => {
@@ -30,7 +33,7 @@ function Field({ label, value, span }) {
                 textTransform: 'uppercase', letterSpacing: .6, lineHeight: 1.4 }}>
                 {label}
             </Typography>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35 }} noWrap={!span}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
                 {value || '—'}
             </Typography>
         </Box>
@@ -45,13 +48,35 @@ function EditField({ label, value, onChange, span, type = 'text', options }) {
                 value={value ?? ''} onChange={(e) => onChange(e.target.value)}
                 InputLabelProps={type === 'date' ? { shrink: true } : undefined}
                 sx={{ '& .MuiInputBase-input': { fontSize: 13 }, '& .MuiInputLabel-root': { fontSize: 12 } }}>
-                {options && options.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+                {options && options.map(([v, l]) => <MenuItem key={v} value={v}>{l}</MenuItem>)}
             </TextField>
         </Box>
     );
 }
 
-export default function StudentIdCard({ student, canManage, classes, onClose, onSave, onTransfer }) {
+/** Build the view grid from whatever fields the record carries. */
+const viewRows = (student) => {
+    const rows = [];
+    if (student.admissionNo) rows.push(['Admission no.', student.admissionNo]);
+    if (student.rollNum != null) rows.push(['Roll no.', student.rollNum]);
+    if (student.className) rows.push(['Class', student.className]);
+    if (student.dateOfBirth) rows.push(['Date of birth', student.dateOfBirth]);
+    const age = ageFromDob(student.dateOfBirth);
+    if (age != null) rows.push(['Age', `${age} yrs`]);
+    if (student.gender) rows.push(['Gender', student.gender]);
+    if (student.guardianName) rows.push(['Guardian', student.guardianName]);
+    if (student.guardianRelation) rows.push(['Relation', student.guardianRelation]);
+    if (student.guardianPhone) rows.push(['Guardian phone', student.guardianPhone]);
+    if (student.guardianEmail) rows.push(['Guardian email', student.guardianEmail]);
+    if (student.address) rows.push(['Address', student.address]);
+    if (student.previousSchool) rows.push(['Previous school', student.previousSchool]);
+    if (student.medicalNotes) rows.push(['Medical notes', student.medicalNotes]);
+    if (student.specialNeedsNote) rows.push(['Special needs note', student.specialNeedsNote]);
+    if (student.enrolmentDate) rows.push(['Enrolled', student.enrolmentDate]);
+    return rows;
+};
+
+export default function StudentIdCard({ student, canManage, classes, onClose, onSave, onTransfer, saving }) {
     const theme = useTheme();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(null);
@@ -65,15 +90,13 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
     const startEdit = () => {
         setDraft({
             name: student.name || '',
-            gender: student.gender || '',
+            gender: (student.gender || '').toLowerCase(),
             dateOfBirth: student.dateOfBirth || '',
             guardianName: student.guardianName || '',
-            guardianRelation: student.guardianRelation || '',
             guardianPhone: student.guardianPhone || '',
-            address: student.address || '',
-            previousSchool: student.previousSchool || '',
-            medicalNotes: student.medicalNotes || '',
-            status: student.status || 'Active',
+            guardianEmail: student.guardianEmail || '',
+            specialNeedsNote: student.specialNeedsNote || student.medicalNotes || '',
+            specialNeeds: Boolean(student.specialNeeds),
         });
         setTransferOpen(false);
         setEditing(true);
@@ -81,7 +104,16 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
 
     const saveEdit = () => {
         if (!draft.name.trim()) return;
-        onSave(student.name, draft);
+        onSave({
+            name: draft.name.trim(),
+            gender: draft.gender || null,
+            dateOfBirth: draft.dateOfBirth || null,
+            guardianName: draft.guardianName.trim() || null,
+            guardianPhone: draft.guardianPhone.trim() || null,
+            guardianEmail: draft.guardianEmail.trim() || null,
+            specialNeedsNote: draft.specialNeedsNote.trim() || null,
+            specialNeeds: draft.specialNeeds,
+        });
         setEditing(false);
     };
 
@@ -90,14 +122,11 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
             setTransferError('Choose a different class to transfer to.');
             return;
         }
-        onTransfer(student.name, targetClass, reason.trim());
-        setTransferOpen(false);
-        setTargetClass('');
-        setReason('');
-        setTransferError('');
+        onTransfer(targetClass, reason.trim());
     };
 
     const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
+    const rows = viewRows(student);
 
     return (
         <Dialog open onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 2, overflow: 'hidden' } }}>
@@ -134,12 +163,14 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                 </Typography>
                                 <Typography sx={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700,
                                     color: 'text.secondary', letterSpacing: .8, mt: .25 }}>
-                                    {student.admissionNumber || '—'}
+                                    {student.admissionNo || '—'}
                                 </Typography>
                                 <Box sx={{ display: 'flex', gap: .75, mt: 1, flexWrap: 'wrap' }}>
-                                    <Chip label={student.className} size="small"
-                                        sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11.5,
-                                            bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }} />
+                                    {student.className && (
+                                        <Chip label={student.className} size="small"
+                                            sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11.5,
+                                                bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }} />
+                                    )}
                                     {student.status && (
                                         <Chip label={student.status} size="small"
                                             sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11.5,
@@ -149,24 +180,18 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                             </Box>
                         </Box>
 
-                        <Divider sx={{ mb: 1.5 }} />
+                        {rows.length > 0 && <Divider sx={{ mb: 1.5 }} />}
 
-                        {/* dense record grid */}
+                        {/* record grid — only fields the record carries */}
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 2, rowGap: 1.1 }}>
-                            <Field label="Date of birth" value={student.dateOfBirth} />
-                            <Field label="Age" value={ageFromDob(student.dateOfBirth) != null ? `${ageFromDob(student.dateOfBirth)} yrs` : null} />
-                            <Field label="Gender" value={student.gender} />
-                            <Field label="Enrolled" value={student.enrolmentDate} />
-                            <Field label="Guardian" value={student.guardianName} />
-                            <Field label="Relation" value={student.guardianRelation} />
-                            <Field label="Guardian phone" value={student.guardianPhone} span />
-                            <Field label="Address" value={student.address} span />
-                            <Field label="Previous school" value={student.previousSchool} span />
-                            <Field label="Medical notes" value={student.medicalNotes} span />
+                            {rows.map(([label, value]) => (
+                                <Field key={label} label={label} value={value}
+                                    span={['Guardian phone', 'Guardian email', 'Address', 'Previous school', 'Medical notes', 'Special needs note'].includes(label)} />
+                            ))}
                         </Box>
 
                         {/* actions */}
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2.5 }}>
+                        <Box sx={{ display: 'flex', gap: 1, mt: 2.5, alignItems: 'center' }}>
                             {canManage && (
                                 <>
                                     <Button size="small" variant="outlined" startIcon={<EditIcon sx={{ fontSize: 15 }} />}
@@ -174,11 +199,13 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
                                         Edit
                                     </Button>
-                                    <Button size="small" variant="outlined" startIcon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
-                                        onClick={() => { setTransferOpen((v) => !v); setEditing(false); setTransferError(''); }}
-                                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                                        Transfer
-                                    </Button>
+                                    {classes?.length > 0 && (
+                                        <Button size="small" variant="outlined" startIcon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
+                                            onClick={() => { setTransferOpen((v) => !v); setEditing(false); setTransferError(''); }}
+                                            sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                                            Transfer
+                                        </Button>
+                                    )}
                                 </>
                             )}
                             <Button size="small" onClick={onClose} sx={{ ml: 'auto', fontWeight: 700,
@@ -198,7 +225,7 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                             <Box sx={{ mt: 2, p: 2, borderRadius: 1.25, border: '1px dashed',
                                 borderColor: 'divider', bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
                                 <Typography sx={{ fontWeight: 800, fontSize: 13, mb: 1.5 }}>
-                                    Transfer {student.name.split(' ')[0]} to another class
+                                    Transfer {(student.name || '').split(' ')[0]} to another class
                                 </Typography>
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                                     <TextField select label="New class" size="small"
@@ -217,9 +244,9 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                 )}
                                 <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
                                     <Button size="small" variant="contained" disableElevation
-                                        onClick={confirmTransfer}
+                                        onClick={confirmTransfer} disabled={saving}
                                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                                        Confirm transfer
+                                        {saving ? 'Transferring…' : 'Confirm transfer'}
                                     </Button>
                                     <Button size="small" onClick={() => setTransferOpen(false)}
                                         sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
@@ -236,20 +263,23 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                         </Typography>
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                             <EditField label="Full name" value={draft.name} onChange={set('name')} span />
-                            <EditField label="Gender" value={draft.gender} onChange={set('gender')} options={['Male', 'Female']} />
+                            <EditField label="Gender" value={draft.gender} onChange={set('gender')}
+                                options={[['male', 'Male'], ['female', 'Female']]} />
                             <EditField label="Date of birth" type="date" value={draft.dateOfBirth} onChange={set('dateOfBirth')} />
                             <EditField label="Guardian" value={draft.guardianName} onChange={set('guardianName')} />
-                            <EditField label="Relation" value={draft.guardianRelation} onChange={set('guardianRelation')} options={['Mother', 'Father', 'Guardian', 'Other']} />
-                            <EditField label="Guardian phone" value={draft.guardianPhone} onChange={set('guardianPhone')} span />
-                            <EditField label="Address" value={draft.address} onChange={set('address')} span />
-                            <EditField label="Previous school" value={draft.previousSchool} onChange={set('previousSchool')} span />
-                            <EditField label="Medical notes" value={draft.medicalNotes} onChange={set('medicalNotes')} span />
+                            <EditField label="Guardian phone" value={draft.guardianPhone} onChange={set('guardianPhone')} />
+                            <EditField label="Guardian email" value={draft.guardianEmail} onChange={set('guardianEmail')} span />
+                            <EditField label="Special needs note" value={draft.specialNeedsNote} onChange={set('specialNeedsNote')} span />
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2.25 }}>
+                        <FormControlLabel sx={{ mt: 1, '& .MuiFormControlLabel-label': { fontSize: 13 } }}
+                            control={<Checkbox size="small" checked={draft.specialNeeds}
+                                onChange={(e) => setDraft((d) => ({ ...d, specialNeeds: e.target.checked }))} />}
+                            label="Special needs support" />
+                        <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
                             <Button size="small" variant="contained" disableElevation onClick={saveEdit}
-                                disabled={!draft.name.trim()}
+                                disabled={!draft.name.trim() || saving}
                                 sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                                Save changes
+                                {saving ? 'Saving…' : 'Save changes'}
                             </Button>
                             <Button size="small" onClick={() => setEditing(false)}
                                 sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
@@ -262,3 +292,4 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
         </Dialog>
     );
 }
+

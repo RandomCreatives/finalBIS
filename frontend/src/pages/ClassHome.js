@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, Container, Divider, Grid, IconButton,
-    MenuItem, Paper, Snackbar, Table, TableBody, TableCell, TableContainer, TableHead,
-    TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, useTheme,
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Divider, Grid,
+    IconButton, InputAdornment, MenuItem, Paper, Snackbar, Table, TableBody, TableCell,
+    TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup,
+    Tooltip, Typography, useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -19,18 +20,21 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventIcon from '@mui/icons-material/Event';
 import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useColorScheme } from '../theme';
 import {
-    classBySlug, readClassLogin, clearClassLogin, demoRoster, CLASS_SUBJECTS,
+    classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
+import { studentApi, classApi } from '../api/endpoints';
+import { clearToken } from '../api/client';
+import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
 import { CalendarBoard } from './PublicCalendar';
 import WordEditor from '../components/WordEditor';
 import Spreadsheet, { makeModel } from '../components/Spreadsheet';
-import { CLASSES } from '../data/classes';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -585,77 +589,140 @@ function PlanningSection({ klass, onToast }) {
 
 /* ── students section ─────────────────────────────────────── */
 
-function StudentsSection({ klass, roster }) {
-    const [students, setStudents] = useState(roster);
+function StudentsSection({ klass, roster, loading, error, reload, classNames, classIdByName }) {
+    const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
+    const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState('');
 
-    useEffect(() => setStudents(roster), [roster]);
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return roster;
+        return roster.filter((s) =>
+            s.name.toLowerCase().includes(q)
+            || (s.admissionNo || '').toLowerCase().includes(q));
+    }, [roster, search]);
 
-    const selectedStudent = students.find((s) => s.name === selected) ?? null;
+    const selectedStudent = roster.find((s) => s.id === selected) ?? null;
 
-    const handleSave = (originalName, patch) => {
-        setStudents((prev) => prev.map((s) => (s.name === originalName ? { ...s, ...patch } : s)));
-        if (patch.name && patch.name !== originalName) setSelected(patch.name);
-        setToast('Student record saved');
+    const handleSave = async (patch) => {
+        if (!selectedStudent) return;
+        setSaving(true);
+        try {
+            await studentApi.update(selectedStudent.id, patch);
+            await reload();
+            setToast('Student record saved');
+        } catch (err) {
+            setToast(err.message || 'Could not save changes');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handleTransfer = (name, toClass) => {
-        setStudents((prev) => prev.filter((s) => s.name !== name));
-        setToast(`${name} transferred to ${toClass}`);
+    const handleTransfer = async (toClassName, reason) => {
+        if (!selectedStudent) return;
+        const toClassId = classIdByName[toClassName];
+        if (!toClassId) { setToast('Unknown class'); return; }
+        setSaving(true);
+        try {
+            await studentApi.transfer(selectedStudent.id, toClassId, reason);
+            const name = selectedStudent.name;
+            await reload();
+            setSelected(null);
+            setToast(`${name} transferred to ${toClassName}`);
+        } catch (err) {
+            setToast(err.message || 'Transfer failed');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
         <Box>
-            <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 2 }}>
-                {students.length} student{students.length === 1 ? '' : 's'} in {klass.name} —
-                open a student's ID card to view, edit or transfer.
-            </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
-                            <TableCell sx={{ fontWeight: 700 }}>Student</TableCell>
-                            <TableCell sx={{ width: 120, fontWeight: 700 }}>Admission</TableCell>
-                            <TableCell sx={{ width: 100 }} />
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {students.map((s) => (
-                            <TableRow key={s.name} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(s.name)}>
-                                <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum}</TableCell>
-                                <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
-                                <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNumber || '—'}</TableCell>
-                                <TableCell onClick={(e) => e.stopPropagation()}>
-                                    <Button size="small" onClick={() => setSelected(s.name)}
-                                        sx={{ fontWeight: 700, textTransform: 'none', color: 'primary.main' }}>
-                                        ID Card
-                                    </Button>
-                                </TableCell>
+            <Box sx={{ display: 'flex', gap: 1.5, mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <TextField
+                    placeholder="Search by name or admission no…"
+                    size="small" value={search} onChange={(e) => setSearch(e.target.value)}
+                    sx={{ flexGrow: 1, maxWidth: 360 }}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            </InputAdornment>
+                        ),
+                    }}
+                />
+                <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                    {filtered.length} of {roster.length} student{roster.length === 1 ? '' : 's'} in {klass.name}
+                </Typography>
+            </Box>
+
+            {loading && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                    <CircularProgress />
+                </Box>
+            )}
+            {error && (
+                <Alert severity="error" sx={{ borderRadius: 1.5 }}
+                    action={<Button size="small" onClick={reload}>Retry</Button>}>
+                    Could not load the class list: {error}
+                </Alert>
+            )}
+            {!loading && !error && roster.length === 0 && (
+                <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                    No students have been placed in this class yet.
+                </Alert>
+            )}
+
+            {!loading && !error && roster.length > 0 && (
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
+                                <TableCell sx={{ width: 130, fontWeight: 700 }}>Admission</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Student name</TableCell>
+                                <TableCell sx={{ width: 150, fontWeight: 700 }}>Guardian phone</TableCell>
+                                <TableCell sx={{ width: 100 }} />
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                        </TableHead>
+                        <TableBody>
+                            {filtered.map((s) => (
+                                <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(s.id)}>
+                                    <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
+                                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNo || '—'}</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
+                                    <TableCell sx={{ fontSize: 12.5 }}>{s.guardianPhone || '—'}</TableCell>
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                        <Button size="small" onClick={() => setSelected(s.id)}
+                                            sx={{ fontWeight: 700, textTransform: 'none', color: 'primary.main' }}>
+                                            ID Card
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
 
             {selectedStudent && (
                 <StudentIdCard
-                    student={selectedStudent}
+                    student={{ ...selectedStudent, className: klass.name }}
                     canManage
-                    classes={CLASSES.map((c) => c.name)}
+                    classes={classNames}
+                    saving={saving}
                     onClose={() => setSelected(null)}
                     onSave={handleSave}
                     onTransfer={handleTransfer}
                 />
             )}
+
             <Snackbar open={Boolean(toast)} autoHideDuration={3000}
                 onClose={() => setToast('')} message={toast} />
         </Box>
     );
 }
-
-/* ── overview section ─────────────────────────────────────── */
 
 function OverviewSection({ klass, roster, goTo }) {
     const attendanceStore = readStore(STORE.attendance)[klass.name] || {};
@@ -725,14 +792,43 @@ export default function ClassHome() {
     const klass = classBySlug(slug);
     const session = readClassLogin();
     const [section, setSection] = useState('overview');
-    const roster = useMemo(() => (klass ? demoRoster(klass) : []), [klass]);
 
-    if (!klass || !session || session.slug !== slug) {
+    // Live roster from the school database. The class login stored the class
+    // id plus a real JWT for the class's main teacher, which the API client
+    // attaches to every request.
+    const liveRoster = useApi(
+        () => (session?.classId
+            ? studentApi.list({ classId: session.classId })
+            : Promise.resolve([])),
+        [session?.classId]
+    );
+    const roster = useMemo(
+        () => [...(liveRoster.data || [])].sort(
+            (a, b) => (a.rollNum ?? 999) - (b.rollNum ?? 999) || a.name.localeCompare(b.name)
+        ),
+        [liveRoster.data]
+    );
+
+    // All classes — for the transfer picker.
+    const allClasses = useApi(() => classApi.list().catch(() => []), []);
+    const classNames = useMemo(
+        () => (allClasses.data || []).map((cl) => cl.name).sort(),
+        [allClasses.data]
+    );
+    const classIdByName = useMemo(() => {
+        const m = {};
+        (allClasses.data || []).forEach((cl) => { m[cl.name] = cl.id; });
+        return m;
+    }, [allClasses.data]);
+
+    if (!klass || !session || session.slug !== slug || !session.classId) {
+        // Old or incomplete session — go back through the class login.
         return <Navigate to="/classes" replace />;
     }
 
     const signOut = () => {
         clearClassLogin();
+        clearToken();
         navigate('/classes');
     };
 
@@ -866,7 +962,12 @@ export default function ClassHome() {
                         {section === 'marks' && <MarksSection klass={klass} roster={roster} onToast={() => {}} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
 {section === 'calendar' && <CalendarBoard />}
-                        {section === 'students' && <StudentsSection klass={klass} roster={roster} />}
+                        {section === 'students' && (
+                            <StudentsSection klass={klass} roster={roster}
+                                loading={liveRoster.loading} error={liveRoster.error}
+                                reload={liveRoster.reload}
+                                classNames={classNames} classIdByName={classIdByName} />
+                        )}
                         {section === 'timetable' && <Alert severity="info">The weekly timetable arrives in a later version.</Alert>}
                     </Box>
                 </Box>

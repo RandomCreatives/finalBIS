@@ -16,9 +16,12 @@ import LockIcon from '@mui/icons-material/Lock';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useColorScheme } from '../theme';
+import { setToken } from '../api/client';
 import {
-    CLASSES, passwordFor, saveClassLogin, slugFor,
+    CLASSES, saveClassLogin, slugFor,
 } from '../data/classes';
+
+const BASE_URL = process.env.REACT_APP_API_URL || '';
 
 /*
  * Public, login-free view of the school's classes.
@@ -130,15 +133,36 @@ export default function PublicClasses() {
 
     const closeLogin = () => setLoginClass(null);
 
-    const submitLogin = (e) => {
-        e.preventDefault();
-        if (!loginClass) return;
+    const [submitting, setSubmitting] = useState(false);
 
-        if (password.trim().toLowerCase() === passwordFor(loginClass.name)) {
-            saveClassLogin(loginClass);
+    const submitLogin = async (e) => {
+        e.preventDefault();
+        if (!loginClass || submitting) return;
+
+        setSubmitting(true);
+        setLoginError('');
+        try {
+            const res = await fetch(`${BASE_URL}/api/auth/class-login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ className: loginClass.name, password }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.message || 'Sign-in failed');
+
+            // Real JWT for the class's main teacher — the dashboard uses it
+            // for the live roster, edits and transfers.
+            setToken(data.token);
+            saveClassLogin(loginClass, {
+                classId: data.class?.id,
+                userId: data.user?.id,
+                teacher: data.user?.name,
+            });
             navigate(`/class-home/${slugFor(loginClass.name)}`);
-        } else {
-            setLoginError('That password is not correct for this class.');
+        } catch (err) {
+            setLoginError(err.message || 'Sign-in failed');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -274,9 +298,9 @@ export default function PublicClasses() {
                                 Cancel
                             </Button>
                             <Button type="submit" variant="contained" disableElevation
-                                disabled={!password.trim()}
+                                disabled={!password.trim() || submitting}
                                 sx={{ fontWeight: 700, textTransform: 'none', px: 3 }}>
-                                Sign In
+                                {submitting ? 'Signing in…' : 'Sign In'}
                             </Button>
                         </DialogActions>
                     </form>

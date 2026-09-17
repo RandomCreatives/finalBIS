@@ -8,7 +8,8 @@ import { CLASS_LOGIN_KEY } from '../data/classes';
 
 const renderDash = (slug) => {
     localStorage.setItem(CLASS_LOGIN_KEY, JSON.stringify({
-        slug, className: 'Year 3 - Blue', teacher: 'Ms. Yeabsira A.', at: Date.now(),
+        slug, className: 'Year 3 - Blue', teacher: 'Ms. Yeabsira A.',
+        classId: '713bfeaa-d141-44f0-864a-cee594efb105', at: Date.now(),
     }));
     return render(
         <ThemeProvider>

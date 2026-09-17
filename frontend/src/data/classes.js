@@ -44,11 +44,13 @@ export const classBySlug = (slug) =>
 
 export const CLASS_LOGIN_KEY = 'bisnoc.classLogin';
 
-export const saveClassLogin = (klass) => {
+export const saveClassLogin = (klass, extra = {}) => {
     localStorage.setItem(CLASS_LOGIN_KEY, JSON.stringify({
         slug: slugFor(klass.name),
         className: klass.name,
-        teacher: klass.mainTeacher,
+        teacher: klass.mainTeacher ?? extra.teacher ?? null,
+        classId: extra.classId ?? null,
+        userId: extra.userId ?? null,
         at: Date.now(),
     }));
 };
