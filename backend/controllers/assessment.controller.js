@@ -46,7 +46,7 @@ const recomputeFinals = async (req, classId, subjectId, termId) => {
     if (aErr) throw aErr;
 
     const ids = (assessments || []).map((a) => a.id);
-    if (ids.length === 0) return;
+    if (ids.length === 0) return new Map();
 
     const maxByAssessment = new Map(assessments.map((a) => [a.id, Number(a.max_marks)]));
 
