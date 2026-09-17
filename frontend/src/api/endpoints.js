@@ -173,6 +173,13 @@ export const attendanceApi = {
         client.get('/attendance/report.csv', { params, responseType: 'blob' }).then((r) => r.data),
 };
 
+export const assessmentApi = {
+    list: (params) => client.get('/assessments', { params }).then((r) => r.data.assessments),
+    create: (payload) => client.post('/assessments', payload).then((r) => r.data.assessment),
+    saveMarks: (payload) => client.post('/assessments/marks/bulk', payload).then((r) => r.data),
+    remove: (id) => client.delete(`/assessments/${id}`).then((r) => r.data),
+};
+
 export const marksheetApi = {
     list: (params) => client.get('/marksheets', { params }).then((r) => r.data.marksheets),
     forStudent: (studentId, params) =>
