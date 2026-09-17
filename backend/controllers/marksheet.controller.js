@@ -5,6 +5,7 @@ const { resolveYearId: resolveAcademicYearId } = require('./academicYear.control
 const {
     BadRequestError, ForbiddenError, NotFoundError, asyncHandler,
 } = require('../utils/errors');
+const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
 
 /** Hard ceiling for one bulk save — a roster of 30 classes stays well under. */
 const BULK_LIMIT = 200;
@@ -300,12 +301,29 @@ const bulkUpsertMarksheets = asyncHandler(async (req, res) => {
 const listMarksheets = asyncHandler(async (req, res) => {
     const { classId, termId, subjectId } = req.query;
 
+    // Teachers only ever read marks of classes they are attached to.
+    if (req.user.role !== ROLES.ADMIN) {
+        const myClasses = await teacherClassIds(req);
+        if (classId) {
+            if (!myClasses.includes(classId)) {
+                throw new ForbiddenError('That class is not one of yours');
+            }
+        } else if (myClasses.length === 0) {
+            return res.json({ marksheets: [] });
+        }
+    }
+
     let query = supabase
         .from('marksheets')
         .select(SELECT)
         .eq('school_id', req.user.school_id);
 
-    if (classId) query = query.eq('class_id', classId);
+    if (classId) {
+        query = query.eq('class_id', classId);
+    } else if (req.user.role !== ROLES.ADMIN) {
+        const myClasses = await teacherClassIds(req);
+        query = query.in('class_id', myClasses);
+    }
     if (termId) query = query.eq('term_id', termId);
     if (subjectId) query = query.eq('subject_id', subjectId);
 
@@ -317,6 +335,20 @@ const listMarksheets = asyncHandler(async (req, res) => {
 
 /** GET /api/marksheets/student/:studentId?termId= */
 const getStudentMarksheet = asyncHandler(async (req, res) => {
+    // Teachers may only read the report of a student in one of their classes.
+    if (req.user.role !== ROLES.ADMIN) {
+        const { data: student, error: studentError } = await supabase
+            .from('students')
+            .select('class_id')
+            .eq('id', req.params.studentId)
+            .eq('school_id', req.user.school_id)
+            .maybeSingle();
+
+        if (studentError) throw studentError;
+        if (!student) throw new NotFoundError('Student not found');
+        await assertClassAccess(req, student.class_id);
+    }
+
     let query = supabase
         .from('marksheets')
         .select(SELECT)
@@ -345,16 +377,28 @@ const getStudentMarksheet = asyncHandler(async (req, res) => {
 
 /** DELETE /api/marksheets/:id */
 const deleteMarksheet = asyncHandler(async (req, res) => {
+    const { data: existing, error: findError } = await supabase
+        .from('marksheets')
+        .select('id, class_id')
+        .eq('id', req.params.id)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    if (findError) throw findError;
+    if (!existing) throw new NotFoundError('Marksheet not found');
+
+    // Main teachers may only delete marks of their own classes.
+    await assertClassAccess(req, existing.class_id);
+
     const { data, error } = await supabase
         .from('marksheets')
         .delete()
-        .eq('id', req.params.id)
+        .eq('id', existing.id)
         .eq('school_id', req.user.school_id)
         .select()
         .maybeSingle();
 
     if (error) throw error;
-    if (!data) throw new NotFoundError('Marksheet not found');
 
     res.json({ message: 'Marksheet deleted' });
 });

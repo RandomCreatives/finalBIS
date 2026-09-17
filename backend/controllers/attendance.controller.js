@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { BadRequestError, NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
+const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
 
 /**
  * Attendance in two modes:
@@ -191,43 +192,6 @@ const assertMonthEditable = async (req, classId, dateStr) => {
         throw new ConflictError(
             'This month has been submitted and is locked. Ask an admin to return it for correction.'
         );
-    }
-};
-
-/** Non-admins must be attached to the class (staff seat or teaching assignment). */
-const assertClassAccess = async (req, classId) => {
-    if (req.user.role === 'admin') return;
-
-    const { data: year, error: yearError } = await supabase
-        .from('academic_years')
-        .select('id')
-        .eq('school_id', req.user.school_id)
-        .eq('is_current', true)
-        .maybeSingle();
-
-    if (yearError) throw yearError;
-    if (!year) throw new ForbiddenError('No current academic year');
-
-    // Plain selects (not maybeSingle): a teacher legitimately has several
-    // class_subjects rows per class — one per subject they teach there.
-    const [staffRes, subjRes] = await Promise.all([
-        supabase.from('class_staff')
-            .select('id')
-            .eq('academic_year_id', year.id)
-            .eq('class_id', classId)
-            .eq('user_id', req.user.id),
-        supabase.from('class_subjects')
-            .select('id')
-            .eq('academic_year_id', year.id)
-            .eq('class_id', classId)
-            .eq('teacher_id', req.user.id),
-    ]);
-
-    if (staffRes.error) throw staffRes.error;
-    if (subjRes.error) throw subjRes.error;
-
-    if ((staffRes.data || []).length === 0 && (subjRes.data || []).length === 0) {
-        throw new ForbiddenError('That class is not one of yours');
     }
 };
 
