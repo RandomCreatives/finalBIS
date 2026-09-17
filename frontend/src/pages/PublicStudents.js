@@ -14,7 +14,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import GroupsIcon from '@mui/icons-material/Groups';
 import BadgeIcon from '@mui/icons-material/Badge';
 import { useColorScheme } from '../theme';
-import { readClassLogin, SAMPLE_STUDENTS } from '../data/classes';
+import { readClassLogin } from '../data/classes';
 import StudentIdCard from '../components/StudentIdCard';
 
 const BASE_URL = process.env.REACT_APP_API_URL || '';
@@ -58,8 +58,7 @@ export default function PublicStudents() {
                 return r.json();
             })
             .then((data) => {
-                const list = data.students || [];
-                setStudents(list.length > 0 ? list : SAMPLE_STUDENTS);
+                setStudents(data.students || []);
             })
             .catch((err) => setError(err.message || 'Could not load the student list'));
     };
