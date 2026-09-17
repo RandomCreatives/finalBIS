@@ -235,29 +235,41 @@ const assertClassAccess = async (req, classId) => {
 const buildMonthlySummary = async (schoolId, classId, month) => {
     const daysInMonth = lastDayOf(month);
 
-    const [{ data: klass }, { data: roster }, { data: rows }, { data: submission }] =
-        await Promise.all([
-            supabase.from('classes').select('id, name').eq('id', classId)
-                .eq('school_id', schoolId).maybeSingle(),
-            supabase.from('students')
-                .select('id, name, admission_no, roll_num')
-                .eq('school_id', schoolId)
-                .eq('class_id', classId)
-                .eq('is_active', true)
-                .order('name'),
-            supabase.from('attendance')
-                .select('student_id, date, status')
-                .eq('school_id', schoolId)
-                .eq('class_id', classId)
-                .is('subject_id', null)
-                .gte('date', `${month}-01`)
-                .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
-            supabase.from('attendance_submissions')
-                .select('id, class_id, month, status, submitted_by, submitted_at, note')
-                .eq('class_id', classId)
-                .eq('month', month)
-                .maybeSingle(),
-        ]);
+    const [klassRes, rosterRes, rowsRes, submissionRes] = await Promise.all([
+        supabase.from('classes').select('id, name').eq('id', classId)
+            .eq('school_id', schoolId).maybeSingle(),
+        supabase.from('students')
+            .select('id, name, admission_no, roll_num')
+            .eq('school_id', schoolId)
+            .eq('class_id', classId)
+            .eq('is_active', true)
+            .order('name'),
+        supabase.from('attendance')
+            .select('student_id, date, status')
+            .eq('school_id', schoolId)
+            .eq('class_id', classId)
+            .is('subject_id', null)
+            .gte('date', `${month}-01`)
+            .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
+        supabase.from('attendance_submissions')
+            .select('id, class_id, month, status, submitted_by, submitted_at, note')
+            .eq('class_id', classId)
+            .eq('month', month)
+            .maybeSingle(),
+    ]);
+
+    // Surface real query errors instead of failing silently.
+    for (const [label, r] of [['class', klassRes], ['students', rosterRes],
+                              ['attendance', rowsRes], ['submission', submissionRes]]) {
+        if (r.error) {
+            throw new BadRequestError(`Monthly summary (${label}): ${r.error.message}`);
+        }
+    }
+
+    const klass = klassRes.data;
+    const roster = rosterRes.data;
+    const rows = rowsRes.data;
+    const submission = submissionRes.data;
 
     if (!klass) throw new NotFoundError('Class not found');
 
