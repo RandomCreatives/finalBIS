@@ -187,3 +187,25 @@ describe('DELETE /api/assessments/:id', () => {
         assert.equal(finals.find((m) => m.student_id === STU_A2), undefined);
     });
 });
+
+describe('deleting the last assessment', () => {
+    test('removes the final cleanly when no assessments remain', async () => {
+        rowsOf('assessment_marks').push(
+            { id: 'am-x', school_id: SCHOOL, assessment_id: QUIZ_1, student_id: STU_A1, marks: 8 },
+        );
+
+        // Delete BOTH columns so none remain.
+        let res = await request(app)
+            .delete(`/api/assessments/${CLASSWORK}`)
+            .auth(tokenFor(MAIN_A));
+        assert.equal(res.status, 200);
+
+        res = await request(app)
+            .delete(`/api/assessments/${QUIZ_1}`)
+            .auth(tokenFor(MAIN_A));
+        assert.equal(res.status, 200);
+
+        // No assessments left -> the student's final is gone.
+        assert.equal(rowsOf('marksheets').filter((m) => m.student_id === STU_A1).length, 0);
+    });
+});
