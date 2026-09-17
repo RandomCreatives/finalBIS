@@ -804,7 +804,7 @@ export default function ClassHome() {
     );
     const roster = useMemo(
         () => [...(liveRoster.data || [])].sort(
-            (a, b) => (a.rollNum ?? 999) - (b.rollNum ?? 999) || a.name.localeCompare(b.name)
+            (a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
         ),
         [liveRoster.data]
     );
