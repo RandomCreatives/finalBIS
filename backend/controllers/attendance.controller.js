@@ -310,7 +310,12 @@ const getMonthlySummary = asyncHandler(async (req, res) => {
     const { classId, month } = req.query;
     assertMonthFormat(month);
     await assertClassAccess(req, classId);
-    res.json(await buildMonthlySummary(req.user.school_id, classId, month));
+    try {
+        res.json(await buildMonthlySummary(req.user.school_id, classId, month));
+    } catch (err) {
+        // TEMPORARY diagnostic: surface the underlying error, then revert.
+        throw new BadRequestError(`DIAG: ${err.message} | hint: ${err.hint || ''} | details: ${err.details || ''} | code: ${err.code || ''}`);
+    }
 });
 
 /** POST /api/attendance/submit — teacher submits the month (locks it). */
