@@ -42,7 +42,13 @@ const tables = () => ({
         { id: 'cs-a', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, user_id: MAIN_A.id, position: 'main' },
         { id: 'cs-b', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_B, user_id: MAIN_B.id, position: 'main' },
     ],
-    class_subjects: [],
+    class_subjects: [
+        // MAIN_A teaches THREE subjects in CLASS_A — the shape that crashed
+        // production when assertClassAccess used maybeSingle().
+        { id: 'cs-1', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: '3b7d9e15-8c2a-4f60-b1d4-7e5a9c0f2b38', teacher_id: MAIN_A.id, sessions_per_week: 6 },
+        { id: 'cs-2', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: 'e8c792f8-5e0f-4a8b-96e6-9a07ea4c932a', teacher_id: MAIN_A.id, sessions_per_week: 5 },
+        { id: 'cs-3', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: 'a9d8c7b6-5e4f-4a3b-9c8d-7e6f5a4b3c2d', teacher_id: MAIN_A.id, sessions_per_week: 2 },
+    ],
     students: [
         { id: STU_1, school_id: SCHOOL, name: 'Abel T', admission_no: 'A001', roll_num: 1, class_id: CLASS_A, is_active: true },
         { id: STU_2, school_id: SCHOOL, name: 'Sara K', admission_no: 'A002', roll_num: 2, class_id: CLASS_A, is_active: true },
