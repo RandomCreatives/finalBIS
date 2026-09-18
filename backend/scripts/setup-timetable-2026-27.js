@@ -105,7 +105,11 @@ const PLACEHOLDER_TEACHERS = [
 
 // Sessions per week per class.
 const LOAD = {
-    MAT: 5, SCI: 3, GCT: 2,           // main teacher
+    // Main-teacher subjects differ by year (admin decision 2026-09-18):
+    //   Year 3: Math, Science, Geography, History
+    //   Year 4: Math, Science, Global Citizenship
+    MAT: 5, SCI: 3,                    // main teacher — both years
+    GCT: 2, GEO: 2, HIS: 2,            // GCT: Year 4 only · GEO+HIS: Year 3 only
     ENG: 5, SPL: 1,                    // English teacher (5 English + 1 Spelling)
     AMH: 2, MUS: 2, ART: 2, PE: 2,     // paired subject teachers
     FRA: 1, ICT: 1,                    // single subject teachers
@@ -113,6 +117,7 @@ const LOAD = {
 
 const SUBJECT_BY_CODE = {
     MAT: 'Mathematics', SCI: 'Science', GCT: 'Global Citizenship',
+    GEO: 'Geography', HIS: 'History',
     ENG: 'English', SPL: 'Spelling',
     AMH: 'Amharic', MUS: 'Music', ART: 'Art', PE: 'Physical Education',
     FRA: 'French', ICT: 'ICT',
@@ -232,7 +237,14 @@ async function main() {
         plan.push(
             { className: name, code: 'MAT', teacherName: main, sessions: LOAD.MAT },
             { className: name, code: 'SCI', teacherName: main, sessions: LOAD.SCI },
-            { className: name, code: 'GCT', teacherName: main, sessions: LOAD.GCT },
+            // Year 3 main teachers teach Geography + History; Year 4 teach
+            // Global Citizenship. All in their own classes.
+            ...(yearNum === 3
+                ? [
+                    { className: name, code: 'GEO', teacherName: main, sessions: LOAD.GEO },
+                    { className: name, code: 'HIS', teacherName: main, sessions: LOAD.HIS },
+                ]
+                : [{ className: name, code: 'GCT', teacherName: main, sessions: LOAD.GCT }]),
             { className: name, code: 'REG', teacherName: main, sessions: 5 },
             { className: name, code: 'ENG', teacherName: ENGLISH_MAP[name], sessions: LOAD.ENG },
             { className: name, code: 'SPL', teacherName: SPELLING_MAP[name], sessions: LOAD.SPL },
