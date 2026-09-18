@@ -22,6 +22,13 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { createClient } = require('@supabase/supabase-js');
 
+// supabase-js v2 needs a WebSocket implementation; Node >= 22 ships one
+// natively, older runtimes (CI/dev boxes) fall back to the ws package.
+if (typeof globalThis.WebSocket === 'undefined') {
+    // eslint-disable-next-line global-require
+    globalThis.WebSocket = require('ws');
+}
+
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { generateWeek, DAYS, LESSON_PERIODS, REGISTRATION } = require('../utils/timetableGenerator');
 
@@ -116,8 +123,6 @@ async function main() {
 
     // ── 1. Subjects: renames + Spelling + Registration ────────────────────
     if (!DRY_RUN) {
-        await supabase.from('subjects').update({ name: 'Global Citizenship' })
-            .eq('school_id', school.id).eq('name', 'Global Studies');
         await supabase.from('subjects').update({ name: 'Art' })
             .eq('school_id', school.id).eq('name', 'Arts');
 
@@ -132,13 +137,22 @@ async function main() {
         if (!codes.has('REG')) {
             toCreate.push({ school_id: school.id, name: 'Registration', code: 'REG', taught_by: 'main_teacher', is_semester: false });
         }
+        // Global Citizenship may already exist as GLS (created earlier) —
+        // rename its display name; otherwise create it as GCT.
+        if (!codes.has('GCT') && !codes.has('GLS')) {
+            toCreate.push({ school_id: school.id, name: 'Global Citizenship', code: 'GCT', taught_by: 'main_teacher', is_semester: true });
+        }
         if (toCreate.length > 0) {
             const { error } = await supabase.from('subjects').insert(toCreate);
             if (error) throw error;
             console.log(`Created subjects: ${toCreate.map((s) => s.name).join(', ')}`);
         }
+        if (codes.has('GLS')) {
+            await supabase.from('subjects').update({ name: 'Global Citizenship' })
+                .eq('school_id', school.id).eq('code', 'GLS');
+        }
     } else {
-        console.log('(dry) would rename Global Studies -> Global Citizenship, Arts -> Art; ensure Spelling + Registration exist');
+        console.log('(dry) would rename Arts -> Art; ensure Spelling, Registration and Global Citizenship exist');
     }
 
     // ── 2. Placeholder teachers ────────────────────────────────────────────
@@ -224,7 +238,9 @@ async function main() {
     // Resolve teacher names to ids (after placeholder creation).
     const teacherIdFor = (name, classNameForMain) => {
         if (name === '<main>') return mainByClass.get(classByName.get(classNameForMain).id);
-        return userByName.get(name)?.id;
+        // In dry-run the placeholders haven't been created — use the name
+        // itself as a stable synthetic id so the plan can still be validated.
+        return userByName.get(name)?.id ?? (DRY_RUN ? name : undefined);
     };
 
     // ── 5. Upsert class_subjects ───────────────────────────────────────────
@@ -241,10 +257,17 @@ async function main() {
     const { data: subjects } = await supabase.from('subjects')
         .select('id, code').eq('school_id', school.id);
     const subjectByCode = new Map((subjects || []).map((s) => [s.code, s.id]));
+    // Global Citizenship may live under the older GLS code.
+    if (!subjectByCode.has('GCT') && subjectByCode.has('GLS')) {
+        subjectByCode.set('GCT', subjectByCode.get('GLS'));
+    }
+    // In dry-run, not-yet-created subjects resolve to synthetic ids.
+    const subjectIdFor = (code) => subjectByCode.get(code) ?? (DRY_RUN ? `_dry_${code}` : null);
     for (const row of assignmentRows) {
-        row.subject_id = subjectByCode.get(row._code);
+        const code = row._code;
         delete row._code;
-        if (!row.subject_id) throw new Error(`Subject missing for code ${row._code}`);
+        row.subject_id = subjectIdFor(code);
+        if (!row.subject_id) throw new Error(`Subject missing for code ${code}`);
         if (!row.teacher_id) throw new Error(`Teacher not found for an assignment in ${row.className}`);
     }
 
@@ -262,6 +285,42 @@ async function main() {
     }
 
     // ── 6. Generate the week ───────────────────────────────────────────────
+    // Gap-fill by default: slots an admin already entered by hand are kept;
+    // the generator only places what's missing around them. --wipe regenerates
+    // everything from scratch instead.
+    const occupied = new Set();      // `${classId}|${day}|${period}`
+    const teacherBusyExisting = new Set(); // `${teacherId}|${day}|${period}`
+    const existingCount = new Map(); // `${classId}|${subjectCode}` -> count
+    const regDays = new Map();       // classId -> Set(day)
+
+    if (!DRY_RUN && !WIPE) {
+        const { data: existingSlots, error: exErr } = await supabase
+            .from('timetable_slots')
+            .select('class_id, teacher_id, day_of_week, starts_at, cs:class_subjects(subject:subjects(code))')
+            .eq('academic_year_id', year.id);
+        if (exErr) throw exErr;
+
+        for (const s of existingSlots || []) {
+            const period = LESSON_PERIODS.findIndex(([start]) => s.starts_at.startsWith(start));
+            if (period >= 0) {
+                occupied.add(`${s.class_id}|${s.day_of_week}|${period}`);
+                if (s.teacher_id) teacherBusyExisting.add(`${s.teacher_id}|${s.day_of_week}|${period}`);
+            }
+            const code = s.cs?.subject?.code;
+            if (code) {
+                const key = `${s.class_id}|${code}`;
+                existingCount.set(key, (existingCount.get(key) || 0) + 1);
+                if (code === 'REG') {
+                    if (!regDays.has(s.class_id)) regDays.set(s.class_id, new Set());
+                    regDays.get(s.class_id).add(s.day_of_week);
+                }
+            }
+        }
+        if (occupied.size > 0) {
+            console.log(`Found ${occupied.size} existing slots — filling gaps around them (use --wipe to regenerate all)`);
+        }
+    }
+
     const generatorInput = plan
         .filter((p) => p.code !== 'REG')
         .map((p) => ({
@@ -269,26 +328,51 @@ async function main() {
             className: p.className,
             subjectCode: p.code,
             teacherId: teacherIdFor(p.teacherName, p.className),
-            sessions: p.sessions,
-        }));
+            sessions: Math.max(
+                0,
+                p.sessions - (existingCount.get(`${classByName.get(p.className).id}|${p.code}`) || 0)
+            ),
+        }))
+        .filter((p) => p.sessions > 0);
 
-    const result = generateWeek(generatorInput);
+    // Gap-fill is best-effort: a class already (nearly) full from manual
+    // entries simply gets fewer generated sessions rather than aborting.
+    const gapFilling = !DRY_RUN && !WIPE;
+    const result = generateWeek(generatorInput, occupied, gapFilling, teacherBusyExisting);
     if (!result.ok) throw new Error(`Timetable generation failed: ${result.reason}`);
+    if (result.unplaced && result.unplaced.length > 0) {
+        console.log(`Note: ${result.unplaced.length} session(s) had no free slot (class already nearly full from manual entries) — skipped:`);
+        const byClass = {};
+        result.unplaced.forEach((i) => { byClass[i.className] = (byClass[i.className] || 0) + 1; });
+        Object.entries(byClass).forEach(([cn, n]) => console.log(`   ${cn}: ${n}`));
+    }
 
     // Load the class_subject ids we need for slot rows.
-    const { data: assignmentIds } = await supabase.from('class_subjects')
-        .select('id, class_id, subject_id, teacher_id')
-        .eq('academic_year_id', year.id);
     const csKey = (classId, subjectId) => `${classId}|${subjectId}`;
-    const csByKey = new Map((assignmentIds || []).map((r) => [csKey(r.class_id, r.subject_id), r]));
+    let csByKey;
+    if (DRY_RUN) {
+        // Nothing was written — synthesize ids so the plan can be validated.
+        csByKey = new Map(assignmentRows.map((r) => (
+            [csKey(r.class_id, r.subject_id), { id: `_dry_${r.class_id}_${r.subject_id}` }]
+        )));
+    } else {
+        const { data: assignmentIds } = await supabase.from('class_subjects')
+            .select('id, class_id, subject_id, teacher_id')
+            .eq('academic_year_id', year.id);
+        csByKey = new Map((assignmentIds || []).map((r) => [csKey(r.class_id, r.subject_id), r]));
+    }
 
     const slotRows = [];
 
-    // Registration: 08:10–08:30 every day, main teacher.
+    // Registration: 08:10–08:30 every day, main teacher — except days that
+    // already have one.
     for (const name of allClassNames) {
-        const cs = csByKey.get(csKey(classByName.get(name).id, subjectByCode.get('REG')));
+        const classId = classByName.get(name).id;
+        const cs = csByKey.get(csKey(classId, subjectIdFor('REG')));
         if (!cs) throw new Error(`Registration assignment missing for ${name}`);
+        const done = regDays.get(classId) || new Set();
         for (const day of DAYS) {
+            if (!WIPE && done.has(day)) continue;
             slotRows.push({
                 school_id: school.id,
                 academic_year_id: year.id,
@@ -302,7 +386,7 @@ async function main() {
 
     // Lesson sessions.
     for (const slot of result.slots) {
-        const cs = csByKey.get(csKey(slot.assignment.classId, subjectByCode.get(slot.assignment.subjectCode)));
+        const cs = csByKey.get(csKey(slot.assignment.classId, subjectIdFor(slot.assignment.subjectCode)));
         if (!cs) throw new Error('Assignment row not found for a generated slot');
         const [start, end] = LESSON_PERIODS[slot.period];
         slotRows.push({
@@ -315,7 +399,7 @@ async function main() {
         });
     }
 
-    console.log(`Generated ${slotRows.length} timetable slots (${allClassNames.length} classes × (5 registration + 26 lessons))`);
+    console.log(`Prepared ${slotRows.length} new timetable slots (gap-fill mode${WIPE ? ' DISABLED — full regeneration' : ''})`);
 
     if (DRY_RUN) {
         console.log('(dry) no writes performed');
