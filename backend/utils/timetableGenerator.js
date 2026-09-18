@@ -26,9 +26,12 @@ const REGISTRATION = { start: '08:10', end: '08:30' };
 
 /**
  * @param {Array<{classId, subjectCode, teacherId, sessions}>} assignments
+ * @param {Set<string>} occupiedClassSlots pre-filled `${classId}|${day}|${period}`
+ *        keys (e.g. slots an admin already entered by hand) that the
+ *        generator must work around.
  * @returns {{ok: boolean, slots?: Array<{assignment, day, period}>, reason?: string}}
  */
-const generateWeek = (assignments) => {
+const generateWeek = (assignments, occupiedClassSlots = new Set(), bestEffort = false, occupiedTeacherSlots = new Set()) => {
     // Total weekly load per teacher — high-load teachers get placed first.
     const teacherLoad = new Map();
     for (const a of assignments) {
@@ -43,13 +46,20 @@ const generateWeek = (assignments) => {
     items.sort((x, y) => (teacherLoad.get(y.teacherId) - teacherLoad.get(x.teacherId))
         || x.subjectCode.localeCompare(y.subjectCode));
 
-    const teacherBusy = new Set(); // `${teacher}|${day}|${period}`
-    const classBusy = new Set();   // `${class}|${day}|${period}`
+    const teacherBusy = new Set(occupiedTeacherSlots); // `${teacher}|${day}|${period}`
+    const classBusy = new Set(occupiedClassSlots); // `${class}|${day}|${period}`
     const classDaySubjects = new Map(); // `${class}|${day}` -> Set(subjectCode)
     const teacherDayCount = new Map(); // `${teacher}|${day}` -> count
     const classDayCount = new Map();   // `${class}|${day}` -> count
 
+    for (const key of occupiedClassSlots) {
+        const [classId, day] = key.split('|');
+        const dayKey = `${classId}|${day}`;
+        classDayCount.set(dayKey, (classDayCount.get(dayKey) || 0) + 1);
+    }
+
     const slots = [];
+    const unplaced = [];
 
     for (const item of items) {
         let best = null;
@@ -73,6 +83,7 @@ const generateWeek = (assignments) => {
         }
 
         if (!best) {
+            if (bestEffort) { unplaced.push(item); continue; }
             return {
                 ok: false,
                 reason: `No free slot for ${item.subjectCode} (class ${item.classId})`,
@@ -94,7 +105,7 @@ const generateWeek = (assignments) => {
         slots.push({ assignment: item, day, period });
     }
 
-    return { ok: true, slots };
+    return { ok: true, slots, unplaced };
 };
 
 module.exports = { generateWeek, DAYS, LESSON_PERIODS, REGISTRATION };
