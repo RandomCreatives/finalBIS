@@ -411,7 +411,8 @@ const submitMonth = asyncHandler(async (req, res) => {
     res.json({ message: `Attendance for ${month} submitted`, submission: data });
 });
 
-/** POST /api/attendance/return — admin unlocks a submitted month. */
+/** POST /api/attendance/return — admin unlocks a submitted month.
+ *  The reason (`note`) is mandatory and is shown to the main teacher. */
 const returnMonth = asyncHandler(async (req, res) => {
     const { classId, month, note } = req.body;
     assertMonthFormat(month);

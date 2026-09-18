@@ -167,12 +167,26 @@ describe('monthly submission workflow', () => {
             .send({ classId: CLASS_A, month: MONTH });
         assert.equal(denied.status, 403);
 
+        // Even an admin must give a reason — the unlock leaves a paper trail.
+        const noReason = await request(app)
+            .post('/api/attendance/return')
+            .auth(tokenFor(ADMIN))
+            .send({ classId: CLASS_A, month: MONTH });
+        assert.equal(noReason.status, 400);
+
+        const blankReason = await request(app)
+            .post('/api/attendance/return')
+            .auth(tokenFor(ADMIN))
+            .send({ classId: CLASS_A, month: MONTH, note: '   ' });
+        assert.equal(blankReason.status, 400);
+
         const returned = await request(app)
             .post('/api/attendance/return')
             .auth(tokenFor(ADMIN))
             .send({ classId: CLASS_A, month: MONTH, note: 'Please fix the 7th' });
         assert.equal(returned.status, 200);
         assert.equal(returned.body.submission.status, 'returned');
+        assert.equal(returned.body.submission.note, 'Please fix the 7th');
 
         // Teacher can mark again.
         supabaseStub._rpc.mark_attendance = () => ({ data: { count: 1 }, error: null });
