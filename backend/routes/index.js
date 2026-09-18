@@ -448,6 +448,10 @@ router.post(
     authorize(ROLES.ADMIN),
     body('classId').isUUID().withMessage('classId is required'),
     body('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    // The unlock reason is mandatory: returning a submitted month is the one
+    // operation that rewrites locked history, so it must leave a paper trail.
+    body('note').isString().trim().notEmpty()
+        .withMessage('note is required: explain why the month is being returned'),
     validate,
     attendance.returnMonth
 );
