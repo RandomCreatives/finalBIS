@@ -26,9 +26,14 @@ const DAYS = [
 
 const hhmm = (t) => (t ? t.slice(0, 5) : '');
 
-/** Colour a period by who delivers it, so the grid reads at a glance. */
-const periodTint = (slot) =>
-    slot.subject?.taughtBy === 'main_teacher' ? '#eef2ff' : '#ecfdf5';
+/** Colour a period by who delivers it, so the grid reads at a glance.
+ *  Spelling gets its own distinct colour as a reference for the planned
+ *  English-load rebalance; Registration reads neutral. */
+const periodTint = (slot) => {
+    if (slot.subject?.code === 'SPL') return '#f3e8ff';
+    if (slot.subject?.code === 'REG') return '#f1f5f9';
+    return slot.subject?.taughtBy === 'main_teacher' ? '#eef2ff' : '#ecfdf5';
+};
 
 export default function Timetable() {
     const { user, isAdmin } = useAuth();
@@ -197,6 +202,8 @@ export default function Timetable() {
                         <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                             <Chip size="small" label="Main-teacher subject" sx={{ bgcolor: '#eef2ff' }} />
                             <Chip size="small" label="Subject-teacher subject" sx={{ bgcolor: '#ecfdf5' }} />
+                            <Chip size="small" label="Spelling" sx={{ bgcolor: '#f3e8ff' }} />
+                            <Chip size="small" label="Registration" sx={{ bgcolor: '#f1f5f9' }} />
                         </Stack>
                         {renderGrid(myWeek.data || [], { who: 'class' })}
                     </>

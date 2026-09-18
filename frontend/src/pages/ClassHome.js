@@ -605,7 +605,10 @@ function MarksSection({ klass, classId, roster }) {
     const subjects = useMemo(() => {
         const seen = new Map();
         (classSubjects.data || []).forEach((a) => {
-            if (a.subject?.id && !seen.has(a.subject.id)) seen.set(a.subject.id, a.subject);
+            // Registration is a timetable fixture, not a marked subject.
+            if (a.subject?.id && a.subject.code !== 'REG' && !seen.has(a.subject.id)) {
+                seen.set(a.subject.id, a.subject);
+            }
         });
         return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
     }, [classSubjects.data]);
