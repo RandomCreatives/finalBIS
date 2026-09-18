@@ -7,7 +7,7 @@
  * What it does (idempotent):
  *   1. Renames Global Studies -> Global Citizenship, Arts -> Art
  *   2. Creates the Spelling and Registration subjects if missing
- *   3. Creates placeholder subject-teacher accounts (English Teacher 1..4,
+ *   3. Creates placeholder subject-teacher accounts (English Teacher 1..3,
  *      Amharic/Music/Art/PE Teacher 1-2, French Teacher 1, ICT Teacher 1)
  *      if they don't exist yet — rename them later when names are decided
  *   4. Upserts class_subjects assignments (sessions per week included)
@@ -49,33 +49,42 @@ const YEAR4_CLASSES = ['Blue', 'Purple', 'Lavender', 'Crimson', 'Green', 'Yellow
 
 const className = (year, color) => `Year ${year} - ${color}`;
 
-// English: 4 teachers. Each takes one Year 3 class; Year 4 splits 3+3+2+2.
-// With the (future, admin-approved) spelling swap, all four land at 21
-// sessions/week; the swap itself is just re-pointing the Spelling rows.
+// English: 3 teachers (reduced from 4 on 2026-09-18 by admin decision).
+// Year 4 splits 3+3+4; Year 3 splits 2+2+0. Admin decision 2026-09-18:
+// English Teacher 3 takes ALL Year 3 Spelling, landing every teacher on
+// exactly 28 sessions/week:
+//   T1: ENG Y3 Blue/Green + Y4 Blue/Purple/Lavender (25) + SPL Y4 B/P/L (3) = 28
+//   T2: ENG Y3 Yellow/Red + Y4 Crimson/Green/Yellow (25) + SPL Y4 C/G/Y (3) = 28
+//   T3: ENG Y4 Magenta/Red/Violet/Orange (20) + SPL Y4 M/R/V/O (4)
+//       + SPL all Year 3 (4) = 28
 const ENGLISH_MAP = {
     [className(3, 'Blue')]: 'English Teacher 1',
+    [className(3, 'Green')]: 'English Teacher 1',
     [className(4, 'Blue')]: 'English Teacher 1',
     [className(4, 'Purple')]: 'English Teacher 1',
     [className(4, 'Lavender')]: 'English Teacher 1',
 
     [className(3, 'Yellow')]: 'English Teacher 2',
+    [className(3, 'Red')]: 'English Teacher 2',
     [className(4, 'Crimson')]: 'English Teacher 2',
     [className(4, 'Green')]: 'English Teacher 2',
     [className(4, 'Yellow')]: 'English Teacher 2',
 
-    [className(3, 'Red')]: 'English Teacher 3',
     [className(4, 'Magenta')]: 'English Teacher 3',
     [className(4, 'Red')]: 'English Teacher 3',
-
-    [className(3, 'Green')]: 'English Teacher 4',
-    [className(4, 'Violet')]: 'English Teacher 4',
-    [className(4, 'Orange')]: 'English Teacher 4',
+    [className(4, 'Violet')]: 'English Teacher 3',
+    [className(4, 'Orange')]: 'English Teacher 3',
 };
 
-// Two-teacher subjects: T1 takes Year 3 Blue+Yellow and five Year 4 classes;
-// T2 takes the rest.
+// Spelling: same as English for Year 4; ALL Year 3 spelling goes to T3.
+const SPELLING_MAP = Object.fromEntries(
+    Object.entries(ENGLISH_MAP).map(([name, t]) => [name, name.startsWith('Year 3') ? 'English Teacher 3' : t])
+);
+
+// Two-teacher subjects: T1 takes Year 3 Green+Red (admin re-split of
+// 2026-09-18) and five Year 4 classes; T2 takes the rest.
 const PAIRED_T1 = {
-    y3: ['Blue', 'Yellow'],
+    y3: ['Green', 'Red'],
     y4: ['Blue', 'Purple', 'Lavender', 'Crimson', 'Green'],
 };
 
@@ -85,7 +94,7 @@ const pairedTeacher = (subjectName, color, year) => {
 };
 
 const PLACEHOLDER_TEACHERS = [
-    'English Teacher 1', 'English Teacher 2', 'English Teacher 3', 'English Teacher 4',
+    'English Teacher 1', 'English Teacher 2', 'English Teacher 3',
     'Amharic Teacher 1', 'Amharic Teacher 2',
     'Music Teacher 1', 'Music Teacher 2',
     'Art Teacher 1', 'Art Teacher 2',
@@ -226,7 +235,7 @@ async function main() {
             { className: name, code: 'GCT', teacherName: main, sessions: LOAD.GCT },
             { className: name, code: 'REG', teacherName: main, sessions: 5 },
             { className: name, code: 'ENG', teacherName: ENGLISH_MAP[name], sessions: LOAD.ENG },
-            { className: name, code: 'SPL', teacherName: ENGLISH_MAP[name], sessions: LOAD.SPL },
+            { className: name, code: 'SPL', teacherName: SPELLING_MAP[name], sessions: LOAD.SPL },
             { className: name, code: 'FRA', teacherName: 'French Teacher 1', sessions: LOAD.FRA },
             { className: name, code: 'ICT', teacherName: 'ICT Teacher 1', sessions: LOAD.ICT },
         );
