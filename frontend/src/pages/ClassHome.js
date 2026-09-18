@@ -1337,12 +1337,56 @@ const ttTint = (slot) => {
     return slot.subject?.taughtBy === 'main_teacher' ? '#eef2ff' : '#ecfdf5';
 };
 
-function TimetableSection({ classId }) {
+/** Builds the worksheet rows (array of arrays) for the class weekly grid:
+ *  one row per bell period, columns Time + Mon–Fri. Pure, so it's testable. */
+export const timetableSheetRows = (slots, className) => {
+    const periodKeys = [...new Set(slots.map((s) => `${s.startsAt}|${s.endsAt}`))].sort();
+    const rows = [
+        [`${className} — Weekly Timetable 2026/2027`],
+        [],
+        ['Time', ...TT_DAYS.map((d) => d.label)],
+    ];
+    periodKeys.forEach((key) => {
+        const [start, end] = key.split('|');
+        const row = [`${ttHhmm(start)}–${ttHhmm(end)}`];
+        TT_DAYS.forEach((day) => {
+            const slot = slots.find(
+                (s) => s.dayOfWeek === day.value && s.startsAt === start && s.endsAt === end
+            );
+            if (!slot) { row.push(''); return; }
+            const subject = slot.subject?.name || 'Period';
+            row.push(slot.teacher?.name ? `${subject} (${slot.teacher.name})` : subject);
+        });
+        rows.push(row);
+    });
+    return rows;
+};
+
+function TimetableSection({ classId, klass }) {
     const tt = useApi(
         () => (classId ? timetableApi.get({ classId }) : Promise.resolve([])),
         [classId]
     );
     const slots = tt.data || [];
+    const [exporting, setExporting] = useState(false);
+
+    const downloadExcel = async () => {
+        try {
+            setExporting(true);
+            // Lazy-load SheetJS so the Excel library stays out of the main bundle.
+            const XLSX = await import('xlsx');
+            const rows = timetableSheetRows(slots, klass?.name || 'Class');
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = [{ wch: 13 }, ...TT_DAYS.map(() => ({ wch: 26 }))];
+            ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Timetable');
+            const stem = (klass?.name || 'class').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            XLSX.writeFile(wb, `${stem}-timetable-2026-27.xlsx`);
+        } finally {
+            setExporting(false);
+        }
+    };
 
     if (tt.loading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={28} /></Box>;
@@ -1356,12 +1400,20 @@ function TimetableSection({ classId }) {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Chip size="small" label={`${slots.length} sessions / week`} sx={{ fontWeight: 700 }} />
-                <Chip size="small" label="Main teacher" sx={{ bgcolor: '#eef2ff' }} />
-                <Chip size="small" label="Subject teacher" sx={{ bgcolor: '#ecfdf5' }} />
-                <Chip size="small" label="Spelling" sx={{ bgcolor: '#f3e8ff' }} />
-                <Chip size="small" label="Registration" sx={{ bgcolor: '#f1f5f9' }} />
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2,
+                justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    <Chip size="small" label={`${slots.length} sessions / week`} sx={{ fontWeight: 700 }} />
+                    <Chip size="small" label="Main teacher" sx={{ bgcolor: '#eef2ff' }} />
+                    <Chip size="small" label="Subject teacher" sx={{ bgcolor: '#ecfdf5' }} />
+                    <Chip size="small" label="Spelling" sx={{ bgcolor: '#f3e8ff' }} />
+                    <Chip size="small" label="Registration" sx={{ bgcolor: '#f1f5f9' }} />
+                </Box>
+                <Button variant="outlined" size="small" onClick={downloadExcel} disabled={exporting}
+                    startIcon={exporting ? <CircularProgress size={14} /> : <DownloadIcon sx={{ fontSize: 16 }} />}
+                    sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 1 }}>
+                    Download Excel
+                </Button>
             </Box>
 
             <Grid container spacing={1.5}>
@@ -1596,7 +1648,7 @@ export default function ClassHome() {
                                 reload={liveRoster.reload}
                                 classNames={classNames} classIdByName={classIdByName} />
                         )}
-                        {section === 'timetable' && <TimetableSection classId={session.classId} />}
+                        {section === 'timetable' && <TimetableSection classId={session.classId} klass={klass} />}
                     </Box>
                 </Box>
             </Container>
