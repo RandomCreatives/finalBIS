@@ -32,7 +32,7 @@ import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
-import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi } from '../api/endpoints';
+import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi, timetableApi } from '../api/endpoints';
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
@@ -103,7 +103,7 @@ const SECTIONS = [
     { id: 'plans', label: 'Planning', icon: MenuBookOutlinedIcon },
     { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'students', label: 'Students', icon: GroupsIcon },
-    { id: 'timetable', label: 'Timetable', icon: EventIcon, soon: true },
+    { id: 'timetable', label: 'Timetable', icon: EventIcon },
 ];
 
 /* ── small pieces ─────────────────────────────────────────── */
@@ -1317,6 +1317,95 @@ function OverviewSection({ klass, classId, roster, goTo }) {
     );
 }
 
+/* ── timetable section ────────────────────────────────────── */
+
+const TT_DAYS = [
+    { value: 1, label: 'Monday' },
+    { value: 2, label: 'Tuesday' },
+    { value: 3, label: 'Wednesday' },
+    { value: 4, label: 'Thursday' },
+    { value: 5, label: 'Friday' },
+];
+
+const ttHhmm = (t) => (t ? t.slice(0, 5) : '');
+
+/** Same palette as the admin Timetable page: Spelling purple, Registration
+ *  neutral, main-teacher subjects indigo, subject-teacher subjects mint. */
+const ttTint = (slot) => {
+    if (slot.subject?.code === 'SPL') return '#f3e8ff';
+    if (slot.subject?.code === 'REG') return '#f1f5f9';
+    return slot.subject?.taughtBy === 'main_teacher' ? '#eef2ff' : '#ecfdf5';
+};
+
+function TimetableSection({ classId }) {
+    const tt = useApi(
+        () => (classId ? timetableApi.get({ classId }) : Promise.resolve([])),
+        [classId]
+    );
+    const slots = tt.data || [];
+
+    if (tt.loading) {
+        return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={28} /></Box>;
+    }
+    if (tt.error) {
+        return <Alert severity="error">Could not load the timetable. Please try again.</Alert>;
+    }
+    if (slots.length === 0) {
+        return <Alert severity="info">No periods have been scheduled for this class yet.</Alert>;
+    }
+
+    return (
+        <Box>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Chip size="small" label={`${slots.length} sessions / week`} sx={{ fontWeight: 700 }} />
+                <Chip size="small" label="Main teacher" sx={{ bgcolor: '#eef2ff' }} />
+                <Chip size="small" label="Subject teacher" sx={{ bgcolor: '#ecfdf5' }} />
+                <Chip size="small" label="Spelling" sx={{ bgcolor: '#f3e8ff' }} />
+                <Chip size="small" label="Registration" sx={{ bgcolor: '#f1f5f9' }} />
+            </Box>
+
+            <Grid container spacing={1.5}>
+                {TT_DAYS.map((day) => {
+                    const daySlots = slots
+                        .filter((s) => s.dayOfWeek === day.value)
+                        .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+                    return (
+                        <Grid item xs={12} sm={6} md key={day.value}>
+                            <Paper variant="outlined" sx={{ p: 1.25, height: '100%' }}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, textAlign: 'center', color: 'text.secondary', fontWeight: 800 }}>
+                                    {day.label}
+                                </Typography>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                    {daySlots.length === 0 && (
+                                        <Typography variant="caption" color="text.disabled" textAlign="center">—</Typography>
+                                    )}
+                                    {daySlots.map((slot) => (
+                                        <Box key={slot.id} sx={{ p: 1, borderRadius: 1.5, bgcolor: ttTint(slot),
+                                            border: '1px solid', borderColor: 'divider' }}>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {ttHhmm(slot.startsAt)}–{ttHhmm(slot.endsAt)}
+                                            </Typography>
+                                            <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
+                                                {slot.subject?.name || 'Period'}
+                                            </Typography>
+                                            <Typography variant="caption" display="block" color="text.secondary">
+                                                {slot.teacher?.name || 'Unassigned'}
+                                            </Typography>
+                                            {slot.room && (
+                                                <Typography variant="caption" color="text.disabled">{slot.room}</Typography>
+                                            )}
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Paper>
+                        </Grid>
+                    );
+                })}
+            </Grid>
+        </Box>
+    );
+}
+
 /* ── the dashboard ────────────────────────────────────────── */
 
 export default function ClassHome() {
@@ -1507,7 +1596,7 @@ export default function ClassHome() {
                                 reload={liveRoster.reload}
                                 classNames={classNames} classIdByName={classIdByName} />
                         )}
-                        {section === 'timetable' && <Alert severity="info">The weekly timetable arrives in a later version.</Alert>}
+                        {section === 'timetable' && <TimetableSection classId={session.classId} />}
                     </Box>
                 </Box>
             </Container>
