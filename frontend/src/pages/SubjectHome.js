@@ -12,6 +12,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
 import GroupsIcon from '@mui/icons-material/Groups';
 import GradeIcon from '@mui/icons-material/Grade';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
@@ -24,6 +25,8 @@ import {
 } from '../components/settings/profileCards';
 import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
+import PlanningSection from '../components/planning/PlanningDocs';
+import { CalendarBoard } from './PublicCalendar';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 import LightModeIcon from '@mui/icons-material/LightMode';
@@ -56,6 +59,8 @@ const GRADE_COLORS = {
 const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: DashboardIcon },
     { id: 'week', label: 'My week', icon: EventIcon },
+    { id: 'planning', label: 'Planning', icon: MenuBookOutlinedIcon },
+    { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'classes', label: 'My classes', icon: GroupsIcon },
     { id: 'marks', label: 'Marks', icon: GradeIcon },
     { id: 'profile', label: 'Profile', icon: PersonIcon },
@@ -678,6 +683,8 @@ export default function SubjectHome() {
                                     : <WeekGrid slots={week.data} />
                         )}
 
+                        {section === 'planning' && <PlanningSection klass={{ name: user.name }} onToast={() => {}} />}
+                        {section === 'calendar' && <CalendarBoard />}
                         {section === 'classes' && (
                             myAssignments.loading
                                 ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={28} /></Box>

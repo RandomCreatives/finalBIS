@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, Divider, Grid,
@@ -29,6 +29,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import PersonIcon from '@mui/icons-material/Person';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import {
     IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
 } from '../components/settings/profileCards';
@@ -41,8 +42,8 @@ import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
 import { CalendarBoard } from './PublicCalendar';
-import WordEditor from '../components/WordEditor';
-import Spreadsheet, { makeModel } from '../components/Spreadsheet';
+import PlanningSection from '../components/planning/PlanningDocs';
+import StoreSection from '../components/communications/StoreSection';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -59,15 +60,9 @@ const STORE = {
     planning: 'bisnoc.demo.planningDocs',
 };
 
-const rgba = (hex, a) => {
-    const n = parseInt(hex.slice(1), 16);
-    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-};
-
 const readStore = (key) => {
     try { return JSON.parse(localStorage.getItem(key)) ?? {}; } catch { return {}; }
 };
-const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
 
 const gradeFor = (p) => (p >= 90 ? 'A+' : p >= 80 ? 'A' : p >= 70 ? 'B+'
     : p >= 60 ? 'B' : p >= 50 ? 'C' : p >= 40 ? 'D' : 'F');
@@ -108,7 +103,21 @@ const SECTIONS = [
     { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'students', label: 'Students', icon: GroupsIcon },
     { id: 'timetable', label: 'Timetable', icon: EventIcon },
+    { id: 'store', label: 'Store', icon: StorefrontIcon },
     { id: 'profile', label: 'Profile', icon: PersonIcon },
+];
+
+/**
+ * Sidebar grouping: day-to-day classroom tools first, then the channels to
+ * the school administration (store requests today; permission requests and
+ * conduct reports join them here). Profile stays pinned to the bottom.
+ */
+const SECTION_GROUPS = [
+    {
+        label: 'Class Room Management',
+        ids: ['overview', 'attendance', 'marks', 'plans', 'calendar', 'students', 'timetable'],
+    },
+    { label: 'Admin Communications', ids: ['store'] },
 ];
 
 /* ── small pieces ─────────────────────────────────────────── */
@@ -890,236 +899,6 @@ function MarksSection({ klass, classId, roster }) {
     );
 }
 
-const PLANNING_TEMPLATES = {
-    blank: {
-        label: 'Blank page',
-        title: (k) => `Planning — ${k.name}`,
-        html: '<p><br></p>',
-    },
-    sheet: {
-        label: 'Spreadsheet',
-        title: (k) => `Spreadsheet — ${k.name}`,
-        sheet: true,
-    },
-    scheme: {
-        label: 'Scheme of Work',
-        title: (k) => `Scheme of Work — ${k.name}`,
-        html: `
-<h1>Scheme of Work</h1>
-<p><strong>School:</strong> British International School — NOC Gerji<br>
-<strong>Class:</strong> ____________ &nbsp;&nbsp; <strong>Subject:</strong> ____________ &nbsp;&nbsp; <strong>Term:</strong> ____________ (2026/27)<br>
-<strong>Teacher:</strong> ____________</p>
-<table class="doc-table"><tbody>
-<tr><th>Week</th><th>Unit / Topic</th><th>Learning objectives</th><th>Activities &amp; resources</th><th>Reflection</th></tr>
-${'<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>'.repeat(12)}
-</tbody></table>
-<p><br></p>`,
-    },
-    lesson: {
-        label: 'Lesson Plan',
-        title: (k) => `Lesson Plan — ${k.name}`,
-        html: `
-<h1>Lesson Plan</h1>
-<p><strong>Date:</strong> ____________ &nbsp;&nbsp; <strong>Week:</strong> ____________ &nbsp;&nbsp;
-<strong>Class:</strong> ____________ &nbsp;&nbsp; <strong>Subject:</strong> ____________ &nbsp;&nbsp;
-<strong>Period:</strong> ____________</p>
-<h2>1. Objectives</h2>
-<p>By the end of the lesson, learners will be able to…</p>
-<h2>2. Materials &amp; resources</h2>
-<p><br></p>
-<h2>3. Introduction (5–10 min)</h2>
-<p><br></p>
-<h2>4. Lesson development</h2>
-<p><br></p>
-<h2>5. Closure &amp; summary</h2>
-<p><br></p>
-<h2>6. Assessment / evidence of learning</h2>
-<p><br></p>
-<h2>7. Reflection (complete after teaching)</h2>
-<p><br></p>`,
-    },
-};
-
-const DOC_TYPE_META = {
-    sheet: { label: 'Spreadsheet', color: '#0891b2' },
-    scheme: { label: 'Scheme of Work', color: '#7c3aed' },
-    lesson: { label: 'Lesson Plan', color: '#2563eb' },
-    blank: { label: 'Document', color: '#64748b' },
-};
-function DocEditor({ doc, klass, onBack, onPatch, onToast }) {
-    const saveTimer = useRef(null);
-    const [status, setStatus] = useState('saved');
-
-    const handleHtml = (html) => {
-        setStatus('saving');
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => {
-            onPatch({ html });
-            setStatus('saved');
-        }, 600);
-    };
-
-    const handleModel = (model) => {
-        setStatus('saving');
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => {
-            onPatch({ model });
-            setStatus('saved');
-        }, 600);
-    };
-
-    useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
-
-    const meta = DOC_TYPE_META[doc.type] || DOC_TYPE_META.blank;
-
-    return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2, flexWrap: 'wrap' }}>
-                <Button size="small" onClick={onBack}
-                    sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
-                    ← All documents
-                </Button>
-                <Chip size="small" label={meta.label}
-                    sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11,
-                        bgcolor: rgba(meta.color, 0.1), color: meta.color }} />
-                <TextField size="small" value={doc.title} sx={{ flexGrow: 1, maxWidth: 460,
-                    '& .MuiInputBase-input': { fontSize: 14, fontWeight: 700 } }}
-                    onChange={(e) => onPatch({ title: e.target.value })} />
-                <Typography sx={{ fontSize: 12, fontWeight: 700, ml: 'auto',
-                    color: status === 'saving' ? 'text.secondary' : '#16a34a' }}>
-                    {status === 'saving' ? 'Saving…' : '✓ Saved'}
-                </Typography>
-            </Box>
-            {doc.type === 'sheet' ? (
-                <Spreadsheet
-                    key={doc.id}
-                    value={doc.model || makeModel()}
-                    onChange={handleModel}
-                />
-            ) : (
-                <WordEditor
-                    key={doc.id}
-                    initialHtml={doc.html}
-                    onHtmlChange={handleHtml}
-                    printHeader={`${meta.label} · ${klass.name}`}
-                />
-            )}
-            <Snackbar open={false} message="" />
-        </Box>
-    );
-}
-
-function PlanningSection({ klass, onToast }) {
-    const [docs, setDocs] = useState(() => readStore(STORE.planning)[klass.name] || []);
-    const [openId, setOpenId] = useState(null);
-
-    const persist = (next) => {
-        setDocs(next);
-        const all = readStore(STORE.planning);
-        all[klass.name] = next;
-        writeStore(STORE.planning, all);
-    };
-
-    const createDoc = (type) => {
-        const tpl = PLANNING_TEMPLATES[type];
-        const doc = {
-            id: `doc-${Date.now()}`,
-            type,
-            title: tpl.title(klass),
-            html: tpl.sheet ? undefined : tpl.html,
-            model: tpl.sheet ? makeModel() : undefined,
-            updatedAt: Date.now(),
-        };
-        persist([doc, ...docs]);
-        setOpenId(doc.id);
-        onToast(`${tpl.label} created`);
-    };
-
-    const patchDoc = (id, patch) => {
-        persist(docs.map((d) => (d.id === id ? { ...d, ...patch, updatedAt: Date.now() } : d)));
-    };
-
-    const deleteDoc = (id) => {
-        // eslint-disable-next-line no-alert
-        if (!window.confirm('Delete this document? This cannot be undone.')) return;
-        persist(docs.filter((d) => d.id !== id));
-        if (openId === id) setOpenId(null);
-        onToast('Document deleted');
-    };
-
-    const openDoc = docs.find((d) => d.id === openId);
-    if (openDoc) {
-        return (
-            <DocEditor doc={openDoc} klass={klass}
-                onBack={() => setOpenId(null)}
-                onPatch={(patch) => patchDoc(openDoc.id, patch)}
-                onToast={onToast} />
-        );
-    }
-
-    return (
-        <Box>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                <Typography sx={{ fontSize: 13, color: 'text.secondary', flexGrow: 1 }}>
-                    Build your planning as a Word-like page (formatted text, tables, printing) or an
-                    Excel-like spreadsheet — schemes of work, weekly plans, grade trackers, anything.
-                </Typography>
-                {Object.entries(PLANNING_TEMPLATES).map(([type, tpl]) => (
-                    <Button key={type} size="small" variant={type === 'blank' ? 'outlined' : 'contained'}
-                        disableElevation startIcon={<AddIcon sx={{ fontSize: 15 }} />}
-                        onClick={() => createDoc(type)}
-                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                        New {tpl.label}
-                    </Button>
-                ))}
-            </Box>
-
-            {docs.length === 0 ? (
-                <Alert severity="info" sx={{ borderRadius: 1.5 }}>
-                    No planning documents yet — start with a <strong>Scheme of Work</strong> for the term,
-                    then add weekly <strong>Lesson Plans</strong>.
-                </Alert>
-            ) : (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.75 }}>
-                    {docs.map((d) => {
-                        const meta = DOC_TYPE_META[d.type] || DOC_TYPE_META.blank;
-                        return (
-                            <Card key={d.id} variant="outlined"
-                                sx={{ borderRadius: 1.5, cursor: 'pointer', transition: 'border-color .15s, transform .15s',
-                                    '&:hover': { borderColor: 'primary.main', transform: 'translateY(-2px)' } }}
-                                onClick={() => setOpenId(d.id)}>
-                                <CardContent sx={{ p: 2.25 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                        <Chip size="small" label={meta.label}
-                                            sx={{ fontWeight: 700, borderRadius: 1, height: 20, fontSize: 10.5,
-                                                bgcolor: rgba(meta.color, 0.1), color: meta.color }} />
-                                        <Box sx={{ ml: 'auto' }} onClick={(e) => e.stopPropagation()}>
-                                            <Tooltip title="Delete">
-                                                <IconButton size="small" onClick={() => deleteDoc(d.id)}>
-                                                    <DeleteOutlineIcon sx={{ fontSize: 16 }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </Box>
-                                    </Box>
-                                    <Typography sx={{ fontWeight: 800, fontSize: 14.5, lineHeight: 1.3 }}>
-                                        {d.title}
-                                    </Typography>
-                                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .75 }}>
-                                        Last edited {new Date(d.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}{' '}
-                                        at {new Date(d.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </Box>
-            )}
-        </Box>
-    );
-}
-
-/* ── students section ─────────────────────────────────────── */
-
 function StudentsSection({ klass, roster, loading, error, reload, classNames, classIdByName }) {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
@@ -1679,7 +1458,18 @@ export default function ClassHome() {
                         width: { md: 220 }, display: 'flex', flexDirection: { xs: 'row', md: 'column' },
                         gap: .5, overflowX: 'auto', maxWidth: '100%', position: { md: 'sticky' }, top: { md: 76 },
                         height: { md: 'calc(100vh - 100px)' }, overflowY: { md: 'auto' } }}>
-                        {SECTIONS.filter((s) => s.id !== 'profile').map((s) => renderNavButton(s))}
+                        {SECTION_GROUPS.map((g, gi) => (
+                            <Box key={g.label} sx={{ display: 'contents' }}>
+                                <Typography data-testid={`side-nav-group-${gi}`}
+                                    sx={{ display: { xs: 'none', md: 'block' },
+                                        px: 0.75, pt: gi === 0 ? 0 : 1, pb: 0.25,
+                                        fontSize: 9.5, fontWeight: 800, letterSpacing: '.14em',
+                                        textTransform: 'uppercase', color: 'text.disabled' }}>
+                                    {g.label}
+                                </Typography>
+                                {g.ids.map((id) => renderNavButton(SECTIONS.find((s) => s.id === id)))}
+                            </Box>
+                        ))}
                         <Box data-testid="side-nav-spacer"
                             sx={{ flexGrow: 1, display: { xs: 'none', md: 'block' } }} />
                         <Divider sx={{ display: { xs: 'none', md: 'block' }, mx: 0.5 }} />
@@ -1714,6 +1504,7 @@ export default function ClassHome() {
                                 classNames={classNames} classIdByName={classIdByName} />
                         )}
                         {section === 'timetable' && <TimetableSection classId={session.classId} klass={klass} />}
+                        {section === 'store' && <StoreSection klass={klass} classId={session.classId} />}
                         {section === 'profile' && <ProfileSection klass={klass} classId={session.classId} />}
                     </Box>
                 </Box>
