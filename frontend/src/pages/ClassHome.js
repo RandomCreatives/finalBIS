@@ -1494,9 +1494,12 @@ function ProfileSection({ klass, classId }) {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                     <IdentityCard
                         roleLabel="Main Teacher"
-                        nameNote="You sign in with the class card; your display name is issued by the school. Ask the coordinator to correct it."
+                        nameNote="You sign in daily with the class card; your display name is issued by the school. Ask the coordinator to correct it."
                     />
-                    <SecurityCard mode="managed" />
+                    <SecurityCard
+                        mode="self-service"
+                        note="This is your personal account password (for signing in with your school email). The class card still works for daily sign-in. Don’t know your current password? Ask the coordinator — it can be reset to your class card password."
+                    />
                 </Box>
             </Grid>
             <Grid item xs={12} md={5}>

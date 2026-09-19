@@ -124,11 +124,11 @@ export function IdentityCard({ roleLabel, canEditName = false, nameNote }) {
 
             {canEditName ? (
                 <Box component="form" onSubmit={(e) => { e.preventDefault(); save({ name: name.trim() }); }}
-                    sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                     <TextField label="Display name" size="small" fullWidth value={name}
                         onChange={(e) => setName(e.target.value)} />
                     <Button type="submit" variant="contained" disableElevation disabled={!nameDirty || saving}
-                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, minHeight: 40 }}>
                         Save
                     </Button>
                 </Box>
@@ -147,12 +147,12 @@ export function IdentityCard({ roleLabel, canEditName = false, nameNote }) {
             )}
 
             <Box component="form" onSubmit={(e) => { e.preventDefault(); save({ phone: phone.trim() }); }}
-                sx={{ display: 'flex', gap: 1 }}>
+                sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
                 <TextField label="Phone" size="small" fullWidth value={phone}
                     placeholder="+251 9…" onChange={(e) => setPhone(e.target.value)}
                     helperText="Used by the office to reach you." />
                 <Button type="submit" variant="outlined" disabled={!phoneDirty || saving}
-                    sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, height: 40 }}>
+                    sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, minHeight: 40 }}>
                     Save
                 </Button>
             </Box>
@@ -234,7 +234,7 @@ export function TelegramCard() {
                         Link your Telegram account to sign in with one tap — no password needed.
                     </Typography>
                     {config?.enabled ? (
-                        <TelegramLoginButton onAuth={link} />
+                        <TelegramLoginButton onAuth={link} purpose="link" />
                     ) : (
                         <Typography variant="caption" color="text.secondary">
                             Telegram sign-in is not configured yet.
@@ -278,7 +278,7 @@ const PasswordField = ({ label, value, onChange }) => {
  * mode 'managed'      → explainer (class-card main teachers: passwords are
  *                       coordinator-issued; the card is the door).
  */
-export function SecurityCard({ mode = 'self-service', managedNote }) {
+export function SecurityCard({ mode = 'self-service', managedNote, note }) {
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -322,6 +322,11 @@ export function SecurityCard({ mode = 'self-service', managedNote }) {
             ) : (
                 <Box component="form" onSubmit={submit}
                     sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {note && (
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                            {note}
+                        </Typography>
+                    )}
                     {(error || success) && (
                         <Alert severity={error ? 'error' : 'success'}>{error || success}</Alert>
                     )}
@@ -329,8 +334,8 @@ export function SecurityCard({ mode = 'self-service', managedNote }) {
                     <PasswordField label="New password (10+ characters)" value={newPassword} onChange={setNewPassword} />
                     <PasswordField label="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} />
                     <Button type="submit" variant="contained" disableElevation disabled={busy} sx={{
-                        alignSelf: 'flex-start', textTransform: 'none', fontWeight: 700,
-                        borderRadius: 2, px: 3,
+                        alignSelf: { xs: 'stretch', sm: 'flex-start' }, textTransform: 'none',
+                        fontWeight: 700, borderRadius: 2, px: 3, minHeight: 42,
                     }}>
                         {busy ? 'Changing…' : 'Change password'}
                     </Button>
