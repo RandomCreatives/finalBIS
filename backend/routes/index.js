@@ -27,6 +27,7 @@ const tasks = require('../controllers/task.controller');
 const dashboard = require('../controllers/dashboard.controller');
 const datacenter = require('../controllers/datacenter.controller');
 const store = require('../controllers/store.controller');
+const permissionRequests = require('../controllers/permissionRequests.controller');
 const files = require('../controllers/files.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
@@ -802,6 +803,7 @@ router.delete('/timetable/:id', authenticate, authorize(ROLES.ADMIN), uuid('id')
 // then the admin gives the final approval. The approved form is printed and
 // kept in the school's records.
 // =============================================================================
+
 router.get('/store/requests', authenticate, store.listRequests);
 router.get('/store/requests/:id', authenticate, uuid('id'), validate, store.getRequest);
 
@@ -856,6 +858,50 @@ router.post(
     validate,
     store.adminReview
 );
+
+
+// =============================================================================
+// PERMISSION REQUESTS (Admin Communications — "Request")
+//
+// A teacher asks the admin for permission tied to a specific roster student
+// (e.g. a parent picking the child up mid-class); the admin approves or
+// declines. Teachers manage only their own requests.
+// =============================================================================
+router.get('/permission-requests', authenticate, permissionRequests.listRequests);
+
+router.post(
+    '/permission-requests',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.SUBJECT_TEACHER),
+    body('classId').isUUID(),
+    body('studentId').isUUID(),
+    body('reason').isString().trim().isLength({ min: 3 }),
+    body('pickupTime').optional({ nullable: true }).isISO8601(),
+    validate,
+    permissionRequests.createRequest
+);
+
+router.post(
+    '/permission-requests/:id/review',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    uuid('id'),
+    body('decision').isIn(['approved', 'declined']),
+    body('note').optional().trim(),
+    validate,
+    permissionRequests.reviewRequest
+);
+
+router.delete('/permission-requests/:id', authenticate, uuid('id'), validate, permissionRequests.deleteRequest);
+
+// Admin Communications — unread/badge counters for the admin home.
+router.get(
+    '/communications/badge-counts',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    permissionRequests.badgeCounts
+);
+
 
 
 // =============================================================================

@@ -29,11 +29,11 @@ const STATUS_META = {
 };
 
 const FILTERS = [
-    { label: 'All', status: 'all' },
-    { label: 'Pending', status: 'pending' },
-    { label: 'Store approved', status: 'store_approved' },
-    { label: 'Approved', status: 'approved' },
-    { label: 'Rejected', status: 'rejected' },
+    { value: 'all', label: 'All' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'store_approved', label: 'Store approved' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
 ];
 
 const cleanItem = (it) => ({
@@ -68,8 +68,8 @@ export default function Store() {
     const classes = useApi(() => classApi.list(), []);
 
     const allRequests = requests.data || [];
-    const counts = FILTERS.filter((f) => f.status !== 'all').reduce((acc, f) => {
-        acc[f.status] = allRequests.filter((r) => r.status === f.status).length;
+    const counts = FILTERS.filter((f) => f.value !== 'all').reduce((acc, f) => {
+        acc[f.value] = allRequests.filter((r) => r.status === f.value).length;
         return acc;
     }, {});
     const rows = filter === 'all' ? allRequests : allRequests.filter((r) => r.status === filter);
