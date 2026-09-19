@@ -27,6 +27,7 @@ import Subjects from './pages/Subjects';
 import Library from './pages/Library';
 import Clinic from './pages/Clinic';
 import Store from './pages/Store';
+import Communications from './pages/Communications';
 import Messages from './pages/Messages';
 import Notices from './pages/Notices';
 import Tasks from './pages/Tasks';
@@ -66,6 +67,7 @@ export default function App() {
                             <Route path="library" element={<Library />} />
                             <Route path="clinic" element={<Clinic />} />
                             <Route path="store" element={<Store />} />
+                            <Route path="communications" element={<Communications />} />
                             <Route path="messages" element={<Messages />} />
                             <Route path="notices" element={<Notices />} />
                             <Route path="tasks" element={<Tasks />} />

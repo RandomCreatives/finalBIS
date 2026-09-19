@@ -231,6 +231,18 @@ export const storeApi = {
         client.post(`/store/requests/${id}/admin-review`, { decision, note }).then((r) => r.data.request),
 };
 
+export const permissionApi = {
+    list: (params) => client.get('/permission-requests', { params }).then((r) => r.data.requests),
+    create: (payload) => client.post('/permission-requests', payload).then((r) => r.data.request),
+    review: (id, decision, note) =>
+        client.post(`/permission-requests/${id}/review`, { decision, note }).then((r) => r.data.request),
+    remove: (id) => client.delete(`/permission-requests/${id}`).then((r) => r.data),
+};
+
+export const communicationsApi = {
+    badgeCounts: () => client.get('/communications/badge-counts').then((r) => r.data.badgeCounts),
+};
+
 export const filesApi = {
     list: (params) => client.get('/files', { params }).then((r) => r.data.files),
     get: (id) => client.get(`/files/${id}`).then((r) => r.data.file),

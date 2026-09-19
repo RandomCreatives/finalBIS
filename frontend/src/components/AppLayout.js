@@ -15,6 +15,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import BadgeIcon from '@mui/icons-material/Badge';
+import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TodayIcon from '@mui/icons-material/Today';
 import GradeIcon from '@mui/icons-material/Grade';
@@ -23,6 +24,8 @@ import FolderIcon from '@mui/icons-material/Folder';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../auth/AuthContext';
+import useApi from '../hooks/useApi';
+import { communicationsApi } from '../api/endpoints';
 
 const DRAWER_WIDTH = 248;
 
@@ -59,6 +62,7 @@ const NAV_SECTIONS = [
         label: 'Administration',
         adminOnly: true,
         items: [
+            { label: 'Communications', to: '/app/communications', icon: <CampaignOutlinedIcon />, badge: 'communications' },
             { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon /> },
             { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon /> },
             { label: 'Staff', to: '/app/staff', icon: <BadgeIcon /> },
@@ -93,7 +97,7 @@ function NavButton({ item, onClick }) {
             }}
         >
             <ListItemIcon sx={{ minWidth: 40 }}>
-                {item.badge === 'messages' ? (
+                {(item.badge === 'messages' || item.badge === 'communications') ? (
                     <Badge color="error" badgeContent={item.unread} invisible={!item.unread}>
                         {item.icon}
                     </Badge>
@@ -130,11 +134,24 @@ export default function AppLayout() {
 
     const closeDrawer = () => setMobileOpen(false);
 
+    // Live pending count for the Admin Communications badge (admin only).
+    const commsBadges = useApi(
+        () => (isAdmin ? communicationsApi.badgeCounts() : Promise.resolve(null)),
+        [isAdmin],
+    );
+    const commsPending = commsBadges.data
+        ? (commsBadges.data.storeRequestsPending || 0)
+            + (commsBadges.data.permissionRequestsPending || 0)
+            + (commsBadges.data.conductReportsPending || 0)
+        : 0;
+
     const sections = NAV_SECTIONS
         .filter((s) => !s.adminOnly || isAdmin)
         .map((s) => ({
             ...s,
-            items: s.items.filter((item) => !item.roles || item.roles.includes(user?.role)),
+            items: s.items
+                .filter((item) => !item.roles || item.roles.includes(user?.role))
+                .map((item) => (item.badge === 'communications' ? { ...item, unread: commsPending } : item)),
         }))
         .filter((s) => s.items.length > 0);
 
