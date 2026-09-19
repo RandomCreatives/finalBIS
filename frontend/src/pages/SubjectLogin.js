@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-    Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions,
-    DialogContent, DialogTitle, Grid, IconButton, InputAdornment, Paper, TextField,
-    Typography, useTheme,
+    Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, CircularProgress,
+    Container, Dialog, DialogActions, DialogContent, DialogTitle, Grid, IconButton,
+    InputAdornment, Paper, TextField, Typography, useTheme,
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import LoginIcon from '@mui/icons-material/Login';
@@ -18,6 +19,21 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 
 /** "English Teacher 1" -> "English"; "Physical Education Teacher 2" -> "Physical Education". */
 export const subjectOf = (name) => name.replace(/\s+teacher\s+\d+$/i, '') || 'Other';
+
+/**
+ * Placeholder seats are named "<Subject> Teacher N" (e.g. "English Teacher 1").
+ * Only these get a card on the sign-in wall, labelled generically ("Teacher N").
+ * Real names are revealed once staff are mapped to the seats — flip this predicate
+ * (and teacherLabel) in the same change that renames the accounts.
+ */
+const PLACEHOLDER_RE = /\s+teacher\s+(\d+)$/i;
+export const isWallCard = (teacher) => PLACEHOLDER_RE.test(teacher.name);
+
+/** "English Teacher 2" -> "Teacher 2"; anything else keeps its full name. */
+export const teacherLabel = (teacher) => {
+    const m = teacher.name.match(PLACEHOLDER_RE);
+    return m ? `Teacher ${m[1]}` : teacher.name;
+};
 
 /** Groups the flat teacher list into subject sections for the card wall. */
 export const groupTeachers = (teachers) => {
@@ -45,16 +61,19 @@ export default function SubjectLogin() {
     const navigate = useNavigate();
 
     const directory = useApi(() => authApi.subjectTeachers(), []);
-    const groups = useMemo(() => groupTeachers(directory.data || []), [directory.data]);
+    const groups = useMemo(
+        () => groupTeachers((directory.data || []).filter(isWallCard)),
+        [directory.data]
+    );
 
-    const [selected, setSelected] = useState(null);
+    const [selected, setSelected] = useState(null); // { teacher, label, subject }
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    const openCard = (teacher) => {
-        setSelected(teacher);
+    const openCard = (teacher, label, subject) => {
+        setSelected({ teacher, label, subject });
         setPassword('');
         setError('');
     };
@@ -65,7 +84,7 @@ export default function SubjectLogin() {
         setSubmitting(true);
         setError('');
         try {
-            const { token, user } = await authApi.subjectTeacherLogin(selected.id, password);
+            const { token, user } = await authApi.subjectTeacherLogin(selected.teacher.id, password);
             loginWithToken(token, user);
             navigate('/subject-home', { replace: true });
         } catch (err) {
@@ -115,48 +134,71 @@ export default function SubjectLogin() {
                 )}
 
                 {groups.map((g, gi) => (
-                    <Box key={g.subject} sx={{ mb: 4 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'text.secondary', mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            {g.subject}
-                        </Typography>
-                        <Grid container spacing={1.5}>
-                            {g.teachers.map((t, ti) => (
-                                <Grid item xs={12} sm={6} md={4} lg={3} key={t.id}>
-                                    <Paper
-                                        variant="outlined"
-                                        onClick={() => openCard(t)}
-                                        sx={{
-                                            p: 2, borderRadius: 1.5, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: 1.5,
-                                            transition: 'all .15s ease',
-                                            '&:hover': {
-                                                borderColor: 'primary.main',
-                                                boxShadow: dark ? 3 : 1,
-                                                transform: 'translateY(-1px)',
-                                            },
-                                        }}
-                                    >
-                                        <Box sx={{
-                                            width: 42, height: 42, borderRadius: 1, flexShrink: 0,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontWeight: 800, fontSize: 16, color: 'text.primary',
-                                            bgcolor: SUBJECT_TINTS[(gi + ti) % SUBJECT_TINTS.length],
-                                        }}>
-                                            {t.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}
-                                        </Box>
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Typography sx={{ fontWeight: 800, fontSize: 15 }} noWrap>
-                                                {t.name}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {g.subject} · tap to sign in
-                                            </Typography>
-                                        </Box>
-                                    </Paper>
-                                </Grid>
-                            ))}
-                        </Grid>
-                    </Box>
+                    <Accordion
+                        key={g.subject}
+                        disableGutters
+                        elevation={0}
+                        sx={{
+                            mb: 1.5, border: '1px solid', borderColor: 'divider',
+                            borderRadius: '8px !important', overflow: 'hidden',
+                            '&:before': { display: 'none' },
+                        }}
+                    >
+                        <AccordionSummary
+                            expandIcon={<ExpandMoreIcon />}
+                            sx={{
+                                px: 2, minHeight: 58,
+                                '& .MuiAccordionSummary-content': { my: 1.25, alignItems: 'baseline', gap: 1.5 },
+                            }}
+                        >
+                            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{g.subject}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                {g.teachers.length === 1 ? '1 teacher' : `${g.teachers.length} teachers`}
+                            </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 2, pt: 0, pb: 2 }}>
+                            <Grid container spacing={1.5}>
+                                {g.teachers.map((t, ti) => {
+                                    const label = teacherLabel(t);
+                                    return (
+                                        <Grid item xs={12} sm={6} md={4} lg={3} key={t.id}>
+                                            <Paper
+                                                variant="outlined"
+                                                onClick={() => openCard(t, label, g.subject)}
+                                                sx={{
+                                                    p: 2, borderRadius: 1.5, cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', gap: 1.5,
+                                                    transition: 'all .15s ease',
+                                                    '&:hover': {
+                                                        borderColor: 'primary.main',
+                                                        boxShadow: dark ? 3 : 1,
+                                                        transform: 'translateY(-1px)',
+                                                    },
+                                                }}
+                                            >
+                                                <Box sx={{
+                                                    width: 42, height: 42, borderRadius: 1, flexShrink: 0,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontWeight: 800, fontSize: 16, color: 'text.primary',
+                                                    bgcolor: SUBJECT_TINTS[(gi + ti) % SUBJECT_TINTS.length],
+                                                }}>
+                                                    {label.split(' ').map((w) => w[0]).slice(0, 2).join('')}
+                                                </Box>
+                                                <Box sx={{ minWidth: 0 }}>
+                                                    <Typography sx={{ fontWeight: 800, fontSize: 15 }} noWrap>
+                                                        {label}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {g.subject} · tap to sign in
+                                                    </Typography>
+                                                </Box>
+                                            </Paper>
+                                        </Grid>
+                                    );
+                                })}
+                            </Grid>
+                        </AccordionDetails>
+                    </Accordion>
                 ))}
 
                 {!directory.loading && !directory.error && groups.length === 0 && (
@@ -167,7 +209,10 @@ export default function SubjectLogin() {
             {/* password dialog */}
             <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} maxWidth="xs" fullWidth>
                 <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-                    Sign in as {selected?.name}
+                    Sign in as {selected?.label}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
+                        {selected?.subject}
+                    </Typography>
                 </DialogTitle>
                 <Box component="form" onSubmit={signIn} noValidate>
                     <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
