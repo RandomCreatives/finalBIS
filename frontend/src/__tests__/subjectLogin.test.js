@@ -1,109 +1,113 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import SubjectLogin, {
-    groupTeachers, isWallCard, subjectOf, teacherLabel,
-} from '../pages/SubjectLogin';
-import { authApi } from '../api/endpoints';
+import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '../theme';
-import { AuthProvider } from '../auth/AuthContext';
+import SubjectLogin, { yearBands, sectionLabel } from '../pages/SubjectLogin';
+import { CLASSES, CLASS_LOGIN_KEY } from '../data/classes';
 
-jest.mock('../api/endpoints', () => ({
-    authApi: {
-        subjectTeachers: jest.fn(),
-        subjectTeacherLogin: jest.fn(),
-        me: jest.fn(),
-    },
-}));
+const renderWall = (route = '/class-home/:slug') =>
+    render(
+        <ThemeProvider>
+            <MemoryRouter initialEntries={['/teacher-login']}>
+                <SubjectLogin />
+            </MemoryRouter>
+        </ThemeProvider>,
+    );
 
-describe('subjectOf', () => {
-    test('strips the "Teacher N" suffix', () => {
-        expect(subjectOf('English Teacher 1')).toBe('English');
-        expect(subjectOf('Amharic Teacher 2')).toBe('Amharic');
-        expect(subjectOf('Physical Education Teacher 1')).toBe('Physical Education');
-        expect(subjectOf('ICT Teacher 1')).toBe('ICT');
-        expect(subjectOf('French Teacher 1')).toBe('French');
+beforeEach(() => {
+    localStorage.clear();
+    jest.restoreAllMocks();
+});
+
+describe('yearBands', () => {
+    test('groups the roster into ascending year bands', () => {
+        const bands = yearBands(CLASSES);
+        expect(bands.map((b) => b.year)).toEqual([3, 4]);
+        expect(bands[0].classes).toHaveLength(4);
+        expect(bands[1].classes).toHaveLength(10);
     });
 
-    test('leaves real names alone', () => {
-        expect(subjectOf('Meron Abebe')).toBe('Meron Abebe');
+    test('sectionLabel renders the year heading', () => {
+        expect(sectionLabel(3)).toBe('Year 3');
+        expect(sectionLabel(4)).toBe('Year 4');
     });
 });
 
-describe('groupTeachers', () => {
-    test('groups by subject, sorted, numeric order within a subject', () => {
-        const teachers = [
-            { id: '4', name: 'English Teacher 3' },
-            { id: '1', name: 'Amharic Teacher 1' },
-            { id: '3', name: 'English Teacher 2' },
-            { id: '2', name: 'English Teacher 1' },
-            { id: '5', name: 'Amharic Teacher 2' },
-        ];
-        const groups = groupTeachers(teachers);
-        expect(groups.map((g) => g.subject)).toEqual(['Amharic', 'English']);
-        expect(groups[0].teachers.map((t) => t.name)).toEqual(['Amharic Teacher 1', 'Amharic Teacher 2']);
-        expect(groups[1].teachers.map((t) => t.name)).toEqual(
-            ['English Teacher 1', 'English Teacher 2', 'English Teacher 3']
-        );
-    });
-});
-
-describe('teacherLabel', () => {
-    test('placeholder seats get a generic label', () => {
-        expect(teacherLabel({ name: 'English Teacher 2' })).toBe('Teacher 2');
-        expect(teacherLabel({ name: 'Physical Education Teacher 1' })).toBe('Teacher 1');
-    });
-
-    test('real names are kept for the reveal later', () => {
-        expect(teacherLabel({ name: 'Meron Abebe' })).toBe('Meron Abebe');
-    });
-});
-
-describe('isWallCard', () => {
-    test('only numbered placeholder seats appear on the wall', () => {
-        expect(isWallCard({ name: 'English Teacher 1' })).toBe(true);
-        expect(isWallCard({ name: 'Amharic Teacher' })).toBe(false);   // unnumbered shell
-        expect(isWallCard({ name: 'Meron Abebe' })).toBe(false);       // real staff name
-    });
-});
-
-describe('SubjectLogin wall', () => {
-    const renderWall = () =>
-        render(
-            <ThemeProvider>
-                <BrowserRouter>
-                    <AuthProvider>
-                        <SubjectLogin />
-                    </AuthProvider>
-                </BrowserRouter>
-            </ThemeProvider>
-        );
-
-    test('renders collapsible subject bars numbered generically, hiding non-placeholder accounts', async () => {
-        authApi.subjectTeachers.mockResolvedValue([
-            { id: '1', name: 'English Teacher 1' },
-            { id: '2', name: 'English Teacher 2' },
-            { id: '3', name: 'Amharic Teacher 1' },
-            { id: '8', name: 'Music Teacher' },   // unnumbered shell — hidden
-            { id: '9', name: 'Meron Abebe' },     // real staff name — hidden until reveal
-        ]);
+describe('SubjectLogin wall — class cards', () => {
+    test('renders both year bands and one card per class', () => {
         renderWall();
+        expect(screen.getByText('Year 3')).toBeInTheDocument();
+        expect(screen.getByText('Year 4')).toBeInTheDocument();
+        expect(screen.getAllByTestId('class-card')).toHaveLength(CLASSES.length);
+        expect(screen.getByText('Year 3 - Blue')).toBeInTheDocument();
+        expect(screen.getByText('Year 4 - Orange')).toBeInTheDocument();
+    });
 
-        const english = await screen.findByText('English');
-        expect(screen.getByText('Amharic')).toBeInTheDocument();
-        expect(screen.getByText('2 teachers')).toBeInTheDocument();
-        expect(screen.getByText('1 teacher')).toBeInTheDocument();
+    test('cards show the class team and a sign-in action', () => {
+        renderWall();
+        expect(screen.getAllByText('Ms. Yeabsira A.').length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('button', { name: /Class Sign-In/i })).toHaveLength(CLASSES.length);
+    });
 
-        // generic Teacher N cards
-        expect(screen.getAllByText('Teacher 1')).toHaveLength(2); // English + Amharic
-        expect(screen.getByText('Teacher 2')).toBeInTheDocument();
-        expect(screen.queryByText('Meron Abebe')).not.toBeInTheDocument();
-        expect(screen.queryByText('Music Teacher')).not.toBeInTheDocument();
+    test('offers the staff email sign-in fallback', () => {
+        renderWall();
+        const links = screen.getAllByRole('link', { name: /staff email sign-in|sign in with your staff email/i });
+        expect(links.length).toBeGreaterThan(0);
+        expect(links[0]).toHaveAttribute('href', '/login');
+    });
 
-        // subject bars start collapsed and expand on tap
-        const summary = english.closest('.MuiAccordionSummary-root');
-        expect(summary).toHaveAttribute('aria-expanded', 'false');
-        fireEvent.click(summary);
-        expect(summary).toHaveAttribute('aria-expanded', 'true');
+    test('tapping a card opens the shared class password dialog', () => {
+        renderWall();
+        const [firstCard] = screen.getAllByTestId('class-card');
+        fireEvent.click(firstCard.closest('div').querySelector('button'));
+        expect(screen.getByText(/Welcome, Ms. Yeabsira A./)).toBeInTheDocument();
+        expect(screen.getByLabelText(/Class password/i)).toBeInTheDocument();
+    });
+
+    test('submitting the class password calls class-login and stores the session', async () => {
+        const payload = {
+            token: 'jwt-token',
+            user: { id: 'u1', name: 'Ms. Yeabsira A.' },
+            class: { id: 'c1', name: 'Year 3 - Blue' },
+        };
+        const fetchMock = jest.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(payload),
+        });
+        global.fetch = fetchMock;
+
+        renderWall();
+        const [firstCard] = screen.getAllByTestId('class-card');
+        fireEvent.click(firstCard.closest('div').querySelector('button'));
+
+        fireEvent.change(screen.getByLabelText(/Class password/i), {
+            target: { value: 'year 3 blue' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toMatch(/\/api\/auth\/class-login$/);
+        expect(JSON.parse(init.body)).toEqual({ className: 'Year 3 - Blue', password: 'year 3 blue' });
+
+        await waitFor(() => {
+            const saved = JSON.parse(localStorage.getItem(CLASS_LOGIN_KEY));
+            expect(saved).toMatchObject({ slug: 'year-3-blue', className: 'Year 3 - Blue', classId: 'c1' });
+        });
+    });
+
+    test('shows the API error on a wrong password', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: false,
+            json: () => Promise.resolve({ message: 'Wrong class password' }),
+        });
+
+        renderWall();
+        const [firstCard] = screen.getAllByTestId('class-card');
+        fireEvent.click(firstCard.closest('div').querySelector('button'));
+        fireEvent.change(screen.getByLabelText(/Class password/i), { target: { value: 'nope' } });
+        fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+        expect(await screen.findByText('Wrong class password')).toBeInTheDocument();
     });
 });
