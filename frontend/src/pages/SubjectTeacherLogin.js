@@ -16,6 +16,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 /*
  * Subject teacher sign-in: a wall of teacher cards grouped by subject.
@@ -67,6 +68,12 @@ export default function SubjectTeacherLogin() {
     const { loginWithToken } = useAuth();
     const navigate = useNavigate();
 
+    // Back to wherever you came from; a fresh tab lands on the landing page.
+    const goBack = () => {
+        if (window.history.state?.idx > 0) navigate(-1);
+        else navigate('/');
+    };
+
     const directory = useApi(() => authApi.subjectTeachers(), []);
     const groups = useMemo(
         () => groupTeachers((directory.data || []).filter(isWallCard)),
@@ -106,6 +113,11 @@ export default function SubjectTeacherLogin() {
             {/* header */}
             <Box sx={{ bgcolor: dark ? 'background.paper' : '#ffffff', borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Container maxWidth="lg" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5 }}>
+                    <Button startIcon={<ArrowBackOutlinedIcon sx={{ fontSize: 17 }} />} onClick={goBack}
+                        size="small"
+                        sx={{ textTransform: 'none', fontWeight: 700, mr: -0.5 }}>
+                        Back
+                    </Button>
                     <Box sx={{ width: 36, height: 36, borderRadius: 1, display: 'flex', alignItems: 'center',
                         justifyContent: 'center', bgcolor: 'primary.main', color: '#fff' }}>
                         <SchoolIcon sx={{ fontSize: 20 }} />
