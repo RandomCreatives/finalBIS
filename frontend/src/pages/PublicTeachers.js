@@ -188,8 +188,8 @@ export default function PublicTeachers() {
                         </Button>
                         <Typography variant="caption" color="text.secondary" display="block"
                             sx={{ mt: 0.75, maxWidth: 220 }}>
-                            For subject teachers. Main teachers sign in with their{' '}
-                            <RouterLink to="/classes" style={{ color: 'inherit', fontWeight: 700 }}>class card</RouterLink>.
+                            Class sign-in for every teacher. Subject teachers can also use{' '}
+                            <RouterLink to="/login" style={{ color: 'inherit', fontWeight: 700 }}>staff email sign-in</RouterLink>.
                         </Typography>
                     </Box>
                 </Box>
