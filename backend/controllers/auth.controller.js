@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const env = require('../config/env');
 const supabase = require('../config/supabase');
 const { signToken } = require('../middleware/auth');
-const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, asyncHandler } = require('../utils/errors');
+const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, ForbiddenError, asyncHandler } = require('../utils/errors');
 const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
 const { verifyTelegramLogin } = require('../utils/telegram');
 
@@ -33,6 +33,7 @@ const publicUser = (u) => ({
     id: u.id,
     name: u.name,
     email: u.email,
+    phone: u.phone ?? null,
     role: u.role,
     schoolId: u.school_id,
     isActive: u.is_active,
@@ -90,6 +91,13 @@ const me = asyncHandler(async (req, res) => {
 const changePassword = asyncHandler(async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
+    // Class-card accounts (main teachers) arrive through the shared class
+    // card; the account password is issued and rotated by the administrator,
+    // never self-served.
+    if (req.user.role === 'main_teacher') {
+        throw new ForbiddenError('You sign in with your class card — password changes are handled by the administrator');
+    }
+
     const { data: user, error } = await supabase
         .from('users')
         .select('password_hash')
@@ -114,13 +122,38 @@ const changePassword = asyncHandler(async (req, res) => {
     res.json({ message: 'Password updated successfully' });
 });
 
-/** PATCH /api/auth/profile */
+/**
+ * PATCH /api/auth/profile
+ * Self-service contact details. Display names are school-managed: only
+ * admins may change their own name; for other roles a name change is
+ * rejected because names drive the public card walls, seats and printouts.
+ */
+const PHONE_RE = /^[+\d][\d\s\-()]{5,19}$/;
+
 const updateProfile = asyncHandler(async (req, res) => {
-    const { name } = req.body;
+    const { name, phone } = req.body;
+    const patch = {};
+
+    if (name !== undefined) {
+        if (req.user.role !== 'admin') {
+            throw new ForbiddenError('Your display name is managed by the school — ask the administrator to correct it');
+        }
+        patch.name = String(name).trim();
+    }
+
+    if (phone !== undefined) {
+        const trimmed = String(phone).trim();
+        if (trimmed && !PHONE_RE.test(trimmed)) {
+            throw new BadRequestError('Enter a valid phone number (digits, spaces, dashes and a leading + only)');
+        }
+        patch.phone = trimmed || null;
+    }
+
+    if (Object.keys(patch).length === 0) throw new BadRequestError('Nothing to update');
 
     const { data, error } = await supabase
         .from('users')
-        .update({ name })
+        .update(patch)
         .eq('id', req.user.id)
         .select()
         .single();
