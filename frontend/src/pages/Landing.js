@@ -64,10 +64,10 @@ const modules = [
 ];
 
 const roles = [
-    { label: 'Administrator',  icon: AdminPanelSettingsIcon, desc: 'Full system management' },
-    { label: 'Main Teacher',   icon: SchoolIcon,            desc: 'Class and lesson leadership' },
-    { label: 'Assistant Teacher', icon: SchoolIcon,         desc: 'Support teaching duties' },
-    { label: 'Subject Teacher',icon: SchoolIcon,            desc: 'Specialist instruction' },
+    { label: 'Administrator',  icon: AdminPanelSettingsIcon, desc: 'Full system management', to: '/login' },
+    { label: 'Main Teacher',   icon: SchoolIcon,            desc: 'Sign in with your class card', to: '/classes' },
+    { label: 'Assistant Teacher', icon: SchoolIcon,         desc: 'Support teaching duties', to: '/login' },
+    { label: 'Subject Teacher',icon: SchoolIcon,            desc: 'Sign in with your teacher card', to: '/teacher-login' },
     // Clinic, Store Manager and Library roles return with their modules.
 ];
 
@@ -197,36 +197,27 @@ export default function Landing() {
                             const Icon = m.icon;
                             return (
                                 <Grid item xs={6} sm={4} md={3} key={m.label}>
-                                    <Card variant="outlined" sx={{ height: '100%', borderRadius: 3,
-                                        transition: 'transform .18s, box-shadow .18s, border-color .18s',
-                                        '&:hover': {
-                                            transform: 'translateY(-4px)',
-                                            borderColor: 'primary.main',
-                                            boxShadow: dark
-                                                ? '0 16px 40px rgba(0,0,0,.4)'
-                                                : '0 16px 40px rgba(15,23,42,.08)',
-                                        } }}>
-                                        <CardActionArea component={RouterLink}
-                                            to="/login"
-                                            sx={{ p: 2.5, height: '100%',
-                                                display: 'flex', flexDirection: 'column',
-                                                alignItems: 'flex-start', gap: 1 }}>
-                                            <Box sx={{ width: 42, height: 42, borderRadius: 2,
-                                                display: 'flex', alignItems: 'center',
-                                                justifyContent: 'center',
-                                                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                                color: 'primary.main', mb: .5 }}>
-                                                <Icon />
-                                            </Box>
-                                            <Typography sx={{ fontWeight: 700, fontSize: 15 }}>
-                                                {m.label}
-                                            </Typography>
-                                            <Typography sx={{ fontSize: 12.5, color: 'text.secondary',
-                                                lineHeight: 1.5 }}>
-                                                {m.desc}
-                                            </Typography>
-                                        </CardActionArea>
-                                    </Card>
+                                    {/* Showcase only — sign-in lives in the role gateway below,
+                                        not behind feature cards. */}
+                                    <Box sx={{ height: '100%', p: 2.5, border: '1px solid',
+                                        borderColor: 'divider', borderRadius: 3,
+                                        display: 'flex', flexDirection: 'column',
+                                        alignItems: 'flex-start', gap: 1 }}>
+                                        <Box sx={{ width: 42, height: 42, borderRadius: 2,
+                                            display: 'flex', alignItems: 'center',
+                                            justifyContent: 'center',
+                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                            color: 'primary.main', mb: .5 }}>
+                                            <Icon />
+                                        </Box>
+                                        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>
+                                            {m.label}
+                                        </Typography>
+                                        <Typography sx={{ fontSize: 12.5, color: 'text.secondary',
+                                            lineHeight: 1.5 }}>
+                                            {m.desc}
+                                        </Typography>
+                                    </Box>
                                 </Grid>
                             );
                         })}
@@ -260,7 +251,7 @@ export default function Landing() {
                                             borderColor: 'primary.main',
                                             bgcolor: alpha(theme.palette.primary.main, 0.04),
                                         } }}>
-                                        <CardActionArea component={RouterLink} to="/login"
+                                        <CardActionArea component={RouterLink} to={r.to}
                                             sx={{ p: 2.5, height: '100%',
                                                 display: 'flex', flexDirection: 'column',
                                                 alignItems: 'flex-start', gap: 1 }}>
