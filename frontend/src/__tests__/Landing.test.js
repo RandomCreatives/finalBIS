@@ -41,8 +41,12 @@ describe('Landing Page', () => {
         renderWithProviders(<Landing />);
         expect(screen.getByText('Administrator')).toBeInTheDocument();
         expect(screen.getByText('Main Teacher')).toBeInTheDocument();
-        expect(screen.getByText('Assistant Teacher')).toBeInTheDocument();
         expect(screen.getByText('Subject Teacher')).toBeInTheDocument();
+    });
+
+    test('does not offer an assistant teacher sign-in button yet', () => {
+        renderWithProviders(<Landing />);
+        expect(screen.queryByText('Assistant Teacher')).not.toBeInTheDocument();
     });
 
     test('renders module cards', () => {
