@@ -168,15 +168,30 @@ export default function PublicTeachers() {
 
             {/* ── content ── */}
             <Container maxWidth="lg" sx={{ py: { xs: 6, md: 9 } }}>
-                <Box sx={{ mb: { xs: 5, md: 7 } }}>
-                    <Typography variant="h3" sx={{ fontWeight: 800, letterSpacing: '-.02em' }}>
-                        Our Teachers
-                    </Typography>
-                    <Typography sx={{ mt: 1.5, color: 'text.secondary', maxWidth: 620 }}>
-                        The teaching team at British International School, Gerji Primary II —
-                        {mainTeachers.length} homeroom main teachers and the subject teachers who
-                        carry their lessons across the classes.
-                    </Typography>
+                <Box sx={{ mb: { xs: 5, md: 7 }, display: 'flex', alignItems: { sm: 'flex-start' },
+                    flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, letterSpacing: '-.02em' }}>
+                            Our Teachers
+                        </Typography>
+                        <Typography sx={{ mt: 1.5, color: 'text.secondary', maxWidth: 620 }}>
+                            The teaching team at British International School, Gerji Primary II —
+                            {mainTeachers.length} homeroom main teachers and the subject teachers who
+                            carry their lessons across the classes.
+                        </Typography>
+                    </Box>
+                    <Box sx={{ flexShrink: 0 }}>
+                        <Button component={RouterLink} to="/teacher-login" variant="contained"
+                            disableElevation startIcon={<LoginIcon />}
+                            sx={{ fontWeight: 700, borderRadius: 2, px: 2.5, textTransform: 'none' }}>
+                            Teacher sign-in
+                        </Button>
+                        <Typography variant="caption" color="text.secondary" display="block"
+                            sx={{ mt: 0.75, maxWidth: 220 }}>
+                            For subject teachers. Main teachers sign in with their{' '}
+                            <RouterLink to="/classes" style={{ color: 'inherit', fontWeight: 700 }}>class card</RouterLink>.
+                        </Typography>
+                    </Box>
                 </Box>
 
                 {renderTable('Year 3 — Main Teachers',
