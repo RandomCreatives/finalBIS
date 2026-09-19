@@ -41,6 +41,21 @@ describe('ClassHome dashboard', () => {
         expect(buttons[buttons.length - 1]).toBe(profile);
     });
 
+    test('sidebar groups: Class Room Management, then Admin Communications (Store)', () => {
+        renderDash('year-3-blue');
+        const nav = screen.getByTestId('side-nav');
+        expect(screen.getByTestId('side-nav-group-0'))
+            .toHaveTextContent('Class Room Management');
+        expect(screen.getByTestId('side-nav-group-1'))
+            .toHaveTextContent('Admin Communications');
+        expect(within(nav).getByRole('button', { name: 'Store' })).toBeInTheDocument();
+        // group order in the DOM: CRM group label comes before Admin Comms
+        expect(nav.textContent.indexOf('Class Room Management'))
+            .toBeLessThan(nav.textContent.indexOf('Admin Communications'));
+        expect(nav.textContent.indexOf('Admin Communications'))
+            .toBeLessThan(nav.textContent.indexOf('Store'));
+    });
+
     test('redirects to /classes when no session', () => {
         localStorage.removeItem(CLASS_LOGIN_KEY);
         const { container } = render(
