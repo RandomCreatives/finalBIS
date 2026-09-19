@@ -520,7 +520,10 @@ export default function Assignments() {
                                     value={bulkDialog.subjectId}
                                     onChange={(e) => setBulkDialog((d) => ({ ...d, subjectId: e.target.value }))}
                                 >
-                                    {(subjects.data || []).map((s) => (
+                                    {(subjects.data || [])
+                                        // Registration is a timetable fixture, not assignable work.
+                                        .filter((s) => s.code !== 'REG')
+                                        .map((s) => (
                                         <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
                                     ))}
                                 </TextField>
