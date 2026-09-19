@@ -18,6 +18,7 @@ import { dashboardApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 
 const greeting = () => {
@@ -148,12 +149,14 @@ function FlowCard({ item }) {
 function DataFlowCommandCenter() {
     const { data, loading, error } = useApi(() => dashboardApi.dataFlow(), []);
 
+    // Folded by default — the command center is the busiest card on the page;
+    // one tap opens it when you want the full data-flow map.
     return (
-        <DataState loading={loading} error={error}>
-            {data && (
+        <Section title="Teacher ↔ Admin data flow" icon={<SyncAltIcon />} defaultExpanded={false} unmountOnExit>
+            <DataState loading={loading} error={error}>
+                {data && (
                 <Card
                     sx={{
-                        mb: 3,
                         overflow: 'hidden',
                         border: 0,
                         color: '#f8fafc',
@@ -208,8 +211,9 @@ function DataFlowCommandCenter() {
                         </Grid>
                     </CardContent>
                 </Card>
-            )}
-        </DataState>
+                )}
+            </DataState>
+        </Section>
     );
 }
 

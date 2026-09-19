@@ -31,7 +31,7 @@ export function StatCard({ icon, label, value, hint, color = 'primary.main' }) {
  * scrollable dashboard page. `defaultExpanded` keeps the first/primary panel
  * open while the rest start collapsed to avoid an overwhelming wall of content.
  */
-export function Section({ title, icon, action, children, defaultExpanded = false, sx }) {
+export function Section({ title, icon, action, children, defaultExpanded = false, sx, unmountOnExit = false }) {
     const [open, setOpen] = useState(defaultExpanded);
 
     return (
@@ -58,7 +58,7 @@ export function Section({ title, icon, action, children, defaultExpanded = false
                     {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                 </IconButton>
             </Stack>
-            <Collapse in={open}>
+            <Collapse in={open} unmountOnExit={unmountOnExit}>
                 <CardContent sx={{ pt: 0 }}>{children}</CardContent>
             </Collapse>
         </Card>
