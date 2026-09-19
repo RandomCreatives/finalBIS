@@ -79,12 +79,12 @@ export default function SubjectLogin() {
                     Sign in with your class
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 560 }}>
-                    Tap your class card and enter the class password. Main teachers use their own
-                    class; subject teachers sign in with the card of the class they are working
-                    with — or{' '}
+                    Tap your class card and enter the class password — it opens that class's
+                    dashboard as its main teacher. Subject teachers:{' '}
                     <RouterLink to="/login" style={{ color: 'inherit', fontWeight: 700 }}>
                         sign in with your staff email
-                    </RouterLink>.
+                    </RouterLink>{' '}
+                    instead — it takes you to your own subject dashboard.
                 </Typography>
 
                 {bands.map((band) => (

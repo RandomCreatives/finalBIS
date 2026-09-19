@@ -61,6 +61,19 @@ describe('Landing Page', () => {
         expect(screen.getByText('Subject Teacher')).toBeInTheDocument();
     });
 
+    test('role links land on the right sign-in surfaces', () => {
+        renderWithProviders(<Landing />);
+        // Main teachers sign in with a class card; subject teachers use staff
+        // email (Login routes them to /subject-home). The class-card wall must
+        // NOT be offered to subject teachers — it opens the main teacher page.
+        expect(screen.getByRole('link', { name: /Subject Teacher/ }))
+            .toHaveAttribute('href', '/login');
+        expect(screen.getByRole('link', { name: /Main Teacher/ }))
+            .toHaveAttribute('href', '/classes');
+        expect(screen.getByRole('link', { name: /Administrator/ }))
+            .toHaveAttribute('href', '/login');
+    });
+
     test('does not offer an assistant teacher sign-in button yet', () => {
         renderWithProviders(<Landing />);
         expect(screen.queryByText('Assistant Teacher')).not.toBeInTheDocument();
