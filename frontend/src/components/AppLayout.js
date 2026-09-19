@@ -164,7 +164,7 @@ export default function AppLayout() {
                 bgcolor: surface, borderBottom: '1px solid', borderColor: 'divider',
             }}>
                 <Box sx={{
-                    maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: 1.25,
+                    maxWidth: 1600, mx: 'auto', px: { xs: 2, sm: 3 }, py: 1.25,
                     display: 'flex', alignItems: 'center', gap: 1.5,
                 }}>
                     <Box sx={{
@@ -252,7 +252,7 @@ export default function AppLayout() {
             </Box>
 
             <Box sx={{
-                maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 },
+                maxWidth: 1600, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 },
                 display: 'flex', gap: 3, alignItems: 'flex-start',
             }}>
                 {/* desktop side-nav card */}
