@@ -143,6 +143,13 @@ describe('SubjectTeacherLogin wall', () => {
             expect(mockNavigate).toHaveBeenCalledWith('/subject-home', { replace: true }));
     });
 
+    test('back button: fresh visit falls back to the landing page', async () => {
+        authApi.subjectTeachers.mockResolvedValue([{ id: '1', name: 'ICT Teacher 1' }]);
+        renderWall();
+        fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
     test('a wrong password keeps the dialog open with the server message', async () => {
         authApi.subjectTeachers.mockResolvedValue([{ id: '1', name: 'ICT Teacher 1' }]);
         authApi.subjectTeacherLogin.mockRejectedValue(new Error('Incorrect password'));
