@@ -31,6 +31,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import PersonIcon from '@mui/icons-material/Person';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
+import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import {
     IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
 } from '../components/settings/profileCards';
@@ -46,6 +47,7 @@ import { CalendarBoard } from './PublicCalendar';
 import PlanningSection from '../components/planning/PlanningDocs';
 import StoreSection from '../components/communications/StoreSection';
 import RequestSection from '../components/communications/RequestSection';
+import ConductSection from '../components/communications/ConductSection';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -107,20 +109,21 @@ const SECTIONS = [
     { id: 'timetable', label: 'Timetable', icon: EventIcon },
     { id: 'store', label: 'Store', icon: StorefrontIcon },
     { id: 'request', label: 'Request', icon: VerifiedUserOutlinedIcon },
+    { id: 'conduct', label: 'Conduct report', icon: ReportOutlinedIcon },
     { id: 'profile', label: 'Profile', icon: PersonIcon },
 ];
 
 /**
  * Sidebar grouping: day-to-day classroom tools first, then the channels to
- * the school administration (store requests today; permission requests and
- * conduct reports join them here). Profile stays pinned to the bottom.
+ * the school administration (store, permission requests, conduct reports).
+ * Profile stays pinned to the bottom.
  */
 const SECTION_GROUPS = [
     {
         label: 'Class Room Management',
         ids: ['overview', 'attendance', 'marks', 'plans', 'calendar', 'students', 'timetable'],
     },
-    { label: 'Admin Communications', ids: ['store', 'request'] },
+    { label: 'Admin Communications', ids: ['store', 'request', 'conduct'] },
 ];
 
 /* ── small pieces ─────────────────────────────────────────── */
@@ -1509,6 +1512,7 @@ export default function ClassHome() {
                         {section === 'timetable' && <TimetableSection classId={session.classId} klass={klass} />}
                         {section === 'store' && <StoreSection klass={klass} classId={session.classId} />}
                         {section === 'request' && <RequestSection klass={klass} classId={session.classId} roster={roster} />}
+                        {section === 'conduct' && <ConductSection klass={klass} classId={session.classId} roster={roster} />}
                         {section === 'profile' && <ProfileSection klass={klass} classId={session.classId} />}
                     </Box>
                 </Box>

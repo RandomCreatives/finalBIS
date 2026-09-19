@@ -41,7 +41,7 @@ describe('ClassHome dashboard', () => {
         expect(buttons[buttons.length - 1]).toBe(profile);
     });
 
-    test('sidebar groups: Class Room Management, then Admin Communications (Store)', () => {
+    test('sidebar groups: Class Room Management, then Admin Communications (Store/Request/Conduct)', () => {
         renderDash('year-3-blue');
         const nav = screen.getByTestId('side-nav');
         expect(screen.getByTestId('side-nav-group-0'))
@@ -50,6 +50,7 @@ describe('ClassHome dashboard', () => {
             .toHaveTextContent('Admin Communications');
         expect(within(nav).getByRole('button', { name: 'Store' })).toBeInTheDocument();
         expect(within(nav).getByRole('button', { name: 'Request' })).toBeInTheDocument();
+        expect(within(nav).getByRole('button', { name: 'Conduct report' })).toBeInTheDocument();
         // group order in the DOM: CRM group label comes before Admin Comms
         expect(nav.textContent.indexOf('Class Room Management'))
             .toBeLessThan(nav.textContent.indexOf('Admin Communications'));

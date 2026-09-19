@@ -239,6 +239,14 @@ export const permissionApi = {
     remove: (id) => client.delete(`/permission-requests/${id}`).then((r) => r.data),
 };
 
+export const conductApi = {
+    list: (params) => client.get('/conduct-reports', { params }).then((r) => r.data.reports),
+    create: (payload) => client.post('/conduct-reports', payload).then((r) => r.data.report),
+    updateStatus: (id, status, note) =>
+        client.post(`/conduct-reports/${id}/status`, { status, note }).then((r) => r.data.report),
+    remove: (id) => client.delete(`/conduct-reports/${id}`).then((r) => r.data),
+};
+
 export const communicationsApi = {
     badgeCounts: () => client.get('/communications/badge-counts').then((r) => r.data.badgeCounts),
 };
