@@ -214,7 +214,7 @@ export default function Landing() {
 
                         {/* right — sign-in card */}
                         <Box sx={{
-                            p: { xs: 2.5, md: 3 }, borderRadius: 5,
+                            p: { xs: 2.5, md: 3 }, borderRadius: 3,
                             border: `1px solid ${border}`,
                             bgcolor: alpha(surface, dark ? 0.8 : 0.95),
                             backdropFilter: 'blur(10px)',

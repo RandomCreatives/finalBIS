@@ -56,7 +56,7 @@ function getDesignTokens(mode) {
         success: { main: '#15803d' },
         warning: { main: '#b45309' },
         error: { main: '#b91c1c' },
-        shape: { borderRadius: 14 },
+        shape: { borderRadius: 10 },
         typography: {
             fontFamily: '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif',
             h4: { fontWeight: 800, letterSpacing: '-0.03em' },
