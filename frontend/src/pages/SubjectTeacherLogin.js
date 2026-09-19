@@ -115,7 +115,7 @@ export default function SubjectTeacherLogin() {
                 <Container maxWidth="lg" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5 }}>
                     <Button startIcon={<ArrowBackOutlinedIcon sx={{ fontSize: 17 }} />} onClick={goBack}
                         size="small"
-                        sx={{ textTransform: 'none', fontWeight: 700, mr: -0.5 }}>
+                        sx={{ textTransform: 'none', fontWeight: 700, mr: -0.5, minHeight: 40 }}>
                         Back
                     </Button>
                     <Box sx={{ width: 36, height: 36, borderRadius: 1, display: 'flex', alignItems: 'center',
@@ -127,10 +127,11 @@ export default function SubjectTeacherLogin() {
                         <Typography variant="caption" color="text.secondary">Subject teacher sign-in</Typography>
                     </Box>
                     <Button component={RouterLink} to="/teacher-login" size="small"
-                        sx={{ textTransform: 'none', fontWeight: 700, mr: 0.5 }}>
+                        sx={{ textTransform: 'none', fontWeight: 700, mr: 0.5, minHeight: 40 }}>
                         Class sign-in
                     </Button>
-                    <IconButton size="small" onClick={toggleColorScheme}>
+                    <IconButton size="small" onClick={toggleColorScheme}
+                        aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
                         {dark ? <LightModeIcon sx={{ fontSize: 18 }} /> : <DarkModeIcon sx={{ fontSize: 18 }} />}
                     </IconButton>
                 </Container>
@@ -251,7 +252,8 @@ export default function SubjectTeacherLogin() {
                             InputProps={{
                                 endAdornment: (
                                     <InputAdornment position="end">
-                                        <IconButton size="small" onClick={() => setShowPassword((s) => !s)} edge="end">
+                                        <IconButton size="small" onClick={() => setShowPassword((s) => !s)} edge="end"
+                                            aria-label={showPassword ? 'Hide password' : 'Show password'}>
                                             {showPassword ? <VisibilityOffIcon sx={{ fontSize: 18 }} /> : <VisibilityIcon sx={{ fontSize: 18 }} />}
                                         </IconButton>
                                     </InputAdornment>

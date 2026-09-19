@@ -92,7 +92,8 @@ export function ClassCard({ klass, onLogin, actionLabel }) {
                     fullWidth size="small" variant="outlined"
                     startIcon={<LockIcon sx={{ fontSize: 16 }} />}
                     onClick={() => onLogin(klass)}
-                    sx={{ mt: 2.5, fontWeight: 700, borderRadius: 1, textTransform: 'none' }}>
+                    data-testid="class-sign-in"
+                    sx={{ mt: 2.5, fontWeight: 700, borderRadius: 1, textTransform: 'none', minHeight: 44 }}>
                     {actionLabel || (klass.mainTeacher ? 'Main Teacher Login' : 'Teacher Login')}
                 </Button>
             </CardContent>

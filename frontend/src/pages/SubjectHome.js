@@ -404,7 +404,8 @@ function MarksSection({ pairs }) {
                                                     </Typography>
                                                 </Box>
                                                 <Tooltip title="Delete column and its marks">
-                                                    <IconButton size="small" onClick={() => deleteAssessment(a)} sx={{ p: 0.25 }}>
+                                                    <IconButton size="small" onClick={() => deleteAssessment(a)} sx={{ p: 0.25 }}
+                                                        aria-label={`Delete assessment ${a.label}`}>
                                                         <DeleteOutlineIcon sx={{ fontSize: 14 }} />
                                                     </IconButton>
                                                 </Tooltip>
@@ -582,7 +583,8 @@ export default function SubjectHome() {
                     </Box>
                     <Chip size="small" label={user.name} sx={{ fontWeight: 700, borderRadius: 1, mr: 0.5 }} />
                     <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
-                        <IconButton size="small" onClick={toggleColorScheme}>
+                        <IconButton size="small" onClick={toggleColorScheme}
+                            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
                             {dark ? <LightModeIcon sx={{ fontSize: 18 }} /> : <DarkModeIcon sx={{ fontSize: 18 }} />}
                         </IconButton>
                     </Tooltip>
