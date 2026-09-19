@@ -5,9 +5,6 @@ import {
     Container,
     Typography,
     useTheme,
-    Grid,
-    Card,
-    CardActionArea,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import LoginIcon from '@mui/icons-material/Login';
@@ -20,8 +17,10 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import GradeIcon from '@mui/icons-material/Grade';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
+import heroCampus from '../assets/hero-campus.jpg';
 
 /* ── styled primitives ───────────────────────────────────── */
 const NavLink = styled(Typography)(({ theme }) => ({
@@ -51,22 +50,22 @@ const Pill = styled(Box)(({ theme }) => ({
 
 /* ── data ────────────────────────────────────────────────── */
 const modules = [
-    { label: 'Classes',        icon: SchoolIcon,             desc: 'Homerooms, staffing and rosters' },
-    { label: 'Students',       icon: SchoolIcon,             desc: 'Enrolment, placement and records' },
-    { label: 'Attendance',     icon: EventAvailableIcon,     desc: 'Daily attendance and registers' },
-    { label: 'Timetable',      icon: CalendarMonthIcon,      desc: 'Period schedules and swaps' },
-    { label: 'Lesson Plans',   icon: MenuBookIcon,           desc: 'Plan and share curriculum' },
-    { label: 'Assignments',    icon: AssignmentIcon,         desc: 'Set and track coursework' },
-    { label: 'Marksheets',     icon: GradeIcon,              desc: 'Record and review grades' },
-    { label: 'Calendar',       icon: CalendarMonthIcon,      desc: 'Events and term dates' },
+    { label: 'Classes',      icon: SchoolIcon },
+    { label: 'Students',     icon: SchoolIcon },
+    { label: 'Attendance',   icon: EventAvailableIcon },
+    { label: 'Timetable',    icon: CalendarMonthIcon },
+    { label: 'Lesson Plans', icon: MenuBookIcon },
+    { label: 'Assignments',  icon: AssignmentIcon },
+    { label: 'Marksheets',   icon: GradeIcon },
+    { label: 'Calendar',     icon: CalendarMonthIcon },
     // Dormant in v1.0, revived with their versions:
     // Notices · Messages · Library · Clinic · Store · Data Center
 ];
 
 const roles = [
-    { label: 'Administrator',  icon: AdminPanelSettingsIcon, desc: 'Full system management', to: '/login' },
-    { label: 'Main Teacher',   icon: SchoolIcon,            desc: 'Sign in with your class card', to: '/classes' },
-    { label: 'Subject Teacher',icon: SchoolIcon,            desc: 'Sign in with your teacher card', to: '/teacher-login' },
+    { label: 'Administrator',   icon: AdminPanelSettingsIcon, desc: 'Full system access',                 to: '/login' },
+    { label: 'Main Teacher',    icon: SchoolIcon,             desc: 'Sign in with your class card',       to: '/classes' },
+    { label: 'Subject Teacher', icon: MenuBookIcon,           desc: 'Sign in with your teacher card',     to: '/teacher-login' },
     // Assistant teachers have no public sign-in yet; Clinic, Store Manager
     // and Library roles return with their modules.
 ];
@@ -146,171 +145,182 @@ export default function Landing() {
             <Box sx={{
                 position: 'relative', overflow: 'hidden',
                 background: dark
-                    ? `radial-gradient(1200px 400px at 50% -10%, ${alpha(theme.palette.primary.main, 0.18)}, transparent 60%)`
-                    : `radial-gradient(1200px 400px at 50% -10%, ${alpha(theme.palette.primary.main, 0.12)}, transparent 60%)`,
-                pt: { xs: 8, md: 12 }, pb: { xs: 8, md: 12 },
+                    ? [
+                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.28)}, transparent 55%)`,
+                        `radial-gradient(800px 380px at 110% 0%, ${alpha(theme.palette.secondary.main, 0.20)}, transparent 55%)`,
+                      ].join(',')
+                    : [
+                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.12)}, transparent 55%)`,
+                        `radial-gradient(800px 380px at 110% 0%, ${alpha(theme.palette.secondary.main, 0.10)}, transparent 55%)`,
+                      ].join(','),
+                pt: { xs: 6, md: 9 }, pb: { xs: 6, md: 8 },
             }}>
                 <Container maxWidth="lg">
-                    <Box sx={{ maxWidth: 760, mx: 'auto', textAlign: 'center' }}>
-                        <Typography component="h1" sx={{
-                            fontWeight: 800,
-                            fontSize: { xs: '2.2rem', sm: '3.2rem', md: '3.8rem' },
-                            lineHeight: 1.1, letterSpacing: '-.02em', mb: 2.5,
+                    <Box sx={{
+                        display: 'grid', gap: { xs: 4, md: 6 },
+                        gridTemplateColumns: { xs: '1fr', md: '1.05fr 0.95fr' },
+                        alignItems: 'center', mb: { xs: 4, md: 6 },
+                    }}>
+                        {/* left — identity */}
+                        <Box>
+                            <Pill sx={{ mb: 2.5 }}>Gerji · Primary II — Staff Portal</Pill>
+                            <Typography component="h1" sx={{
+                                fontWeight: 800,
+                                fontSize: { xs: '2.1rem', sm: '3rem', md: '3.5rem' },
+                                lineHeight: 1.08, letterSpacing: '-.02em', mb: 2.5,
+                            }}>
+                                Run the whole school day, from one place.
+                            </Typography>
+                            <Typography sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, lineHeight: 1.7,
+                                color: 'text.secondary', maxWidth: 520, mb: 3 }}>
+                                The official staff workspace of British International School, NOC Gerji
+                                Campus — attendance, timetables, marksheets, lesson plans and calendars
+                                in one secure portal.
+                            </Typography>
+                            <Box sx={{
+                                display: 'inline-flex', alignItems: 'center', gap: 1,
+                                px: 1.75, py: 1, borderRadius: 2,
+                                border: `1px solid ${border}`,
+                                bgcolor: alpha(theme.palette.success.main, dark ? 0.14 : 0.1),
+                                color: dark ? 'success.main' : 'success.main',
+                                fontWeight: 700, fontSize: 13,
+                            }}>
+                                <EventAvailableIcon sx={{ fontSize: 17 }} />
+                                Term 1 begins Monday, 21 September 2026
+                            </Box>
+                        </Box>
+
+                        {/* right — sign-in card */}
+                        <Box sx={{
+                            p: { xs: 2.5, md: 3 }, borderRadius: 3,
+                            border: `1px solid ${border}`,
+                            bgcolor: alpha(surface, dark ? 0.75 : 0.9),
+                            backdropFilter: 'blur(10px)',
+                            boxShadow: dark
+                                ? '0 24px 60px -24px rgba(15,23,42,.9)'
+                                : '0 24px 60px -32px rgba(30,64,175,.35)',
                         }}>
-                            Welcome to British International School, Gerji Primary II.
-                        </Typography>
+                            <Typography component="h2" sx={{ fontWeight: 800, fontSize: 20,
+                                letterSpacing: '-.01em', mb: 0.5 }}>
+                                Sign in
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+                                Choose your role to continue.
+                            </Typography>
 
-                        <Typography sx={{ fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.7,
-                            color: 'text.secondary', maxWidth: 600, mx: 'auto', mb: 4 }}>
-                            The official staff portal for British International School, NOC Gerji Campus —
-                            attendance, timetables, lesson plans, grades, health, library and more, all in
-                            a single secure workspace.
-                        </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                                {roles.map((r) => {
+                                    const Icon = r.icon;
+                                    return (
+                                        <Box
+                                            key={r.label}
+                                            component={RouterLink}
+                                            to={r.to}
+                                            sx={{
+                                                display: 'flex', alignItems: 'center', gap: 2,
+                                                p: 1.75, borderRadius: 2,
+                                                border: `1px solid ${border}`,
+                                                textDecoration: 'none', color: 'inherit',
+                                                bgcolor: dark ? 'background.paper' : '#ffffff',
+                                                transition: 'all .15s ease',
+                                                '&:hover': {
+                                                    borderColor: 'primary.main',
+                                                    transform: 'translateY(-1px)',
+                                                    boxShadow: dark ? 3 : 1,
+                                                    '& .role-arrow': {
+                                                        transform: 'translateX(3px)',
+                                                        color: 'primary.main',
+                                                    },
+                                                },
+                                            }}
+                                        >
+                                            <Box sx={{
+                                                width: 42, height: 42, borderRadius: 1.5, flexShrink: 0,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                color: 'primary.main',
+                                            }}>
+                                                <Icon sx={{ fontSize: 21 }} />
+                                            </Box>
+                                            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                                                <Typography sx={{ fontWeight: 800, fontSize: 15, lineHeight: 1.2 }}>
+                                                    {r.label}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary"
+                                                    sx={{ fontWeight: 500 }}>
+                                                    {r.desc}
+                                                </Typography>
+                                            </Box>
+                                            <ArrowForwardIcon className="role-arrow"
+                                                sx={{ fontSize: 19, color: 'text.disabled',
+                                                    transition: 'all .15s ease', flexShrink: 0 }} />
+                                        </Box>
+                                    );
+                                })}
+                            </Box>
 
-                        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-                            <Button component={RouterLink} to={homeTo}
-                                variant="contained" size="large"
-                                sx={{ fontWeight: 700, px: 4, py: 1.5, borderRadius: 2, fontSize: 15,
-                                    textTransform: 'none' }}>
-                                {signInLabel} →
-                            </Button>
+                            <Typography variant="caption" color="text.secondary"
+                                sx={{ display: 'block', mt: 2.25, lineHeight: 1.5 }}>
+                                Accounts are issued by the school — there is no self-registration.
+                            </Typography>
                         </Box>
                     </Box>
+
+                    {/* illustration */}
+                    <Box
+                        component="img"
+                        src={heroCampus}
+                        alt="Illustration of the BIS NOC Gerji school campus in the morning"
+                        sx={{
+                            display: 'block', width: '100%',
+                            aspectRatio: { xs: '16 / 10', sm: '21 / 9' },
+                            objectFit: 'cover', objectPosition: 'center 55%',
+                            borderRadius: 4, border: `1px solid ${border}`,
+                            boxShadow: dark
+                                ? '0 32px 80px -32px rgba(15,23,42,.9)'
+                                : '0 32px 80px -40px rgba(30,64,175,.35)',
+                            filter: dark ? 'saturate(.92) brightness(.8)' : 'none',
+                        }}
+                    />
                 </Container>
             </Box>
 
-            {/* ── MODULES ─────────────────────────────────── */}
-            <Box id="modules" sx={{ py: { xs: 7, md: 10 }, bgcolor: surface,
+            {/* ── MODULES STRIP ───────────────────────────── */}
+            <Box sx={{ py: { xs: 5, md: 7 }, bgcolor: surface,
                 borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
                 <Container maxWidth="lg">
-                    <Box sx={{ textAlign: 'center', mb: { xs: 5, md: 7 } }}>
-                        <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-.02em' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap',
+                        gap: 1.5, mb: 3 }}>
+                        <Typography component="h2" sx={{ fontWeight: 800, fontSize: 17,
+                            letterSpacing: '-.01em' }}>
                             Everything your campus needs
                         </Typography>
-                        <Typography sx={{ mt: 1.5, color: 'text.secondary', maxWidth: 560, mx: 'auto' }}>
-                            A connected set of tools built for teachers, administrators and support staff.
+                        <Typography variant="body2" color="text.secondary">
+                            — one workspace, inside the portal.
                         </Typography>
                     </Box>
-
-                    <Grid container spacing={2.5}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25 }}>
                         {modules.map((m) => {
                             const Icon = m.icon;
                             return (
-                                <Grid item xs={6} sm={4} md={3} key={m.label}>
-                                    {/* Showcase only — sign-in lives in the role gateway below,
-                                        not behind feature cards. */}
-                                    <Box sx={{ height: '100%', p: 2.5, border: '1px solid',
-                                        borderColor: 'divider', borderRadius: 3,
-                                        display: 'flex', flexDirection: 'column',
-                                        alignItems: 'flex-start', gap: 1 }}>
-                                        <Box sx={{ width: 42, height: 42, borderRadius: 2,
-                                            display: 'flex', alignItems: 'center',
-                                            justifyContent: 'center',
-                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                            color: 'primary.main', mb: .5 }}>
-                                            <Icon />
-                                        </Box>
-                                        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>
-                                            {m.label}
-                                        </Typography>
-                                        <Typography sx={{ fontSize: 12.5, color: 'text.secondary',
-                                            lineHeight: 1.5 }}>
-                                            {m.desc}
-                                        </Typography>
-                                    </Box>
-                                </Grid>
+                                <Box key={m.label} sx={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 1,
+                                    px: 1.75, py: 1, borderRadius: 2,
+                                    border: `1px solid ${border}`,
+                                    bgcolor: dark ? 'background.default' : alpha(theme.palette.primary.main, 0.03),
+                                    fontWeight: 600, fontSize: 13,
+                                }}>
+                                    <Icon sx={{ fontSize: 16, color: 'primary.main' }} />
+                                    {m.label}
+                                </Box>
                             );
                         })}
-                    </Grid>
-                </Container>
-            </Box>
-
-            {/* ── ROLE ACCESS ─────────────────────────────── */}
-            <Box id="roles" sx={{ py: { xs: 7, md: 10 }, position: 'relative' }}>
-                <Container maxWidth="lg">
-                    <Box sx={{ mb: { xs: 5, md: 7 }, maxWidth: 640 }}>
-                        <Pill sx={{ mb: 2 }}>Staff Access</Pill>
-                        <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-.02em' }}>
-                            Who signs in?
-                        </Typography>
-                        <Typography sx={{ mt: 1.5, color: 'text.secondary', fontSize: 14 }}>
-                            Accounts are issued by the school administrator — there is no self-registration.
-                            Select your role to continue to sign in.
-                        </Typography>
-                    </Box>
-
-                    <Grid container spacing={2}>
-                        {roles.map((r) => {
-                            const Icon = r.icon;
-                            return (
-                                <Grid item xs={6} sm={4} md={3} key={r.label}>
-                                    <Card variant="outlined" sx={{ height: '100%', borderRadius: 3,
-                                        transition: 'transform .18s, border-color .18s, background .18s',
-                                        '&:hover': {
-                                            transform: 'translateY(-3px)',
-                                            borderColor: 'primary.main',
-                                            bgcolor: alpha(theme.palette.primary.main, 0.04),
-                                        } }}>
-                                        <CardActionArea component={RouterLink} to={r.to}
-                                            sx={{ p: 2.5, height: '100%',
-                                                display: 'flex', flexDirection: 'column',
-                                                alignItems: 'flex-start', gap: 1 }}>
-                                            <Box sx={{ width: 40, height: 40, borderRadius: 2,
-                                                display: 'flex', alignItems: 'center',
-                                                justifyContent: 'center',
-                                                bgcolor: alpha(theme.palette.secondary.main, 0.12),
-                                                color: 'secondary.main' }}>
-                                                <Icon />
-                                            </Box>
-                                            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-                                                {r.label}
-                                            </Typography>
-                                            <Typography sx={{ fontSize: 12, color: 'text.secondary',
-                                                lineHeight: 1.5 }}>
-                                                {r.desc}
-                                            </Typography>
-                                        </CardActionArea>
-                                    </Card>
-                                </Grid>
-                            );
-                        })}
-                    </Grid>
-                </Container>
-            </Box>
-
-            {/* ── CTA ─────────────────────────────────────── */}
-            <Box sx={{ pb: { xs: 7, md: 10 } }}>
-                <Container maxWidth="lg">
-                    <Box sx={{ p: { xs: 4, md: 6 }, borderRadius: 4,
-                        background: dark
-                            ? alpha(theme.palette.primary.main, 0.12)
-                            : alpha(theme.palette.primary.main, 0.06),
-                        border: `1px solid ${border}`,
-                        display: 'flex', flexDirection: { xs: 'column', md: 'row' },
-                        alignItems: { xs: 'flex-start', md: 'center' },
-                        justifyContent: 'space-between', gap: 3 }}>
-                        <Box>
-                            <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-.02em', mb: 1 }}>
-                                Ready to sign in?
-                            </Typography>
-                            <Typography sx={{ color: 'text.secondary', fontSize: 14, lineHeight: 1.7,
-                                maxWidth: 520 }}>
-                                Use your school-issued email and password, your linked Telegram account,
-                                or your verified Gmail address to access the portal.
-                            </Typography>
-                        </Box>
-                        <Button component={RouterLink} to={homeTo}
-                            variant="contained" size="large"
-                            sx={{ fontWeight: 700, px: 4, py: 1.5, borderRadius: 2, whiteSpace: 'nowrap',
-                                fontSize: 15, textTransform: 'none' }}>
-                            {signInLabel} →
-                        </Button>
                     </Box>
                 </Container>
             </Box>
 
             {/* ── FOOTER ──────────────────────────────────── */}
-            <Box sx={{ py: 4, borderTop: `1px solid ${border}`, bgcolor: surface, mt: 'auto' }}>
+            <Box sx={{ py: 4, bgcolor: surface, mt: 'auto' }}>
                 <Container maxWidth="lg">
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
                         justifyContent: 'space-between', gap: 2 }}>

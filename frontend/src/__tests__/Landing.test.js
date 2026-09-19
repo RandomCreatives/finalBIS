@@ -23,11 +23,30 @@ describe('Landing Page', () => {
         expect(screen.getAllByRole('link', { name: /Sign In/i }).length).toBeGreaterThan(0);
     });
 
-    test('renders welcome heading', () => {
+    test('renders hero heading', () => {
         renderWithProviders(<Landing />);
         expect(
-            screen.getByText(/Welcome to British International School, Gerji Primary II/i)
+            screen.getByRole('heading', { name: /Run the whole school day, from one place/i })
         ).toBeInTheDocument();
+    });
+
+    test('renders the term-1 start pill', () => {
+        renderWithProviders(<Landing />);
+        expect(
+            screen.getByText(/Term 1 begins Monday, 21 September 2026/)
+        ).toBeInTheDocument();
+    });
+
+    test('renders the campus illustration', () => {
+        renderWithProviders(<Landing />);
+        expect(
+            screen.getByAltText(/BIS NOC Gerji school campus/i)
+        ).toBeInTheDocument();
+    });
+
+    test('renders the sign-in card above the fold', () => {
+        renderWithProviders(<Landing />);
+        expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
     });
 
     test('renders footer with copyright', () => {
