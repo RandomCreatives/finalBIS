@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
 const { weekCount } = require('./term.controller');
+const { isFixtureSubject } = require('../utils/subjects');
 const { asyncHandler } = require('../utils/errors');
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -130,12 +131,17 @@ const getMySummary = asyncHandler(async (req, res) => {
                     position: s.position,
                     class: s.class,
                 })),
-                teachingSubjects: (subjectRes.data || []).map((s) => ({
-                    id: s.id,
-                    class: s.class,
-                    subject: s.subject,
-                    sessionsPerWeek: s.sessions_per_week,
-                })),
+                // Registration stays in todaySlots (it is the real daily
+                // schedule) but never counts as a taught subject or a
+                // planning obligation.
+                teachingSubjects: (subjectRes.data || [])
+                    .filter((s) => !isFixtureSubject(s.subject))
+                    .map((s) => ({
+                        id: s.id,
+                        class: s.class,
+                        subject: s.subject,
+                        sessionsPerWeek: s.sessions_per_week,
+                    })),
                 todaySlots,
             };
         })()
@@ -470,7 +476,7 @@ const getTeacherYearScope = async (userId, yearId) => {
 
     return {
         homerooms: (staffRes.data || []).map((row) => ({ position: row.position, class: row.class })),
-        teachingSubjects: subjectRes.data || [],
+        teachingSubjects: (subjectRes.data || []).filter((s) => !isFixtureSubject(s.subject)),
     };
 };
 

@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { asyncHandler } = require('../utils/errors');
+const { isFixtureSubject } = require('../utils/subjects');
 
 /*
  * Public showcase endpoints. Resilience contract: these pages are the
@@ -56,7 +57,7 @@ const listPublicTeachers = asyncHandler(async (req, res) => {
                     .eq('position', 'main'),
                 supabase
                     .from('class_subjects')
-                    .select('teacher_id, subject:subjects(name), class:classes(name)')
+                    .select('teacher_id, subject:subjects(name, code), class:classes(name)')
                     .eq('academic_year_id', year.id),
             ]);
 
@@ -78,6 +79,7 @@ const listPublicTeachers = asyncHandler(async (req, res) => {
         const subjectsByUser = new Map();
         for (const row of assignmentRows) {
             if (!row.subject?.name) continue;
+            if (isFixtureSubject(row.subject)) continue; // Registration is not taught
             if (!subjectsByUser.has(row.teacher_id)) subjectsByUser.set(row.teacher_id, new Map());
 
             const bySubject = subjectsByUser.get(row.teacher_id);

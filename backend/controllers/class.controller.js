@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
 const { NotFoundError, ConflictError, asyncHandler } = require('../utils/errors');
+const { isFixtureSubject } = require('../utils/subjects');
 
 const shapeClass = (c, staff = [], studentCount) => ({
     id: c.id,
@@ -90,12 +91,15 @@ const getClass = asyncHandler(async (req, res) => {
         if (subjectRes.error) throw subjectRes.error;
 
         staffRows = staffRes.data || [];
-        subjects = (subjectRes.data || []).map((s) => ({
-            assignmentId: s.id,
-            sessionsPerWeek: s.sessions_per_week,
-            subject: s.subject,
-            teacher: s.teacher,
-        }));
+        // Registration is a daily fixture, not a subject of the class.
+        subjects = (subjectRes.data || [])
+            .filter((s) => !isFixtureSubject(s.subject))
+            .map((s) => ({
+                assignmentId: s.id,
+                sessionsPerWeek: s.sessions_per_week,
+                subject: s.subject,
+                teacher: s.teacher,
+            }));
     }
 
     res.json({

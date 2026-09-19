@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
 const { NotFoundError, ConflictError, ForbiddenError, asyncHandler } = require('../utils/errors');
+const { isFixtureSubject } = require('../utils/subjects');
 
 /**
  * Weekly timetable.
@@ -164,8 +165,9 @@ const getClassRoster = asyncHandler(async (req, res) => {
         class: { id: klass.data.id, name: klass.data.name, capacity: klass.data.capacity },
         mainTeacher: staff.find((s) => s.position === 'main')?.user ?? null,
         assistantTeacher: staff.find((s) => s.position === 'assistant')?.user ?? null,
-        // Everyone who teaches into this class.
-        teachingStaff: assignments.map((a) => ({
+        // Everyone who teaches into this class. Registration is a daily
+        // fixture pinned to the main teacher, not a taught subject.
+        teachingStaff: assignments.filter((a) => !isFixtureSubject(a.subject)).map((a) => ({
             assignmentId: a.id,
             subject: a.subject,
             teacher: a.teacher,

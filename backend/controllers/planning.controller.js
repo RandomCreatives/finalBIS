@@ -3,6 +3,7 @@ const { resolveTermId, requireTerm, weekCount } = require('./term.controller');
 const {
     NotFoundError, ConflictError, ForbiddenError, BadRequestError, asyncHandler,
 } = require('../utils/errors');
+const { isFixtureSubject } = require('../utils/subjects');
 
 /**
  * Schemes of work and weekly lesson plans.
@@ -424,7 +425,7 @@ const getPlanningOverview = asyncHandler(async (req, res) => {
     const [assignmentRes, schemeRes, planRes] = await Promise.all([
         supabase
             .from('class_subjects')
-            .select('id, class:classes(id, name), subject:subjects(id, name), teacher:users(id, name)')
+            .select('id, class:classes(id, name), subject:subjects(id, name, code), teacher:users(id, name)')
             .eq('school_id', req.user.school_id)
             .eq('academic_year_id', term.academic_year_id),
         supabase
@@ -441,8 +442,9 @@ const getPlanningOverview = asyncHandler(async (req, res) => {
         if (r.error) throw r.error;
     }
 
+    // Registration seats carry no planning obligation — roll call is not taught.
     const rows = (assignmentRes.data || [])
-        .filter((a) => a.teacher)
+        .filter((a) => a.teacher && !isFixtureSubject(a.subject))
         .map((a) => {
             const scheme = (schemeRes.data || []).find((s) => s.class_subject_id === a.id);
             const plans = (planRes.data || []).filter((p) => p.class_subject_id === a.id);

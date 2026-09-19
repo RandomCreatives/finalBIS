@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
+const { isFixtureSubject } = require('../utils/subjects');
 const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 
 /**
@@ -157,7 +158,9 @@ const listSubjectAssignments = asyncHandler(async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.json({ academicYearId: yearId, assignments: data.map(shapeAssignment) });
+    // Registration is a timetable fixture, never a teaching assignment.
+    const teaching = (data || []).filter((a) => !isFixtureSubject(a.subject));
+    res.json({ academicYearId: yearId, assignments: teaching.map(shapeAssignment) });
 });
 
 /**
@@ -246,7 +249,7 @@ const autoAssignMainTeacherSubjects = asyncHandler(async (req, res) => {
 
     const [{ data: subjects, error: subjectError }, { data: seats, error: seatError }] =
         await Promise.all([
-            supabase.from('subjects').select('id').eq('school_id', schoolId).eq('taught_by', 'main_teacher'),
+            supabase.from('subjects').select('id, code').eq('school_id', schoolId).eq('taught_by', 'main_teacher'),
             supabase.from('class_staff').select('class_id, user_id')
                 .eq('school_id', schoolId).eq('academic_year_id', yearId).eq('position', 'main'),
         ]);
@@ -254,7 +257,11 @@ const autoAssignMainTeacherSubjects = asyncHandler(async (req, res) => {
     if (subjectError) throw subjectError;
     if (seatError) throw seatError;
 
-    if (!subjects?.length) {
+    // Registration rows are created and owned by the timetable setup; they
+    // are fixtures, not teaching assignments to hand out.
+    const teachable = (subjects || []).filter((s) => s.code !== 'REG');
+
+    if (!teachable.length) {
         throw new BadRequestError('No subjects are marked as taught by main teachers');
     }
     if (!seats?.length) {
@@ -263,7 +270,7 @@ const autoAssignMainTeacherSubjects = asyncHandler(async (req, res) => {
 
     const rows = [];
     for (const seat of seats) {
-        for (const subject of subjects) {
+        for (const subject of teachable) {
             rows.push({
                 school_id: schoolId,
                 academic_year_id: yearId,
@@ -283,7 +290,7 @@ const autoAssignMainTeacherSubjects = asyncHandler(async (req, res) => {
     if (error) throw error;
 
     res.json({
-        message: `Assigned ${subjects.length} subject(s) to ${seats.length} main teacher(s)`,
+        message: `Assigned ${teachable.length} subject(s) to ${seats.length} main teacher(s)`,
         count: data.length,
     });
 });
@@ -356,7 +363,7 @@ const getWorkload = asyncHandler(async (req, res) => {
             .select('user_id, position, class_id')
             .eq('school_id', schoolId).eq('academic_year_id', yearId),
         supabase.from('class_subjects')
-            .select('teacher_id, class_id, subject_id, sessions_per_week, subject:subjects(id, name)')
+            .select('teacher_id, class_id, subject_id, sessions_per_week, subject:subjects(id, name, code)')
             .eq('school_id', schoolId).eq('academic_year_id', yearId),
         supabase.from('users')
             .select('id, name, email, role')
@@ -370,7 +377,9 @@ const getWorkload = asyncHandler(async (req, res) => {
 
     const teachers = (teacherRes.data || []).map((t) => {
         const staffRows = (staffRes.data || []).filter((s) => s.user_id === t.id);
-        const subjectRows = (subjectRes.data || []).filter((s) => s.teacher_id === t.id);
+        // Registration seats are fixtures — roll call, not taught periods.
+        const subjectRows = (subjectRes.data || [])
+            .filter((s) => s.teacher_id === t.id && !isFixtureSubject(s.subject));
 
         return {
             id: t.id,
@@ -406,7 +415,8 @@ const getWorkload = asyncHandler(async (req, res) => {
         academicYearId: yearId,
         teachers: teachers.sort((a, b) => b.weeklySessions - a.weeklySessions),
         gaps,
-        unassignedSubjects: (subjectRes.data || []).filter((s) => !s.teacher_id).length,
+        unassignedSubjects: (subjectRes.data || [])
+            .filter((s) => !s.teacher_id && !isFixtureSubject(s.subject)).length,
     });
 });
 
