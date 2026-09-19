@@ -50,7 +50,7 @@ const modules = [
 const roles = [
     { label: 'Administrator',   icon: AdminPanelSettingsIcon, desc: 'Full system access',             to: '/login' },
     { label: 'Main Teacher',    icon: SchoolIcon,             desc: 'Sign in with your class card',   to: '/classes' },
-    { label: 'Subject Teacher', icon: MenuBookIcon,           desc: 'Sign in with your staff email',  to: '/login' },
+    { label: 'Subject Teacher', icon: MenuBookIcon,           desc: 'Sign in with your teacher card', to: '/subject-login' },
     // Assistant teachers have no public sign-in yet; Clinic, Store Manager
     // and Library roles return with their modules.
 ];
