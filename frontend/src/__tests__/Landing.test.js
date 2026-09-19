@@ -37,11 +37,9 @@ describe('Landing Page', () => {
         ).toBeInTheDocument();
     });
 
-    test('renders the campus illustration', () => {
+    test('renders the playful shape strip', () => {
         renderWithProviders(<Landing />);
-        expect(
-            screen.getByAltText(/BIS NOC Gerji school campus/i)
-        ).toBeInTheDocument();
+        expect(screen.getByTestId('hero-shape-strip')).toBeInTheDocument();
     });
 
     test('renders the sign-in card above the fold', () => {
