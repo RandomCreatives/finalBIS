@@ -59,8 +59,8 @@ export default function Login() {
         setError('');
         setSubmitting(true);
         try {
-            await login(email.trim(), password);
-            navigate(destination, { replace: true });
+            const profile = await login(email.trim(), password);
+            navigate(profile?.role === 'subject_teacher' ? '/subject-home' : destination, { replace: true });
         } catch (err) {
             setError(err.message || 'Sign in failed. Please check your credentials.');
         } finally {

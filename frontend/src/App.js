@@ -13,6 +13,7 @@ import PublicTeachers from './pages/PublicTeachers';
 import PublicStudents from './pages/PublicStudents';
 import PublicCalendar from './pages/PublicCalendar';
 import ClassHome from './pages/ClassHome';
+import SubjectHome from './pages/SubjectHome';
 
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -87,6 +88,14 @@ export default function App() {
                         <Route path="/students" element={<PublicStudents />} />
                         <Route path="/calendar" element={<PublicCalendar />} />
                         <Route path="/class-home/:slug" element={<ClassHome />} />
+                        <Route
+                            path="/subject-home"
+                            element={
+                                <RequireAuth>
+                                    <SubjectHome />
+                                </RequireAuth>
+                            }
+                        />
                         {/* Data Center dormant in v1.0 (was public). */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
