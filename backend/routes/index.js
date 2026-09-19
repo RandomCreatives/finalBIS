@@ -67,6 +67,15 @@ router.patch(
     auth.updateProfile
 );
 
+// "Revoke to basic": an administrator resets a teacher's lost password back
+// to the account's basic credential (placeholder / class card password).
+router.post(
+    '/auth/reset-password/:userId',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    auth.resetUserPassword
+);
+
 router.post(
     '/auth/send-verification-code',
     authenticate,

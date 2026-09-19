@@ -9,6 +9,11 @@ const request = require('./request');
 const app = require('../app');
 const { signToken } = require('../middleware/auth');
 
+// This file covers the Telegram widget sign-in flow as-specified; the
+// feature is globally grayed out until the bot ships, so this file's
+// process opts back in. profileSettings.test.js covers the disabled state.
+process.env.TELEGRAM_LOGIN_ENABLED = 'true';
+
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
 const ADMIN = 'd4f1a2b8-7c63-4e59-9f21-3a8e6b0d5c74';
 
