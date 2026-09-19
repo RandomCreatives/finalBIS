@@ -12,7 +12,8 @@
  *      if they don't exist yet — rename them later when names are decided
  *   4. Upserts class_subjects assignments (sessions per week included)
  *   5. Regenerates the week's timetable slots (Registration at 08:10 daily,
- *      then 26 lesson sessions placed clash-free). --wipe removes existing
+ *      then the week's lesson sessions placed clash-free — 27/class for
+ *      Year 4, 29/class for Year 3 by this plan). --wipe removes existing
  *      slots for the year first; without it, generation only fills gaps.
  *
  * The DB's exclusion constraints remain the final arbiter: any
@@ -111,7 +112,10 @@ const LOAD = {
     MAT: 5, SCI: 3,                    // main teacher — both years
     GCT: 2, GEO: 2, HIS: 2,            // GCT: Year 4 only · GEO+HIS: Year 3 only
     ENG: 5, SPL: 1,                    // English teacher (5 English + 1 Spelling)
-    AMH: 2, MUS: 2, ART: 2, PE: 2,     // paired subject teachers
+    AMH: 3,                            // admin decision 2026-09-19: Amharic raised
+                                       // 2 -> 3 sessions/week in all 14 classes;
+                                       // each Amharic teacher lands at 21/wk
+    MUS: 2, ART: 2, PE: 2,             // paired subject teachers
     FRA: 1, ICT: 1,                    // single subject teachers
 };
 

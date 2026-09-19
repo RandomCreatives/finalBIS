@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 
 const { generateWeek, DAYS, LESSON_PERIODS } = require('../utils/timetableGenerator');
 
-// Mirrors the 2026/27 plan: 14 classes, each with 26 lesson sessions.
+// Mirrors the 2026/27 plan: 14 classes, each with 27 lesson sessions
+// (Amharic raised 2 -> 3 sessions/week by admin decision 2026-09-19).
 const buildPlan = () => {
     const year3 = ['Blue', 'Yellow', 'Red', 'Green'];
     const year4 = ['Blue', 'Purple', 'Lavender', 'Crimson', 'Green', 'Yellow', 'Magenta', 'Red', 'Violet', 'Orange'];
@@ -36,7 +37,7 @@ const buildPlan = () => {
         push('GCT', `main-${cls.id}`, 2);
         push('ENG', englishByClass[cls.id], 5);
         push('SPL', englishByClass[cls.id], 1);
-        push('AMH', paired('amh', cls), 2);
+        push('AMH', paired('amh', cls), 3);
         push('MUS', paired('mus', cls), 2);
         push('ART', paired('art', cls), 2);
         push('PE', paired('pe', cls), 2);
@@ -53,8 +54,8 @@ describe('timetable generator — 2026/27 plan', () => {
     test('places every session', () => {
         assert.equal(result.ok, true, result.reason);
         const expected = assignments.reduce((n, a) => n + a.sessions, 0);
-        assert.equal(result.slots.length, expected); // 14 × 26 = 364
-        assert.equal(result.slots.length, 364);
+        assert.equal(result.slots.length, expected); // 14 × 27 = 378
+        assert.equal(result.slots.length, 378);
     });
 
     test('no class is double-booked', () => {
