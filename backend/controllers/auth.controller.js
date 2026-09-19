@@ -169,7 +169,7 @@ const SUBJECT_BASIC_PASSWORD = 'BisNoc2026!';
 /**
  * POST /api/auth/reset-password/:userId  (admin only)
  *
- * "Revoke to basic": when a teacher loses their personal password, an
+ * "Reset to basic": when a teacher loses their personal password, an
  * administrator resets the account back to its known basic credential —
  *   · subject teachers → the shared placeholder BisNoc2026!
  *   · main teachers    → their class card password (the class name)
@@ -237,7 +237,7 @@ const resetUserPassword = asyncHandler(async (req, res) => {
     if (updateError) throw updateError;
 
     res.json({
-        message: `${target.name}'s password was revoked to ${describe}. Ask them to sign in and set their own.`,
+        message: `${target.name}'s password was reset to ${describe}. Ask them to sign in and set their own.`,
         basic,
     });
 });

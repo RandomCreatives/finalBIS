@@ -132,7 +132,7 @@ export default function Staff() {
         }
     };
 
-    // "Revoke to basic": reset a lost password back to the account's known
+    // "Reset to basic": reset a lost password back to the account's known
     // basic credential (BisNoc2026! for subject teachers, the class card
     // password for main teachers — the server decides).
     const [resetTarget, setResetTarget] = useState(null);
@@ -366,7 +366,7 @@ export default function Staff() {
                 </DialogActions>
             </Dialog>
 
-            {/* revoke-to-basic: confirm */}
+            {/* reset-to-basic: confirm */}
             <Dialog open={Boolean(resetTarget)} onClose={() => setResetTarget(null)} maxWidth="xs" fullWidth>
                 <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
                     Reset {resetTarget?.name}’s password?
@@ -374,7 +374,7 @@ export default function Staff() {
                 <DialogContent>
                     {resetError && <Alert severity="error" sx={{ mb: 2 }}>{resetError}</Alert>}
                     <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
-                        Their current password stops working immediately. The account is revoked to
+                        Their current password stops working immediately. The account is reset to
                         its basic password —
                         <strong>
                             {resetTarget?.role === 'main_teacher'
@@ -390,14 +390,14 @@ export default function Staff() {
                         disabled={resetBusy}
                         startIcon={<LockResetIcon sx={{ fontSize: 17 }} />}
                         sx={{ textTransform: 'none', fontWeight: 700 }}>
-                        {resetBusy ? 'Resetting…' : 'Revoke & reset'}
+                        {resetBusy ? 'Resetting…' : 'Reset password'}
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* revoke-to-basic: result (hand the basic to the teacher, once) */}
+            {/* reset-to-basic: result (hand the basic to the teacher, once) */}
             <Dialog open={Boolean(resetResult)} onClose={() => setResetResult(null)} maxWidth="xs" fullWidth>
-                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Password revoked</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Password reset</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.65 }}>
                         {resetResult?.message}

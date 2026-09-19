@@ -136,7 +136,7 @@ describe('PATCH /api/auth/password', () => {
     });
 });
 
-/* ── admin reset ("revoke to basic") ─────────────────────── */
+/* ── admin reset ("reset to basic") ─────────────────────── */
 const YEAR = '1a2b3c4d-5e6f-4a5b-8c9d-0e1f2a3b4c5d';
 const CLASS_Y3B = '2b3c4d5e-6f7a-4b5c-9d0e-1f2a3b4c5d6e';
 
@@ -160,7 +160,7 @@ const seedWithSeat = async () => {
 describe('POST /api/auth/reset-password/:userId', () => {
     beforeEach(seedWithSeat);
 
-    test('subject teacher is revoked to BisNoc2026! and can sign in with it', async () => {
+    test('subject teacher is reset to BisNoc2026! and can sign in with it', async () => {
         const res = await request(app)
             .post(`/api/auth/reset-password/${SUBJECT}`)
             .auth(tokenFor(ADMIN, 'admin'));
@@ -174,7 +174,7 @@ describe('POST /api/auth/reset-password/:userId', () => {
         assert.ok(login.body.token);
     });
 
-    test('main teacher is revoked to their class card password', async () => {
+    test('main teacher is reset to their class card password', async () => {
         const res = await request(app)
             .post(`/api/auth/reset-password/${MAIN}`)
             .auth(tokenFor(ADMIN, 'admin'));
@@ -188,7 +188,7 @@ describe('POST /api/auth/reset-password/:userId', () => {
         assert.equal(login.status, 200);
     });
 
-    test('main teacher without a class seat cannot be auto-revoked', async () => {
+    test('main teacher without a class seat cannot be auto-reset', async () => {
         reset({
             users: [
                 { id: ADMIN, school_id: SCHOOL, name: 'Test Admin', email: 'a@a.et',
@@ -215,7 +215,7 @@ describe('POST /api/auth/reset-password/:userId', () => {
         assert.match(res.body.message, /Administrator passwords/);
     });
 
-    test('only admins can revoke passwords', async () => {
+    test('only admins can reset passwords', async () => {
         const res = await request(app)
             .post(`/api/auth/reset-password/${MAIN}`)
             .auth(tokenFor(SUBJECT, 'subject_teacher'));
