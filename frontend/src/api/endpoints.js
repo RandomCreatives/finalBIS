@@ -26,6 +26,8 @@ export const authApi = {
     linkTelegram: (payload) =>
         client.post('/auth/link-telegram', payload).then((r) => r.data),
     unlinkTelegram: () => client.delete('/auth/link-telegram').then((r) => r.data),
+    resetPassword: (userId) =>
+        client.post(`/auth/reset-password/${userId}`).then((r) => r.data),
 };
 
 export const dashboardApi = {
