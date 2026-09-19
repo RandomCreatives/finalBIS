@@ -255,18 +255,23 @@ export default function AppLayout() {
                 maxWidth: 1600, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 },
                 display: 'flex', gap: 3, alignItems: 'flex-start',
             }}>
-                {/* desktop side-nav card */}
+                {/* desktop side-nav card — the scroll lives one layer inside,
+                    so the card's right edge stays visible next to the bar */}
                 <Box
                     component="nav"
                     data-testid="side-nav"
                     sx={{
                         display: { xs: 'none', md: 'flex' }, flexDirection: 'column',
-                        width: 232, flexShrink: 0, borderRadius: 2,
+                        width: 232, flexShrink: 0, borderRadius: 1.5,
                         bgcolor: surface, border: '1px solid', borderColor: 'divider',
-                        p: 1.5, position: 'sticky', top: 88,
-                        height: 'calc(100vh - 100px)', overflowY: 'auto',
+                        py: 1.5, pl: 1.5, pr: 0.5, position: 'sticky', top: 88,
+                        height: 'calc(100vh - 100px)', overflow: 'hidden',
                     }}
                 >
+                    <Box sx={{
+                        flexGrow: 1, minHeight: 0, overflowY: 'auto', pr: 1,
+                        display: 'flex', flexDirection: 'column',
+                    }}>
                     {groups.map((g, gi) => (
                         <Box key={g.label} sx={{ mb: 0.5 }}>
                             <Typography
@@ -290,6 +295,7 @@ export default function AppLayout() {
                     <Divider sx={{ my: 1 }} />
                     <Box data-testid="side-nav-settings">
                         <NavButton item={SETTINGS_ITEM} />
+                    </Box>
                     </Box>
                 </Box>
 
