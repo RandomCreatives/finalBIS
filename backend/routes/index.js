@@ -61,7 +61,8 @@ router.patch(
 router.patch(
     '/auth/profile',
     authenticate,
-    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('name').optional().trim().notEmpty().withMessage('Name must not be blank'),
+    body('phone').optional().trim().isLength({ max: 20 }).withMessage('Phone number is too long'),
     validate,
     auth.updateProfile
 );
