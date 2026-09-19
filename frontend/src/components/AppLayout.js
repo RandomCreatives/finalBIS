@@ -1,138 +1,132 @@
-import { Fragment, useState } from 'react';
-import { NavLink, useNavigate, Outlet } from 'react-router-dom';
+import { Fragment } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
 import {
-    AppBar, Avatar, Badge, Box, Divider, Drawer, IconButton, List, ListItemButton,
-    ListItemIcon, ListItemText, Menu, MenuItem, Toolbar, Typography, useMediaQuery,
+    Badge, Box, Button, Chip, Divider, Stack, Typography, useTheme,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import MenuIcon from '@mui/icons-material/Menu';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ClassIcon from '@mui/icons-material/Class';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
-import FactCheckIcon from '@mui/icons-material/FactCheck';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import EventNoteIcon from '@mui/icons-material/EventNote';
-import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
-import BadgeIcon from '@mui/icons-material/Badge';
-import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TodayIcon from '@mui/icons-material/Today';
 import GradeIcon from '@mui/icons-material/Grade';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import BadgeIcon from '@mui/icons-material/Badge';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import FolderIcon from '@mui/icons-material/Folder';
-import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
+import SchoolIcon from '@mui/icons-material/School';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
+import { useColorScheme } from '../theme';
 import useApi from '../hooks/useApi';
 import { communicationsApi } from '../api/endpoints';
 
-const DRAWER_WIDTH = 248;
+/*
+ * The staff workspace shell — shared look & feel with the teacher
+ * dashboards (Class Home / Subject Home): a slim brand header, a grouped
+ * side-nav card on desktop, one horizontal scroll row on mobile, and the
+ * settings card pinned to the bottom of the nav.
+ *
+ * Which items show depends on the signed-in role; admins see everything.
+ */
 
-const DASHBOARD_ITEM = { label: 'Dashboard', to: '/app', icon: <DashboardIcon />, end: true };
-
-const NAV_SECTIONS = [
+const NAV_GROUPS = [
     {
-        label: 'Academic',
+        label: 'School Today',
         items: [
-            { label: 'Daily Planner', to: '/app/planner', icon: <TodayIcon />, roles: ['main_teacher', 'subject_teacher'] },
-            { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon /> },
-            { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon /> },
-            { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon /> },
-            { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon /> },
+            { label: 'Dashboard', to: '/app', icon: <DashboardIcon fontSize="small" />, end: true },
+            { label: 'Calendar', to: '/app/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
+            { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon fontSize="small" /> },
+        ],
+    },
+    {
+        label: 'Classwork',
+        items: [
+            { label: 'Daily Planner', to: '/app/planner', icon: <TodayIcon fontSize="small" />, roles: ['main_teacher', 'subject_teacher'] },
+            { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon fontSize="small" /> },
+            { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon fontSize="small" /> },
+            { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon fontSize="small" /> },
             {
-                label: 'Marksheets', to: '/app/marksheets', icon: <GradeIcon />,
+                label: 'Marksheets', to: '/app/marksheets', icon: <GradeIcon fontSize="small" />,
                 roles: ['admin', 'main_teacher', 'subject_teacher'],
             },
         ],
     },
     {
-        label: 'Classroom',
+        label: 'People & Classes',
         items: [
-            { label: 'Students', to: '/app/students', icon: <GroupsIcon /> },
-            { label: 'Classes', to: '/app/classes', icon: <ClassIcon /> },
-            { label: 'Files', to: '/app/files', icon: <FolderIcon /> },
-            // v1.1 — dormant for term start, revived by re-adding these items:
-            // { label: 'Store', to: '/app/store', icon: <StorefrontIcon /> },
-            // { label: 'Library', to: '/app/library', icon: <LocalLibraryIcon /> },
-            // { label: 'Clinic', to: '/app/clinic', icon: <HealthAndSafetyIcon /> },
+            { label: 'Students', to: '/app/students', icon: <GroupsIcon fontSize="small" /> },
+            { label: 'Classes', to: '/app/classes', icon: <ClassIcon fontSize="small" /> },
+            { label: 'Staff', to: '/app/staff', icon: <BadgeIcon fontSize="small" />, roles: ['admin'] },
+            { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
+            { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon fontSize="small" />, roles: ['admin'] },
+            { label: 'Files', to: '/app/files', icon: <FolderIcon fontSize="small" /> },
         ],
     },
     {
-        label: 'Administration',
-        adminOnly: true,
+        label: 'Admin Communications',
         items: [
-            { label: 'Communications', to: '/app/communications', icon: <CampaignOutlinedIcon />, badge: 'communications' },
-            { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon /> },
-            { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon /> },
-            { label: 'Staff', to: '/app/staff', icon: <BadgeIcon /> },
+            {
+                label: 'Communications', to: '/app/communications',
+                icon: <CampaignOutlinedIcon fontSize="small" />, badge: 'communications', roles: ['admin'],
+            },
         ],
     },
 ];
 
-const ROLE_LABELS = {
-    admin: 'Administrator',
-    main_teacher: 'Main Teacher',
-    assistant_teacher: 'Assistant Teacher',
-    subject_teacher: 'Subject Teacher',
-    store_manager: 'Store Manager',
+const SETTINGS_ITEM = { label: 'Settings', to: '/app/settings', icon: <SettingsIcon fontSize="small" /> };
+
+const ROLE_CAPTION = {
+    admin: 'Administration',
+    main_teacher: 'Main teacher workspace',
+    assistant_teacher: 'Assistant teacher workspace',
+    subject_teacher: 'Subject teacher workspace',
+    store_manager: 'Store workspace',
 };
 
-function NavButton({ item, onClick }) {
+function NavButton({ item }) {
+    const theme = useTheme();
+    const dark = theme.palette.mode === 'dark';
     return (
-        <ListItemButton
+        <Button
             component={NavLink}
             to={item.to}
             end={item.end}
-            onClick={onClick}
+            fullWidth
+            startIcon={item.badge ? (
+                <Badge color="error" variant="dot" invisible={!item.unread}>{item.icon}</Badge>
+            ) : item.icon}
             sx={{
-                borderRadius: 2,
-                mb: 0.5,
+                justifyContent: 'flex-start', textTransform: 'none', fontWeight: 700,
+                borderRadius: 2, px: 1.5, minHeight: 40, color: 'text.secondary',
                 '&.active': {
-                    bgcolor: 'primary.main',
-                    color: 'common.white',
-                    '& .MuiListItemIcon-root': { color: 'common.white' },
+                    bgcolor: 'primary.main', color: '#fff',
                     '&:hover': { bgcolor: 'primary.dark' },
+                },
+                '&:not(.active):hover': {
+                    bgcolor: dark ? 'rgba(255,255,255,.06)' : 'rgba(30,64,175,.06)',
+                    color: 'primary.main',
                 },
             }}
         >
-            <ListItemIcon sx={{ minWidth: 40 }}>
-                {(item.badge === 'messages' || item.badge === 'communications') ? (
-                    <Badge color="error" badgeContent={item.unread} invisible={!item.unread}>
-                        {item.icon}
-                    </Badge>
-                ) : (
-                    item.icon
-                )}
-            </ListItemIcon>
-            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 14.5 }} />
-        </ListItemButton>
+            {item.label}
+        </Button>
     );
 }
 
 export default function AppLayout() {
-    const [mobileOpen, setMobileOpen] = useState(false);
-    const [anchorEl, setAnchorEl] = useState(null);
-
-    const { user, logout, isAdmin } = useAuth();
-    const navigate = useNavigate();
+    const { user, logout } = useAuth();
     const theme = useTheme();
-    const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+    const { toggleColorScheme } = useColorScheme();
+    const dark = theme.palette.mode === 'dark';
 
-    // Messages/Notices are dormant in v1.0 — no unread polling until they
-    // return. (NavButton badge code stays intact; nothing populates it.)
-
-    const handleLogout = () => {
-        logout();
-        window.location.replace('/login');
-    };
-
-    const handleSettings = () => {
-        setAnchorEl(null);
-        navigate('/app/settings');
-    };
-
-    const closeDrawer = () => setMobileOpen(false);
+    const isAdmin = user?.role === 'admin';
 
     // Live pending count for the Admin Communications badge (admin only).
     const commsBadges = useApi(
@@ -145,158 +139,164 @@ export default function AppLayout() {
             + (commsBadges.data.conductReportsPending || 0)
         : 0;
 
-    const sections = NAV_SECTIONS
-        .filter((s) => !s.adminOnly || isAdmin)
-        .map((s) => ({
-            ...s,
-            items: s.items
+    const groups = NAV_GROUPS
+        .map((g) => ({
+            ...g,
+            items: g.items
                 .filter((item) => !item.roles || item.roles.includes(user?.role))
                 .map((item) => (item.badge === 'communications' ? { ...item, unread: commsPending } : item)),
         }))
-        .filter((s) => s.items.length > 0);
+        .filter((g) => g.items.length > 0);
 
-    const drawer = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Toolbar sx={{ px: 2 }}>
-                <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: 'primary.main' }}>
-                    BIS NOC
-                </Typography>
-            </Toolbar>
-            <Divider />
-            <List sx={{ px: 1, py: 1, flexGrow: 1, overflowY: 'auto' }}>
-                <NavButton 
-                    item={DASHBOARD_ITEM} 
-                    onClick={closeDrawer}
-                />
-                {sections.map((section) => (
-                    <Fragment key={section.label}>
-                        <Typography
-                            variant="overline"
-                            sx={{ px: 2, pt: 2, pb: 0.5, display: 'block', color: 'text.disabled', fontSize: 11 }}
-                        >
-                            {section.label}
+    const signOut = () => {
+        logout();
+        window.location.replace('/login');
+    };
+
+    const caption = `${ROLE_CAPTION[user?.role] || 'Staff workspace'} · 2026/2027`;
+    const surface = dark ? theme.palette.background.paper : '#ffffff';
+
+    return (
+        <Box sx={{ minHeight: '100vh', bgcolor: dark ? 'background.default' : '#f8fafc' }}>
+            {/* slim brand header — same language as the teacher dashboards */}
+            <Box sx={{
+                position: 'sticky', top: 0, zIndex: 20,
+                bgcolor: surface, borderBottom: '1px solid', borderColor: 'divider',
+            }}>
+                <Box sx={{
+                    maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: 1.25,
+                    display: 'flex', alignItems: 'center', gap: 1.5,
+                }}>
+                    <Box sx={{
+                        width: 36, height: 36, borderRadius: 1, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        bgcolor: 'primary.main', color: '#fff', flexShrink: 0,
+                    }}>
+                        <SchoolIcon sx={{ fontSize: 20 }} />
+                    </Box>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 800, fontSize: 15, lineHeight: 1.2 }} noWrap>
+                            BIS NOC Gerji
                         </Typography>
-                        {section.items.map((item) => (
-                            <NavButton
+                        <Typography variant="caption" color="text.secondary" noWrap>{caption}</Typography>
+                    </Box>
+                    {user?.name && (
+                        <Chip size="small" label={user.name}
+                            sx={{ fontWeight: 700, borderRadius: 1, display: { xs: 'none', sm: 'inline-flex' } }} />
+                    )}
+                    <Button
+                        onClick={toggleColorScheme} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                        sx={{
+                            minWidth: 0, width: 34, height: 34, borderRadius: 1, p: 0,
+                            border: '1px solid', borderColor: 'divider', color: 'text.secondary',
+                        }}
+                    >
+                        {dark ? <LightModeIcon sx={{ fontSize: 17 }} /> : <DarkModeIcon sx={{ fontSize: 17 }} />}
+                    </Button>
+                    <Button
+                        onClick={signOut} aria-label="Sign out"
+                        startIcon={<LogoutIcon sx={{ fontSize: 16 }} />}
+                        size="small"
+                        sx={{
+                            textTransform: 'none', fontWeight: 700, color: 'text.secondary',
+                            border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 1.5,
+                        }}
+                    >
+                        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Sign out</Box>
+                    </Button>
+                </Box>
+            </Box>
+
+            {/* mobile nav — one horizontal scroll row, same as Class Home */}
+            <Box
+                data-testid="side-nav-mobile"
+                sx={{
+                    display: { xs: 'flex', md: 'none' }, gap: 0.75, px: 2, py: 1.25,
+                    overflowX: 'auto', borderBottom: '1px solid', borderColor: 'divider',
+                    bgcolor: surface,
+                }}
+            >
+                {groups.map((g) => (
+                    <Fragment key={g.label}>
+                        {g.items.map((item) => (
+                            <Button
                                 key={item.to}
-                                item={item}
-                                onClick={closeDrawer}
-                            />
+                                component={NavLink}
+                                to={item.to}
+                                end={item.end}
+                                size="small"
+                                sx={{
+                                    textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap',
+                                    borderRadius: 2, color: 'text.secondary', minHeight: 36,
+                                    '&.active': { bgcolor: 'primary.main', color: '#fff' },
+                                }}
+                            >
+                                {item.label}
+                            </Button>
                         ))}
                     </Fragment>
                 ))}
-            </List>
-            <Divider />
-            <List sx={{ px: 1, pb: 1.5 }}>
-                <ListItemButton onClick={handleSettings} sx={{ borderRadius: 2, mb: 0.5 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                        <SettingsIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Settings" primaryTypographyProps={{ fontSize: 14.5 }} />
-                </ListItemButton>
-                <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                        <LogoutIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Sign out" primaryTypographyProps={{ fontSize: 14.5 }} />
-                </ListItemButton>
-            </List>
-        </Box>
-    );
-
-    return (
-        <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-            <AppBar
-                position="fixed"
-                elevation={0}
-                sx={{
-                    width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-                    ml: { md: `${DRAWER_WIDTH}px` },
-                    bgcolor: 'background.paper',
-                    color: 'text.primary',
-                    borderBottom: '1px solid #e5e7eb',
-                    zIndex: 1100,
-                }}
-            >
-                <Toolbar>
-                    <IconButton
-                        edge="start"
-                        onClick={() => setMobileOpen(true)}
-                        sx={{ mr: 2, display: { md: 'none' } }}
-                        aria-label="Open navigation"
-                    >
-                        <MenuIcon />
-                    </IconButton>
-
-                    <Box sx={{ flexGrow: 1 }} />
-
-                    {/* Quick access: calendar, messages, notifications */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
-                        <IconButton
-                            onClick={() => navigate('/app/calendar')}
-                            sx={{ color: 'text.secondary' }}
-                            aria-label="Calendar"
-                        >
-                            <EventNoteIcon />
-                        </IconButton>
-                        {/* Messages & Notices dormant in v1.0 — restore the two
-                            IconButtons (and the unread polling) when they return. */}
-                    </Box>
-
-                    <Box sx={{ textAlign: 'right', mr: 1.5, display: { xs: 'none', sm: 'block' } }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                            {user?.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            {ROLE_LABELS[user?.role] || user?.role}
-                        </Typography>
-                    </Box>
-
-                    <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="Account menu">
-                        <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: 15 }}>
-                            {user?.name?.charAt(0)?.toUpperCase()}
-                        </Avatar>
-                    </IconButton>
-
-                    <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-                        <MenuItem disabled sx={{ opacity: '1 !important' }}>
-                            <Typography variant="caption" color="text.secondary">{user?.email}</Typography>
-                        </MenuItem>
-                        <MenuItem onClick={handleSettings}>Settings</MenuItem>
-                        <MenuItem onClick={handleLogout}>Sign out</MenuItem>
-                    </Menu>
-                </Toolbar>
-            </AppBar>
-
-            <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
-                <Drawer
-                    variant={isDesktop ? 'permanent' : 'temporary'}
-                    open={isDesktop || mobileOpen}
-                    onClose={() => setMobileOpen(false)}
-                    ModalProps={{ keepMounted: true }}
+                <Button
+                    component={NavLink}
+                    to={SETTINGS_ITEM.to}
+                    size="small"
+                    data-testid="mobile-nav-settings"
                     sx={{
-                        '& .MuiDrawer-paper': {
-                            width: DRAWER_WIDTH,
-                            boxSizing: 'border-box',
-                            borderRight: '1px solid #e5e7eb',
-                        },
+                        textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap',
+                        borderRadius: 2, color: 'text.secondary', minHeight: 36,
+                        '&.active': { bgcolor: 'primary.main', color: '#fff' },
                     }}
                 >
-                    {drawer}
-                </Drawer>
+                    Settings
+                </Button>
             </Box>
 
-            {/* Main content area - Stacked views rendered here via Outlet */}
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-                    p: { xs: 2, sm: 3 },
-                    mt: 8,
-                }}
-            >
-                <Outlet />
+            <Box sx={{
+                maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 },
+                display: 'flex', gap: 3, alignItems: 'flex-start',
+            }}>
+                {/* desktop side-nav card */}
+                <Box
+                    component="nav"
+                    data-testid="side-nav"
+                    sx={{
+                        display: { xs: 'none', md: 'flex' }, flexDirection: 'column',
+                        width: 232, flexShrink: 0, borderRadius: 2,
+                        bgcolor: surface, border: '1px solid', borderColor: 'divider',
+                        p: 1.5, position: 'sticky', top: 88,
+                        height: 'calc(100vh - 100px)', overflowY: 'auto',
+                    }}
+                >
+                    {groups.map((g, gi) => (
+                        <Box key={g.label} sx={{ mb: 0.5 }}>
+                            <Typography
+                                variant="overline"
+                                data-testid={`side-nav-group-${gi}`}
+                                sx={{
+                                    px: 1.5, pt: 1.5, pb: 0.5, display: 'block',
+                                    color: 'text.disabled', fontSize: 10.5, fontWeight: 700,
+                                    letterSpacing: '.08em',
+                                }}
+                            >
+                                {g.label}
+                            </Typography>
+                            <Stack spacing={0.25}>
+                                {g.items.map((item) => <NavButton key={item.to} item={item} />)}
+                            </Stack>
+                        </Box>
+                    ))}
+
+                    <Box sx={{ flexGrow: 1 }} data-testid="side-nav-spacer" />
+                    <Divider sx={{ my: 1 }} />
+                    <Box data-testid="side-nav-settings">
+                        <NavButton item={SETTINGS_ITEM} />
+                    </Box>
+                </Box>
+
+                {/* page content */}
+                <Box component="main" sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Outlet />
+                </Box>
             </Box>
         </Box>
     );

@@ -589,7 +589,8 @@ export default function SubjectHome() {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Sign out">
-                        <IconButton size="small" onClick={() => { logout(); navigate('/login', { replace: true }); }}>
+                        <IconButton size="small" aria-label="Sign out"
+                            onClick={() => { logout(); navigate('/subject-login', { replace: true }); }}>
                             <LogoutIcon sx={{ fontSize: 18 }} />
                         </IconButton>
                     </Tooltip>

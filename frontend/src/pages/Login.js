@@ -2,19 +2,18 @@ import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, CircularProgress,
-    Stack, TextField, Typography, Divider, IconButton, InputAdornment
+    Stack, TextField, Typography, IconButton, InputAdornment
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../auth/AuthContext';
-import TelegramLoginButton from '../components/TelegramLoginButton';
 
 /**
  * The single sign-in screen for all staff.
  *
- * Provides email/password sign-in with password visibility toggle,
- * clean error & expired alerts, and Telegram login widget integration.
+ * Email + password only — deliberately simple (card-style sign-ins
+ * for main and subject teachers live on their own walls).
  */
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -23,10 +22,7 @@ export default function Login() {
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    const [telegramError, setTelegramError] = useState('');
-    const [telegramSubmitting, setTelegramSubmitting] = useState(false);
-
-    const { login, telegramLogin } = useAuth();
+    const { login } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [params] = useSearchParams();
@@ -40,19 +36,6 @@ export default function Login() {
         !requestedDestination.includes('\\')
             ? requestedDestination
             : '/app';
-
-    const handleTelegramAuth = async (user) => {
-        setTelegramError('');
-        setTelegramSubmitting(true);
-        try {
-            await telegramLogin(user);
-            navigate(destination, { replace: true });
-        } catch (err) {
-            setTelegramError(err.message || 'Telegram sign-in failed. Please try again.');
-        } finally {
-            setTelegramSubmitting(false);
-        }
-    };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -158,25 +141,6 @@ export default function Login() {
                                 {submitting ? <CircularProgress size={24} color="inherit" /> : 'Sign in'}
                             </Button>
 
-                            <Box sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                <Divider sx={{ flexGrow: 1 }} />
-                                <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 11 }}>
-                                    OR SIGN IN WITH
-                                </Typography>
-                                <Divider sx={{ flexGrow: 1 }} />
-                            </Box>
-
-                            {telegramError && (
-                                <Alert severity="error" sx={{ mb: 1, borderRadius: 2 }}>{telegramError}</Alert>
-                            )}
-
-                            {telegramSubmitting ? (
-                                <Stack alignItems="center" sx={{ py: 1 }}>
-                                    <CircularProgress size={24} />
-                                </Stack>
-                            ) : (
-                                <TelegramLoginButton onAuth={handleTelegramAuth} />
-                            )}
                         </Stack>
                     </Box>
 
@@ -185,10 +149,10 @@ export default function Login() {
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }} textAlign="center">
                         Subject teacher?{' '}
-                        <RouterLink to="/teacher-login" style={{ color: 'inherit', fontWeight: 700 }}>
+                        <RouterLink to="/subject-login" style={{ color: 'inherit', fontWeight: 700 }}>
                             Sign in with your teacher card
                         </RouterLink>
-                        {' '}instead.
+                        {' '}instead. Main teachers use their class card.
                     </Typography>
 
                     <Box sx={{ mt: 2, textAlign: 'center' }}>
