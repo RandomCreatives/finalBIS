@@ -458,6 +458,88 @@ const unlinkTelegram = asyncHandler(async (req, res) => {
 const normalizeClassPassword = (s) =>
     String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
+/**
+ * GET /api/auth/subject-teachers — card directory for the subject-teacher
+ * sign-in page. Returns only the safe fields needed to render the cards
+ * (names are already public on the /teachers page); the password still
+ * guards the actual sign-in.
+ */
+const listSubjectTeachers = asyncHandler(async (req, res) => {
+    const { data: school, error: schoolError } = await supabase
+        .from('schools')
+        .select('id')
+        .maybeSingle();
+
+    if (schoolError) throw schoolError;
+    if (!school) throw new NotFoundError('School not found');
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('school_id', school.id)
+        .eq('role', 'subject_teacher')
+        .eq('is_active', true)
+        .order('name');
+
+    if (error) throw error;
+    // Shape explicitly: the response guarantees only safe fields, whatever
+    // the query layer returns.
+    res.json({ teachers: (data || []).map((t) => ({ id: t.id, name: t.name })) });
+});
+
+/**
+ * POST /api/auth/subject-teacher-login — teacher-card sign-in.
+ *
+ * Each subject teacher has a card on the sign-in page; the card carries the
+ * teacher's id and the dialog asks for their account password. Verification
+ * is the same bcrypt path as the normal login — this endpoint simply spares
+ * teachers from typing machine-generated email addresses.
+ */
+const subjectTeacherLogin = asyncHandler(async (req, res) => {
+    const { teacherId, password } = req.body;
+
+    const { data: school, error: schoolError } = await supabase
+        .from('schools')
+        .select('id')
+        .maybeSingle();
+
+    if (schoolError) throw schoolError;
+    if (!school) throw new NotFoundError('School not found');
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('school_id', school.id)
+        .eq('id', teacherId)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    // Same dummy-hash timing defence as the main login.
+    const hash = user?.password_hash || '$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidin';
+    const passwordOk = await bcrypt.compare(password, hash);
+
+    if (!user || !passwordOk) {
+        throw new UnauthorizedError('Incorrect password for that teacher');
+    }
+
+    if (user.role !== 'subject_teacher') {
+        throw new UnauthorizedError('That card is not a subject-teacher account');
+    }
+
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
+    }
+
+    await supabase
+        .from('users')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', user.id)
+        .then(({ error: e }) => { if (e) console.error('[auth] Failed to update last_login_at:', e.message); });
+
+    res.json({ token: signToken(user), user: publicUser(user) });
+});
+
 const classLogin = asyncHandler(async (req, res) => {
     const { className, password } = req.body;
 
@@ -530,6 +612,8 @@ const classLogin = asyncHandler(async (req, res) => {
 module.exports = {
     login,
     classLogin,
+    listSubjectTeachers,
+    subjectTeacherLogin,
     me,
     changePassword,
     updateProfile,

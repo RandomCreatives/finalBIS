@@ -14,6 +14,7 @@ import PublicStudents from './pages/PublicStudents';
 import PublicCalendar from './pages/PublicCalendar';
 import ClassHome from './pages/ClassHome';
 import SubjectHome from './pages/SubjectHome';
+import SubjectLogin from './pages/SubjectLogin';
 
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -44,6 +45,7 @@ export default function App() {
                 <AuthProvider>
                     <Routes>
                         <Route path="/login" element={<Login />} />
+                        <Route path="/teacher-login" element={<SubjectLogin />} />
 
                         <Route
                             path="/app"
