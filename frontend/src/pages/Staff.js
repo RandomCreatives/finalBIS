@@ -10,7 +10,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SendIcon from '@mui/icons-material/Send';
 import LinkIcon from '@mui/icons-material/Link';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
-import { userApi } from '../api/endpoints';
+import LockResetIcon from '@mui/icons-material/LockReset';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { userApi, authApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
@@ -130,6 +132,42 @@ export default function Staff() {
         }
     };
 
+    // "Revoke to basic": reset a lost password back to the account's known
+    // basic credential (BisNoc2026! for subject teachers, the class card
+    // password for main teachers — the server decides).
+    const [resetTarget, setResetTarget] = useState(null);
+    const [resetBusy, setResetBusy] = useState(false);
+    const [resetError, setResetError] = useState('');
+    const [resetResult, setResetResult] = useState(null); // { name, message, basic }
+
+    const openReset = (member) => {
+        setResetError('');
+        setResetTarget(member);
+    };
+
+    const confirmReset = async () => {
+        setResetBusy(true);
+        setResetError('');
+        try {
+            const res = await authApi.resetPassword(resetTarget.id);
+            setResetResult({ name: resetTarget.name, message: res.message, basic: res.basic });
+            setResetTarget(null);
+        } catch (err) {
+            setResetError(err.message || 'Reset failed. Please try again.');
+        } finally {
+            setResetBusy(false);
+        }
+    };
+
+    const copyBasic = async () => {
+        try {
+            await navigator.clipboard.writeText(resetResult.basic);
+            setToast('Copied to clipboard');
+        } catch {
+            setToast(resetResult.basic); // clipboard blocked — surface the value instead
+        }
+    };
+
     const rows = staff.data || [];
 
     return (
@@ -230,6 +268,14 @@ export default function Staff() {
                                                     </IconButton>
                                                 </Tooltip>
                                             )}
+                                            {m.role !== 'admin' && (
+                                                <Tooltip title="Reset password to basic">
+                                                    <IconButton size="small" onClick={() => openReset(m)}
+                                                        aria-label={`Reset password for ${m.name}`}>
+                                                        <LockResetIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
                                             {!isSelf && (
                                                 <Tooltip title={m.isActive ? 'Deactivate' : 'Reactivate'}>
                                                     <IconButton size="small" onClick={() => toggleActive(m)}>
@@ -316,6 +362,73 @@ export default function Staff() {
                         disabled={telegramSaving}
                     >
                         {telegramSaving ? 'Saving…' : 'Save'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* revoke-to-basic: confirm */}
+            <Dialog open={Boolean(resetTarget)} onClose={() => setResetTarget(null)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+                    Reset {resetTarget?.name}’s password?
+                </DialogTitle>
+                <DialogContent>
+                    {resetError && <Alert severity="error" sx={{ mb: 2 }}>{resetError}</Alert>}
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
+                        Their current password stops working immediately. The account is revoked to
+                        its basic password —
+                        <strong>
+                            {resetTarget?.role === 'main_teacher'
+                                ? ' the class card password for their class'
+                                : ' BisNoc2026!'}
+                        </strong>
+                        — and they set their own the next time they sign in.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                    <Button onClick={() => setResetTarget(null)} sx={{ textTransform: 'none' }}>Cancel</Button>
+                    <Button onClick={confirmReset} variant="contained" color="error" disableElevation
+                        disabled={resetBusy}
+                        startIcon={<LockResetIcon sx={{ fontSize: 17 }} />}
+                        sx={{ textTransform: 'none', fontWeight: 700 }}>
+                        {resetBusy ? 'Resetting…' : 'Revoke & reset'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* revoke-to-basic: result (hand the basic to the teacher, once) */}
+            <Dialog open={Boolean(resetResult)} onClose={() => setResetResult(null)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Password revoked</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.65 }}>
+                        {resetResult?.message}
+                    </Typography>
+                    <Paper variant="outlined" sx={{
+                        p: 2, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1.5,
+                        bgcolor: (t) => (t.palette.mode === 'dark' ? '#0f172a' : '#f8fafc'),
+                    }}>
+                        <Typography sx={{
+                            fontFamily: 'ui-monospace, monospace', fontWeight: 800, fontSize: 16,
+                            letterSpacing: '.04em', flexGrow: 1, wordBreak: 'break-all',
+                        }}>
+                            {resetResult?.basic}
+                        </Typography>
+                        <Tooltip title="Copy">
+                            <IconButton size="small" onClick={copyBasic}
+                                aria-label="Copy basic password">
+                                <ContentCopyIcon sx={{ fontSize: 17 }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Paper>
+                    <Typography variant="caption" color="text.secondary"
+                        sx={{ display: 'block', mt: 1.5, lineHeight: 1.55 }}>
+                        Hand this to {resetResult?.name} in person or on Telegram — and remind them
+                        to set their own password from Profile → Security.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                    <Button onClick={() => setResetResult(null)} variant="contained" disableElevation
+                        sx={{ textTransform: 'none', fontWeight: 700 }}>
+                        Done
                     </Button>
                 </DialogActions>
             </Dialog>
