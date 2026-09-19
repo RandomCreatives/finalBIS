@@ -331,7 +331,12 @@ async function main() {
                 occupied.add(`${s.class_id}|${s.day_of_week}|${period}`);
                 if (s.teacher_id) teacherBusyExisting.add(`${s.teacher_id}|${s.day_of_week}|${period}`);
             }
-            const code = s.cs?.subject?.code;
+            // The plan's GCT code lives in the DB under the older GLS code —
+            // normalize so existing Global Citizenship slots are counted and
+            // re-runs stay gap-fills instead of duplicating sessions (fixed
+            // 2026-09-19 after a re-run doubled Y4 GLS 2 -> 4 sessions/week).
+            const rawCode = s.cs?.subject?.code;
+            const code = rawCode === 'GLS' ? 'GCT' : rawCode;
             if (code) {
                 const key = `${s.class_id}|${code}`;
                 existingCount.set(key, (existingCount.get(key) || 0) + 1);
