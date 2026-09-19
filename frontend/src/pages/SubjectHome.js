@@ -18,6 +18,10 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import PersonIcon from '@mui/icons-material/Person';
+import {
+    IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
+} from '../components/settings/profileCards';
 import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import { useAuth } from '../auth/AuthContext';
@@ -54,6 +58,7 @@ const SECTIONS = [
     { id: 'week', label: 'My week', icon: EventIcon },
     { id: 'classes', label: 'My classes', icon: GroupsIcon },
     { id: 'marks', label: 'Marks', icon: GradeIcon },
+    { id: 'profile', label: 'Profile', icon: PersonIcon },
 ];
 
 const StatCard = ({ icon: Icon, label, value, dark }) => (
@@ -678,6 +683,34 @@ export default function SubjectHome() {
                         )}
 
                         {section === 'marks' && <MarksSection pairs={markedPairs} />}
+                        {section === 'profile' && (
+                            <Grid container spacing={2.5}>
+                                <Grid item xs={12} md={7}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                                        <IdentityCard
+                                            roleLabel="Subject Teacher"
+                                            nameNote="Shown as your card on the teacher sign-in wall. Ask the coordinator to correct your name."
+                                        />
+                                        <SecurityCard mode="self-service" />
+                                    </Box>
+                                </Grid>
+                                <Grid item xs={12} md={5}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                                        <TelegramCard />
+                                        <TeachingCard
+                                            items={classGroups.flatMap((g) =>
+                                                g.subjects.map((s) => ({
+                                                    primary: `${s.name} — ${g.className}`,
+                                                    secondary: s.sessionsPerWeek
+                                                        ? `${s.sessionsPerWeek} session${s.sessionsPerWeek > 1 ? 's' : ''} per week`
+                                                        : null,
+                                                })))}
+                                        />
+                                        <PreferencesCard />
+                                    </Box>
+                                </Grid>
+                            </Grid>
+                        )}
                     </Box>
                 </Box>
             </Container>
