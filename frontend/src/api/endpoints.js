@@ -10,8 +10,8 @@ export const authApi = {
     me: () => client.get('/auth/me').then((r) => r.data.user),
     changePassword: (currentPassword, newPassword) =>
         client.patch('/auth/password', { currentPassword, newPassword }).then((r) => r.data),
-    updateProfile: (name) =>
-        client.patch('/auth/profile', { name }).then((r) => r.data),
+    updateProfile: (fields) =>
+        client.patch('/auth/profile', fields).then((r) => r.data),
     sendVerificationCode: (email) =>
         client.post('/auth/send-verification-code', { email }).then((r) => r.data),
     verifyCode: (code) =>

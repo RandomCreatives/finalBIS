@@ -28,6 +28,10 @@ import SendIcon from '@mui/icons-material/Send';
 import LockIcon from '@mui/icons-material/Lock';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
+import PersonIcon from '@mui/icons-material/Person';
+import {
+    IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
+} from '../components/settings/profileCards';
 import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
@@ -104,6 +108,7 @@ const SECTIONS = [
     { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'students', label: 'Students', icon: GroupsIcon },
     { id: 'timetable', label: 'Timetable', icon: EventIcon },
+    { id: 'profile', label: 'Profile', icon: PersonIcon },
 ];
 
 /* ── small pieces ─────────────────────────────────────────── */
@@ -1458,6 +1463,53 @@ function TimetableSection({ classId, klass }) {
     );
 }
 
+/* ── profile & settings ─────────────────────────────────── */
+
+function ProfileSection({ klass, classId }) {
+    const classSubjects = useApi(
+        () => (classId
+            ? assignmentApi.subjects({ classId }).then((d) => d.assignments).catch(() => [])
+            : Promise.resolve([])),
+        [classId]
+    );
+    const teachingItems = useMemo(() => {
+        const rows = [{
+            primary: `Main teacher — ${klass.name}`,
+            secondary: 'Homeroom · daily attendance · monthly registers',
+        }];
+        const seen = new Map();
+        (classSubjects.data || []).forEach((a) => {
+            if (!a.subject?.id || a.subject.code === 'REG' || seen.has(a.subject.id)) return;
+            seen.set(a.subject.id, {
+                primary: a.subject.name,
+                secondary: a.teacher?.name ? `Taught by ${a.teacher.name}` : null,
+            });
+        });
+        return rows.concat([...seen.values()].sort((a, b) => a.primary.localeCompare(b.primary)));
+    }, [classSubjects.data, klass.name]);
+
+    return (
+        <Grid container spacing={2.5}>
+            <Grid item xs={12} md={7}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                    <IdentityCard
+                        roleLabel="Main Teacher"
+                        nameNote="You sign in with the class card; your display name is issued by the school. Ask the coordinator to correct it."
+                    />
+                    <SecurityCard mode="managed" />
+                </Box>
+            </Grid>
+            <Grid item xs={12} md={5}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                    <TelegramCard />
+                    <TeachingCard items={teachingItems} />
+                    <PreferencesCard />
+                </Box>
+            </Grid>
+        </Grid>
+    );
+}
+
 /* ── the dashboard ────────────────────────────────────────── */
 
 export default function ClassHome() {
@@ -1649,6 +1701,7 @@ export default function ClassHome() {
                                 classNames={classNames} classIdByName={classIdByName} />
                         )}
                         {section === 'timetable' && <TimetableSection classId={session.classId} klass={klass} />}
+                        {section === 'profile' && <ProfileSection klass={klass} classId={session.classId} />}
                     </Box>
                 </Box>
             </Container>
