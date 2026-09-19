@@ -814,7 +814,8 @@ function MarksSection({ klass, classId, roster }) {
                                                 <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>out of {a.maxMarks}</Typography>
                                             </Box>
                                             <Tooltip title="Delete assessment">
-                                                <IconButton size="small" onClick={() => deleteAssessment(a)}>
+                                                <IconButton size="small" onClick={() => deleteAssessment(a)}
+                                                    aria-label={`Delete assessment ${a.label}`}>
                                                     <DeleteOutlineIcon sx={{ fontSize: 15 }} />
                                                 </IconButton>
                                             </Tooltip>

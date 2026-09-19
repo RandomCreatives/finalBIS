@@ -150,6 +150,16 @@ describe('SubjectTeacherLogin wall', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/');
     });
 
+    test('a11y: icon-only controls carry accessible names', async () => {
+        authApi.subjectTeachers.mockResolvedValue([{ id: '1', name: 'ICT Teacher 1' }]);
+        renderWall();
+        expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeInTheDocument();
+
+        fireEvent.click((await screen.findByText('ICT')).closest('.MuiAccordionSummary-root'));
+        fireEvent.click(await screen.findByTestId('subject-seat-card'));
+        expect(screen.getByRole('button', { name: /show password/i })).toBeInTheDocument();
+    });
+
     test('a wrong password keeps the dialog open with the server message', async () => {
         authApi.subjectTeachers.mockResolvedValue([{ id: '1', name: 'ICT Teacher 1' }]);
         authApi.subjectTeacherLogin.mockRejectedValue(new Error('Incorrect password'));

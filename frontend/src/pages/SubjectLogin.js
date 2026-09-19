@@ -63,11 +63,12 @@ export default function SubjectLogin() {
                         <Typography variant="caption" color="text.secondary">Staff sign-in</Typography>
                     </Box>
                     <Button component={RouterLink} to="/login" size="small"
-                        sx={{ textTransform: 'none', fontWeight: 700, mr: 0.5 }}>
+                        sx={{ textTransform: 'none', fontWeight: 700, mr: 0.5, minHeight: 40 }}>
                         Staff email sign-in
                     </Button>
                     <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
-                        <IconButton size="small" onClick={toggleColorScheme}>
+                        <IconButton size="small" onClick={toggleColorScheme}
+                            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
                             {dark ? <LightModeIcon sx={{ fontSize: 18 }} /> : <DarkModeIcon sx={{ fontSize: 18 }} />}
                         </IconButton>
                     </Tooltip>
