@@ -1573,6 +1573,31 @@ export default function ClassHome() {
 
     const activeSection = SECTIONS.find((s) => s.id === section);
 
+    // Sidebar nav button — Profile is rendered separately, pinned to the
+    // bottom of the full-length sidebar (see below).
+    const renderNavButton = (s) => {
+        const Icon = s.icon;
+        const active = section === s.id;
+        return (
+            <Button key={s.id} disabled={s.soon}
+                onClick={() => !s.soon && setSection(s.id)}
+                data-testid={s.id === 'profile' ? 'side-nav-profile' : undefined}
+                startIcon={<Icon sx={{ fontSize: 18 }} />}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none',
+                    fontWeight: active ? 800 : 600, borderRadius: 1, px: 1.5, py: 1,
+                    whiteSpace: 'nowrap', minWidth: { xs: 'auto', md: 0 },
+                    color: active ? '#fff' : s.soon ? 'text.disabled' : 'text.primary',
+                    bgcolor: active ? 'primary.main' : 'transparent',
+                    '&:hover': active ? { bgcolor: 'primary.dark' } : { bgcolor: alpha(theme.palette.primary.main, 0.06) } }}>
+                {s.label}
+                {s.soon && (
+                    <Chip label="soon" size="small" sx={{ ml: 1, height: 16, fontSize: 9,
+                        fontWeight: 800, bgcolor: 'rgba(100,116,139,.12)', color: 'text.secondary' }} />
+                )}
+            </Button>
+        );
+    };
+
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
             {/* ── top bar ── */}
@@ -1649,31 +1674,16 @@ export default function ClassHome() {
             <Container maxWidth="xl" sx={{ py: 3 }}>
                 <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' },
                     alignItems: 'flex-start' }}>
-                    {/* sidebar */}
-                    <Paper variant="outlined" sx={{ borderRadius: 1.5, p: 1, flexShrink: 0,
+                    {/* sidebar — full viewport length, Profile pinned to the bottom */}
+                    <Paper variant="outlined" data-testid="side-nav" sx={{ borderRadius: 1.5, p: 1, flexShrink: 0,
                         width: { md: 220 }, display: 'flex', flexDirection: { xs: 'row', md: 'column' },
-                        gap: .5, overflowX: 'auto', maxWidth: '100%', position: { md: 'sticky' }, top: { md: 76 } }}>
-                        {SECTIONS.map((s) => {
-                            const Icon = s.icon;
-                            const active = section === s.id;
-                            return (
-                                <Button key={s.id} disabled={s.soon}
-                                    onClick={() => !s.soon && setSection(s.id)}
-                                    startIcon={<Icon sx={{ fontSize: 18 }} />}
-                                    sx={{ justifyContent: 'flex-start', textTransform: 'none',
-                                        fontWeight: active ? 800 : 600, borderRadius: 1, px: 1.5, py: 1,
-                                        whiteSpace: 'nowrap', minWidth: { xs: 'auto', md: 0 },
-                                        color: active ? '#fff' : s.soon ? 'text.disabled' : 'text.primary',
-                                        bgcolor: active ? 'primary.main' : 'transparent',
-                                        '&:hover': active ? { bgcolor: 'primary.dark' } : { bgcolor: alpha(theme.palette.primary.main, 0.06) } }}>
-                                    {s.label}
-                                    {s.soon && (
-                                        <Chip label="soon" size="small" sx={{ ml: 1, height: 16, fontSize: 9,
-                                            fontWeight: 800, bgcolor: 'rgba(100,116,139,.12)', color: 'text.secondary' }} />
-                                    )}
-                                </Button>
-                            );
-                        })}
+                        gap: .5, overflowX: 'auto', maxWidth: '100%', position: { md: 'sticky' }, top: { md: 76 },
+                        height: { md: 'calc(100vh - 100px)' }, overflowY: { md: 'auto' } }}>
+                        {SECTIONS.filter((s) => s.id !== 'profile').map((s) => renderNavButton(s))}
+                        <Box data-testid="side-nav-spacer"
+                            sx={{ flexGrow: 1, display: { xs: 'none', md: 'block' } }} />
+                        <Divider sx={{ display: { xs: 'none', md: 'block' }, mx: 0.5 }} />
+                        {SECTIONS.filter((s) => s.id === 'profile').map((s) => renderNavButton(s))}
                     </Paper>
 
                     {/* content */}

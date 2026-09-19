@@ -47,7 +47,7 @@ beforeEach(() => {
     fetchTelegramConfig.mockResolvedValue({ enabled: false, botUsername: '', loginEnabled: false });
 });
 
-describe('Staff page — revoke password to basic', () => {
+describe('Staff page — reset password to basic', () => {
     test('teacher rows offer reset, admin rows do not', async () => {
         wrap();
         await screen.findByText('English Teacher 1');
@@ -59,7 +59,7 @@ describe('Staff page — revoke password to basic', () => {
 
     test('confirm copies the right basic; result dialog hands it over', async () => {
         authApi.resetPassword.mockResolvedValue({
-            message: "English Teacher 1's password was revoked to the placeholder password (BisNoc2026!).",
+            message: "English Teacher 1's password was reset to the placeholder password (BisNoc2026!).",
             basic: 'BisNoc2026!',
         });
         wrap();
@@ -70,10 +70,10 @@ describe('Staff page — revoke password to basic', () => {
         expect(confirm).toBeInTheDocument();
         expect(screen.getByText(/BisNoc2026!/i)).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: /Revoke & reset/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
         await waitFor(() => expect(authApi.resetPassword).toHaveBeenCalledWith('s1'));
 
-        expect(await screen.findByText('Password revoked')).toBeInTheDocument();
+        expect(await screen.findByText('Password reset')).toBeInTheDocument();
         expect(screen.getAllByText('BisNoc2026!').length).toBeGreaterThan(0);
     });
 

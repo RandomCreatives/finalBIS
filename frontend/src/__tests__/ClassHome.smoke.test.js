@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { CssBaseline } from '@mui/material';
 import ClassHome from '../pages/ClassHome';
@@ -29,6 +29,16 @@ describe('ClassHome dashboard', () => {
         expect(screen.getAllByText(/Main Teacher/i).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/Overview/i).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/Attendance/i).length).toBeGreaterThan(0);
+    });
+
+    test('sidebar is full-length with Profile pinned to the bottom', () => {
+        renderDash('year-3-blue');
+        const nav = screen.getByTestId('side-nav');
+        expect(screen.getByTestId('side-nav-spacer')).toBeInTheDocument();
+        const profile = within(nav).getByTestId('side-nav-profile');
+        expect(profile).toHaveTextContent('Profile');
+        const buttons = within(nav).getAllByRole('button');
+        expect(buttons[buttons.length - 1]).toBe(profile);
     });
 
     test('redirects to /classes when no session', () => {
