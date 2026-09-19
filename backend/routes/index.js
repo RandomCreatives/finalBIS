@@ -127,6 +127,18 @@ router.post(
     auth.classLogin
 );
 
+// Subject-teacher card sign-in: the directory lists the cards (safe fields
+// only); the login verifies the teacher's own account password with bcrypt.
+router.get('/auth/subject-teachers', authLimiter, auth.listSubjectTeachers);
+router.post(
+    '/auth/subject-teacher-login',
+    authLimiter,
+    body('teacherId').isUUID().withMessage('teacherId is required'),
+    body('password').isString().notEmpty().withMessage('Password is required'),
+    validate,
+    auth.subjectTeacherLogin
+);
+
 // =============================================================================
 // PUBLIC DIRECTORY — no login, safe fields only (names, classes, subjects).
 // =============================================================================

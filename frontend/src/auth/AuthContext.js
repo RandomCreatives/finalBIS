@@ -58,6 +58,14 @@ export function AuthProvider({ children }) {
         return profile;
     }, []);
 
+    // Card sign-ins (e.g. subject-teacher cards) already hold a verified
+    // token + profile from a dedicated endpoint; adopt them directly.
+    const loginWithToken = useCallback((token, profile) => {
+        setToken(token);
+        setUser(profile);
+        return profile;
+    }, []);
+
     const logout = useCallback(() => {
         clearToken();
         setUser(null);
@@ -76,10 +84,11 @@ export function AuthProvider({ children }) {
             updateUser,
             gmailLogin,
             telegramLogin,
+            loginWithToken,
             isAdmin: user?.role === 'admin',
             isAuthenticated: Boolean(user),
         }),
-        [user, loading, login, logout, updateUser, gmailLogin, telegramLogin]
+        [user, loading, login, logout, updateUser, gmailLogin, telegramLogin, loginWithToken]
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

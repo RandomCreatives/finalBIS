@@ -183,6 +183,13 @@ export default function Login() {
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 3 }} textAlign="center">
                         Staff accounts are issued by your school administrator.
                     </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }} textAlign="center">
+                        Subject teacher?{' '}
+                        <RouterLink to="/teacher-login" style={{ color: 'inherit', fontWeight: 700 }}>
+                            Sign in with your teacher card
+                        </RouterLink>
+                        {' '}instead.
+                    </Typography>
 
                     <Box sx={{ mt: 2, textAlign: 'center' }}>
                         <Button
