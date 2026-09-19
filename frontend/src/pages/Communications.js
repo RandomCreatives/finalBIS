@@ -5,22 +5,24 @@ import {
     Paper, Snackbar, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
-import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
 import ThumbDownOutlinedIcon from '@mui/icons-material/ThumbDownOutlined';
-import { communicationsApi, permissionApi, storeApi } from '../api/endpoints';
+import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import { communicationsApi, conductApi, permissionApi, storeApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { FilterChips } from '../components/DashboardSections';
 import { REQUEST_STATUS_META } from '../components/communications/RequestSection';
+import { CONDUCT_STATUS_META, CONDUCT_TYPE_META } from '../components/communications/ConductSection';
 
 /*
  * Admin Communications — the review queue for the teacher→admin channels.
  *
  *   Requests  — permission requests tied to a student (approve / decline)
  *   Store     — material requests (reviewed in detail on the Store page)
- *   Conduct   — behavior reports (arrives with the conduct module)
+ *   Conduct   — behavior reports (acknowledge, then mark actioned)
  *
  * The same pending totals ride on the Communications nav badge.
  */
@@ -30,6 +32,13 @@ const STATUS_FILTERS = [
     { value: 'pending', label: 'Pending' },
     { value: 'approved', label: 'Approved' },
     { value: 'declined', label: 'Declined' },
+];
+
+const CONDUCT_FILTERS = [
+    { value: 'all', label: 'All' },
+    { value: 'new', label: 'New' },
+    { value: 'acknowledged', label: 'Acknowledged' },
+    { value: 'actioned', label: 'Actioned' },
 ];
 
 const fmtPickup = (iso) =>
@@ -164,6 +173,132 @@ function RequestsTab({ onChanged, onToast }) {
     );
 }
 
+function ConductTab({ onChanged, onToast }) {
+    const [filter, setFilter] = useState('all');
+    const reports = useApi(
+        () => conductApi.list(filter === 'all' ? {} : { status: filter }),
+        [filter],
+    );
+    const [review, setReview] = useState(null); // { report, status }
+    const [note, setNote] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+
+    const openReview = (report, status) => {
+        setReview({ report, status });
+        setNote('');
+        setError('');
+    };
+
+    const confirm = async () => {
+        if (!review || busy) return;
+        setBusy(true);
+        setError('');
+        try {
+            await conductApi.updateStatus(review.report.id, review.status, note.trim());
+            setReview(null);
+            onToast(review.status === 'acknowledged' ? 'Report acknowledged' : 'Report marked as actioned');
+            reports.reload();
+            onChanged();
+        } catch (err) {
+            setError(err.message || 'Could not update the report — please try again');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Box>
+            <FilterChips options={CONDUCT_FILTERS} value={filter} onChange={setFilter} label="Status" />
+
+            <DataState
+                loading={reports.loading}
+                error={reports.error ? 'Could not load conduct reports.' : ''}
+                empty={(reports.data || []).length === 0}
+                emptyMessage="No conduct reports in this view — you're all caught up."
+            >
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
+                    {(reports.data || []).map((r) => {
+                        const tone = CONDUCT_TYPE_META[r.type] || CONDUCT_TYPE_META.praise;
+                        const meta = CONDUCT_STATUS_META[r.status] || CONDUCT_STATUS_META.new;
+                        return (
+                            <Paper key={r.id} variant="outlined" sx={{ p: 1.75, borderRadius: 2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+                                    <Typography sx={{ fontWeight: 800, fontSize: 14 }}>
+                                        {r.student?.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                        {r.class?.name}
+                                    </Typography>
+                                    <Chip size="small" label={tone.label} color={tone.color}
+                                        sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
+                                    <Chip size="small" variant="outlined" label={meta.label} color={meta.color}
+                                        sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                                        {r.reporter?.name} · {new Date(r.createdAt).toLocaleDateString(
+                                            undefined, { day: 'numeric', month: 'short' })}
+                                    </Typography>
+                                </Box>
+                                <Typography sx={{ fontSize: 13.5, mt: 0.75 }}>{r.body}</Typography>
+                                {r.actionNote && (
+                                    <Typography variant="caption" color="text.secondary"
+                                        sx={{ display: 'block', mt: 0.5 }}>
+                                        Your note: {r.actionNote}
+                                    </Typography>
+                                )}
+                                {r.status !== 'actioned' && (
+                                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                        {r.status === 'new' && (
+                                            <Button size="small" variant="contained" color="info" disableElevation
+                                                startIcon={<VisibilityOutlinedIcon sx={{ fontSize: 15 }} />}
+                                                onClick={() => openReview(r, 'acknowledged')}
+                                                sx={{ textTransform: 'none', fontWeight: 700 }}>
+                                                Acknowledge
+                                            </Button>
+                                        )}
+                                        <Button size="small" variant="outlined" color="success"
+                                            startIcon={<DoneAllOutlinedIcon sx={{ fontSize: 15 }} />}
+                                            onClick={() => openReview(r, 'actioned')}
+                                            sx={{ textTransform: 'none', fontWeight: 700 }}>
+                                            Mark actioned
+                                        </Button>
+                                    </Box>
+                                )}
+                            </Paper>
+                        );
+                    })}
+                </Box>
+            </DataState>
+
+            {/* review confirm dialog */}
+            <Dialog open={Boolean(review)} onClose={() => !busy && setReview(null)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ fontWeight: 800 }}>
+                    {review?.status === 'acknowledged' ? 'Acknowledge report?' : 'Mark report as actioned?'}
+                </DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1 }}>
+                    {error && <Alert severity="error">{error}</Alert>}
+                    <Typography variant="body2" color="text.secondary">
+                        <strong>{review?.report?.student?.name}</strong> ({review?.report?.class?.name})
+                        — {review?.report?.body}
+                    </Typography>
+                    <TextField label="Note to the teacher (optional)" size="small" fullWidth multiline
+                        minRows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                    <Button onClick={() => setReview(null)} disabled={busy} sx={{ textTransform: 'none' }}>
+                        Cancel
+                    </Button>
+                    <Button variant="contained" disableElevation onClick={confirm} disabled={busy}
+                        color={review?.status === 'acknowledged' ? 'info' : 'success'}
+                        sx={{ textTransform: 'none', fontWeight: 700 }}>
+                        {busy ? 'Saving…' : (review?.status === 'acknowledged' ? 'Acknowledge' : 'Mark actioned')}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>
+    );
+}
+
 export default function Communications() {
     const [tab, setTab] = useState('requests');
     const [toast, setToast] = useState('');
@@ -183,6 +318,8 @@ export default function Communications() {
                             label={`${c.permissionRequestsPending ?? '…'} requests pending`} sx={{ fontWeight: 700 }} />
                         <Chip size="small" color={(c.storeRequestsPending || 0) > 0 ? 'warning' : 'default'}
                             label={`${c.storeRequestsPending ?? '…'} store pending`} sx={{ fontWeight: 700 }} />
+                        <Chip size="small" color={(c.conductReportsPending || 0) > 0 ? 'warning' : 'default'}
+                            label={`${c.conductReportsPending ?? '…'} new conduct`} sx={{ fontWeight: 700 }} />
                     </Box>
                 )}
             />
@@ -238,16 +375,7 @@ export default function Communications() {
             )}
 
             {tab === 'conduct' && (
-                <Paper variant="outlined" sx={{ p: 3.5, borderRadius: 2, textAlign: 'center',
-                    borderStyle: 'dashed' }}>
-                    <ReportOutlinedIcon sx={{ fontSize: 30, color: 'text.disabled', mb: 0.5 }} />
-                    <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Conduct reports arrive next</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420, mx: 'auto' }}>
-                        Praise, concerns and serious incidents recorded by teachers will land in this
-                        tab with the New → Acknowledged → Actioned flow. Teachers already see
-                        where it will live in their sidebar.
-                    </Typography>
-                </Paper>
+                <ConductTab onChanged={() => counts.reload()} onToast={setToast} />
             )}
 
             <Snackbar open={Boolean(toast)} autoHideDuration={2800}

@@ -205,8 +205,8 @@ const deleteRequest = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/communications/badge-counts — admin home badge: everything still
- * waiting on an admin decision across the Admin Communications channels.
- * (Conduct reports join in the next phase; the key ships now at 0.)
+ * waiting on an admin decision across the Admin Communications channels
+ * (store requests, permission requests, un-read conduct reports).
  */
 const badgeCounts = asyncHandler(async (req, res) => {
     const school = req.user.school_id;
@@ -217,18 +217,19 @@ const badgeCounts = asyncHandler(async (req, res) => {
         return (data || []).length;
     };
 
-    const [store, permission] = await Promise.all([
+    const [store, permission, conduct] = await Promise.all([
         // Anything not finally resolved still needs action — the admin stands
         // in for the store stage while there is no store-manager account.
         count('store_requests', ['pending', 'store_approved']),
         count('permission_requests', ['pending']),
+        count('conduct_reports', ['new']),
     ]);
 
     res.json({
         badgeCounts: {
             storeRequestsPending: store,
             permissionRequestsPending: permission,
-            conductReportsPending: 0, // conduct reports land with their module
+            conductReportsPending: conduct,
         },
     });
 });

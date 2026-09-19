@@ -28,6 +28,7 @@ const dashboard = require('../controllers/dashboard.controller');
 const datacenter = require('../controllers/datacenter.controller');
 const store = require('../controllers/store.controller');
 const permissionRequests = require('../controllers/permissionRequests.controller');
+const conductReports = require('../controllers/conductReports.controller');
 const files = require('../controllers/files.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
@@ -901,6 +902,40 @@ router.get(
     authorize(ROLES.ADMIN),
     permissionRequests.badgeCounts
 );
+
+// =============================================================================
+// CONDUCT REPORTS (Admin Communications — "Conduct report")
+//
+// A teacher records student behavior (praise / concern / serious incident)
+// for the admin; the admin acknowledges it and eventually marks it actioned,
+// noting what was done so the teacher sees the follow-through.
+// =============================================================================
+router.get('/conduct-reports', authenticate, conductReports.listReports);
+
+router.post(
+    '/conduct-reports',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.SUBJECT_TEACHER),
+    body('classId').isUUID(),
+    body('studentId').isUUID(),
+    body('type').isIn(['praise', 'concern', 'serious']),
+    body('body').isString().trim().isLength({ min: 5 }),
+    validate,
+    conductReports.createReport
+);
+
+router.post(
+    '/conduct-reports/:id/status',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    uuid('id'),
+    body('status').isIn(['acknowledged', 'actioned']),
+    body('note').optional().trim(),
+    validate,
+    conductReports.updateStatus
+);
+
+router.delete('/conduct-reports/:id', authenticate, uuid('id'), validate, conductReports.deleteReport);
 
 
 
