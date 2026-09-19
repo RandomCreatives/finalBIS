@@ -19,6 +19,9 @@ export const fetchTelegramConfig = () => {
             .then((res) => ({
                 enabled: Boolean(res.data?.enabled && res.data?.botUsername),
                 botUsername: res.data?.botUsername || '',
+                // Widget sign-in stays grayed out until the bot function
+                // ships; account linking is available either way.
+                loginEnabled: Boolean(res.data?.loginEnabled),
             }))
             .catch(() => {
                 // Clear the cache on error so the next call retries the server
@@ -27,6 +30,7 @@ export const fetchTelegramConfig = () => {
                 return {
                     enabled: Boolean(FALLBACK_BOT_USERNAME),
                     botUsername: FALLBACK_BOT_USERNAME,
+                    loginEnabled: false,
                 };
             });
     }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, Typography } from '@mui/material';
+import SendIcon from '@mui/icons-material/Send';
 import { fetchTelegramConfig } from '../auth/telegram';
 
 /**
@@ -12,8 +13,10 @@ import { fetchTelegramConfig } from '../auth/telegram';
  * the widget appears as soon as the server is configured — no rebuild needed.
  *
  * Used on the login page (sign-in) and in Settings (account linking).
+ * purpose='login' grays out into a placeholder while the bot function is
+ * being finished (backend sets loginEnabled=false); 'link' stays active.
  */
-export default function TelegramLoginButton({ onAuth, size = 'large' }) {
+export default function TelegramLoginButton({ onAuth, size = 'large', purpose = 'login' }) {
     const containerRef = useRef(null);
     const onAuthRef = useRef(onAuth);
     const [config, setConfig] = useState(null); // null = loading
@@ -66,6 +69,31 @@ export default function TelegramLoginButton({ onAuth, size = 'large' }) {
             <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center' }}>
                 Telegram sign-in is not enabled for this school yet.
             </Typography>
+        );
+    }
+
+    // Grayed-out state: the bot exists but widget sign-in is paused.
+    if (purpose === 'login' && !config.loginEnabled) {
+        return (
+            <Box sx={{ textAlign: 'center' }}>
+                <Box
+                    sx={{
+                        display: 'inline-flex', alignItems: 'center', gap: 1,
+                        px: 2.5, py: 1.1, borderRadius: 999,
+                        border: '1px solid', borderColor: 'divider',
+                        color: 'text.disabled', fontWeight: 700, fontSize: 14,
+                        opacity: 0.65, cursor: 'not-allowed', userSelect: 'none',
+                    }}
+                    aria-disabled="true"
+                >
+                    <SendIcon sx={{ fontSize: 17 }} />
+                    Sign in with Telegram
+                </Box>
+                <Typography variant="caption" color="text.disabled"
+                    sx={{ display: 'block', mt: 0.75, lineHeight: 1.5 }}>
+                    Telegram sign-in is paused while we finish the bot — use your email and password.
+                </Typography>
+            </Box>
         );
     }
 
