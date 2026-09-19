@@ -20,7 +20,6 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
-import heroCampus from '../assets/hero-campus.jpg';
 
 /* ── styled primitives ───────────────────────────────────── */
 const NavLink = styled(Typography)(({ theme }) => ({
@@ -32,20 +31,6 @@ const NavLink = styled(Typography)(({ theme }) => ({
     transition: 'color .15s',
     '&:hover': { color: theme.palette.primary.main },
     '@media (pointer: coarse)': { padding: '8px 0' },
-}));
-
-const Pill = styled(Box)(({ theme }) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '5px 12px',
-    borderRadius: 999,
-    background: alpha(theme.palette.primary.main, 0.1),
-    color: theme.palette.primary.main,
-    fontWeight: 700,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
 }));
 
 /* ── data ────────────────────────────────────────────────── */
@@ -63,12 +48,24 @@ const modules = [
 ];
 
 const roles = [
-    { label: 'Administrator',   icon: AdminPanelSettingsIcon, desc: 'Full system access',                 to: '/login' },
-    { label: 'Main Teacher',    icon: SchoolIcon,             desc: 'Sign in with your class card',       to: '/classes' },
-    { label: 'Subject Teacher', icon: MenuBookIcon,           desc: 'Sign in with your teacher card',     to: '/teacher-login' },
+    { label: 'Administrator',   icon: AdminPanelSettingsIcon, desc: 'Full system access',             to: '/login' },
+    { label: 'Main Teacher',    icon: SchoolIcon,             desc: 'Sign in with your class card',   to: '/classes' },
+    { label: 'Subject Teacher', icon: MenuBookIcon,           desc: 'Sign in with your teacher card', to: '/teacher-login' },
     // Assistant teachers have no public sign-in yet; Clinic, Store Manager
     // and Library roles return with their modules.
 ];
+
+/* ── decorative shape-circle with an icon ────────────────── */
+const IconCircle = ({ bg, size, icon, desktopOnly = false }) => (
+    <Box sx={{
+        display: desktopOnly ? { xs: 'none', sm: 'flex' } : 'flex',
+        width: { xs: size[0], md: size[1] }, height: { xs: size[0], md: size[1] },
+        borderRadius: '50%', bgcolor: bg, flexShrink: 0,
+        alignItems: 'center', justifyContent: 'center',
+    }}>
+        {icon}
+    </Box>
+);
 
 /* ── component ───────────────────────────────────────────── */
 export default function Landing() {
@@ -81,6 +78,17 @@ export default function Landing() {
     const border = dark ? theme.palette.divider : '#e2e8f0';
     const homeTo = isAuthenticated ? '/app' : '/login';
     const signInLabel = isAuthenticated ? 'Dashboard' : 'Sign In';
+
+    // Siddhi-style playful accents on top of the brand palette.
+    const accent = {
+        blue: dark ? '#60a5fa' : '#3b82f6',
+        teal: dark ? '#2dd4bf' : '#0d9488',
+        amber: dark ? '#fbbf24' : '#f59e0b',
+        yellow: '#fde68a',
+        pink: dark ? '#f9a8d4' : '#f9a8d4',
+        pinkSoft: '#fbcfe8',
+        navy: '#1e3a8a',
+    };
 
     return (
         <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
@@ -133,7 +141,7 @@ export default function Landing() {
                             </Box>
                             <Button component={RouterLink} to={homeTo}
                                 variant="contained" size="small" startIcon={<LoginIcon />}
-                                sx={{ fontWeight: 700, borderRadius: 2, px: 2.5, textTransform: 'none' }}>
+                                sx={{ fontWeight: 700, borderRadius: 999, px: 2.5, textTransform: 'none' }}>
                                 {signInLabel}
                             </Button>
                         </Box>
@@ -146,14 +154,16 @@ export default function Landing() {
                 position: 'relative', overflow: 'hidden',
                 background: dark
                     ? [
-                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.28)}, transparent 55%)`,
-                        `radial-gradient(800px 380px at 110% 0%, ${alpha(theme.palette.secondary.main, 0.20)}, transparent 55%)`,
+                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.22)}, transparent 55%)`,
+                        `radial-gradient(760px 360px at 110% 0%, ${alpha('#f9a8d4', 0.08)}, transparent 55%)`,
+                        `radial-gradient(700px 340px at 50% 110%, ${alpha('#fbbf24', 0.07)}, transparent 55%)`,
                       ].join(',')
                     : [
-                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.12)}, transparent 55%)`,
-                        `radial-gradient(800px 380px at 110% 0%, ${alpha(theme.palette.secondary.main, 0.10)}, transparent 55%)`,
+                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.08)}, transparent 55%)`,
+                        `radial-gradient(760px 360px at 110% 0%, ${alpha('#f9a8d4', 0.12)}, transparent 55%)`,
+                        `radial-gradient(700px 340px at 50% 110%, ${alpha('#fbbf24', 0.10)}, transparent 55%)`,
                       ].join(','),
-                pt: { xs: 6, md: 9 }, pb: { xs: 6, md: 8 },
+                pt: { xs: 6, md: 9 }, pb: { xs: 5, md: 7 },
             }}>
                 <Container maxWidth="lg">
                     <Box sx={{
@@ -163,13 +173,25 @@ export default function Landing() {
                     }}>
                         {/* left — identity */}
                         <Box>
-                            <Pill sx={{ mb: 2.5 }}>Gerji · Primary II — Staff Portal</Pill>
+                            <Typography sx={{
+                                fontSize: 12, fontWeight: 800, letterSpacing: '.14em',
+                                textTransform: 'uppercase', mb: 2.5,
+                                display: 'flex', alignItems: 'center', gap: 0.75,
+                            }}>
+                                <Box component="span" sx={{ color: accent.blue }}>Gerji</Box>
+                                <Box component="span" sx={{ color: 'text.disabled' }}>·</Box>
+                                <Box component="span" sx={{ color: accent.teal }}>Primary II</Box>
+                                <Box component="span" sx={{ color: 'text.disabled' }}>·</Box>
+                                <Box component="span" sx={{ color: accent.amber }}>Staff Portal</Box>
+                            </Typography>
                             <Typography component="h1" sx={{
                                 fontWeight: 800,
-                                fontSize: { xs: '2.1rem', sm: '3rem', md: '3.5rem' },
-                                lineHeight: 1.08, letterSpacing: '-.02em', mb: 2.5,
+                                fontSize: { xs: '2.2rem', sm: '3.2rem', md: '3.7rem' },
+                                lineHeight: 1.05, letterSpacing: '-.03em', mb: 2.5,
+                                color: dark ? '#f8fafc' : '#0f172a',
                             }}>
-                                Run the whole school day, from one place.
+                                Run the whole school day, from{' '}
+                                <Box component="span" sx={{ color: 'primary.main' }}>one place</Box>.
                             </Typography>
                             <Typography sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, lineHeight: 1.7,
                                 color: 'text.secondary', maxWidth: 520, mb: 3 }}>
@@ -179,10 +201,10 @@ export default function Landing() {
                             </Typography>
                             <Box sx={{
                                 display: 'inline-flex', alignItems: 'center', gap: 1,
-                                px: 1.75, py: 1, borderRadius: 2,
+                                px: 1.75, py: 1, borderRadius: 999,
                                 border: `1px solid ${border}`,
                                 bgcolor: alpha(theme.palette.success.main, dark ? 0.14 : 0.1),
-                                color: dark ? 'success.main' : 'success.main',
+                                color: 'success.main',
                                 fontWeight: 700, fontSize: 13,
                             }}>
                                 <EventAvailableIcon sx={{ fontSize: 17 }} />
@@ -192,16 +214,17 @@ export default function Landing() {
 
                         {/* right — sign-in card */}
                         <Box sx={{
-                            p: { xs: 2.5, md: 3 }, borderRadius: 3,
+                            p: { xs: 2.5, md: 3 }, borderRadius: 5,
                             border: `1px solid ${border}`,
-                            bgcolor: alpha(surface, dark ? 0.75 : 0.9),
+                            bgcolor: alpha(surface, dark ? 0.8 : 0.95),
                             backdropFilter: 'blur(10px)',
                             boxShadow: dark
-                                ? '0 24px 60px -24px rgba(15,23,42,.9)'
-                                : '0 24px 60px -32px rgba(30,64,175,.35)',
+                                ? '0 30px 70px -30px rgba(15,23,42,.9)'
+                                : '0 30px 70px -34px rgba(15,23,42,.28)',
                         }}>
                             <Typography component="h2" sx={{ fontWeight: 800, fontSize: 20,
-                                letterSpacing: '-.01em', mb: 0.5 }}>
+                                letterSpacing: '-.01em', mb: 0.5,
+                                color: dark ? '#f8fafc' : '#0f172a' }}>
                                 Sign in
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
@@ -218,7 +241,7 @@ export default function Landing() {
                                             to={r.to}
                                             sx={{
                                                 display: 'flex', alignItems: 'center', gap: 2,
-                                                p: 1.75, borderRadius: 2,
+                                                p: 1.75, borderRadius: 3,
                                                 border: `1px solid ${border}`,
                                                 textDecoration: 'none', color: 'inherit',
                                                 bgcolor: dark ? 'background.paper' : '#ffffff',
@@ -235,10 +258,10 @@ export default function Landing() {
                                             }}
                                         >
                                             <Box sx={{
-                                                width: 42, height: 42, borderRadius: 1.5, flexShrink: 0,
+                                                width: 42, height: 42, borderRadius: 2, flexShrink: 0,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                                color: 'primary.main',
+                                                bgcolor: '#0f172a', color: '#fff',
+                                                border: dark ? '1px solid #334155' : 'none',
                                             }}>
                                                 <Icon sx={{ fontSize: 21 }} />
                                             </Box>
@@ -266,22 +289,42 @@ export default function Landing() {
                         </Box>
                     </Box>
 
-                    {/* illustration */}
+                    {/* playful shape strip (Siddhi-style collage, icons instead of photos) */}
                     <Box
-                        component="img"
-                        src={heroCampus}
-                        alt="Illustration of the BIS NOC Gerji school campus in the morning"
+                        data-testid="hero-shape-strip"
+                        aria-hidden="true"
                         sx={{
-                            display: 'block', width: '100%',
-                            aspectRatio: { xs: '16 / 10', sm: '21 / 9' },
-                            objectFit: 'cover', objectPosition: 'center 55%',
-                            borderRadius: 4, border: `1px solid ${border}`,
-                            boxShadow: dark
-                                ? '0 32px 80px -32px rgba(15,23,42,.9)'
-                                : '0 32px 80px -40px rgba(30,64,175,.35)',
-                            filter: dark ? 'saturate(.92) brightness(.8)' : 'none',
+                            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+                            gap: { xs: 1.25, sm: 2 }, userSelect: 'none',
                         }}
-                    />
+                    >
+                        <Box sx={{
+                            display: { xs: 'none', sm: 'block' },
+                            width: { sm: 44, md: 58 }, height: { sm: 88, md: 116 },
+                            bgcolor: accent.amber, borderRadius: '0 999px 999px 0',
+                        }} />
+                        <IconCircle bg={accent.blue} size={[84, 116]} desktopOnly
+                            icon={<CalendarMonthIcon sx={{ fontSize: { sm: 38, md: 52 }, color: '#fff' }} />} />
+                        <Box sx={{
+                            width: { xs: 60, md: 96 }, height: { xs: 60, md: 96 },
+                            bgcolor: accent.pink,
+                            borderRadius: '999px 999px 999px 20px',
+                        }} />
+                        <IconCircle bg={accent.yellow} size={[92, 124]}
+                            icon={<GradeIcon sx={{ fontSize: { xs: 42, md: 56 }, color: accent.navy }} />} />
+                        <Box sx={{
+                            display: { xs: 'none', sm: 'block' },
+                            width: { sm: 84, md: 116 }, height: { sm: 42, md: 58 },
+                            bgcolor: accent.teal, borderRadius: '999px 999px 0 0',
+                        }} />
+                        <IconCircle bg={accent.pinkSoft} size={[76, 104]} desktopOnly
+                            icon={<EventAvailableIcon sx={{ fontSize: { sm: 34, md: 46 }, color: accent.navy }} />} />
+                        <Box sx={{
+                            display: { xs: 'none', sm: 'block' },
+                            width: { sm: 44, md: 58 }, height: { sm: 88, md: 116 },
+                            bgcolor: accent.blue, borderRadius: '999px 0 0 999px',
+                        }} />
+                    </Box>
                 </Container>
             </Box>
 
@@ -305,7 +348,7 @@ export default function Landing() {
                             return (
                                 <Box key={m.label} sx={{
                                     display: 'inline-flex', alignItems: 'center', gap: 1,
-                                    px: 1.75, py: 1, borderRadius: 2,
+                                    px: 1.75, py: 1, borderRadius: 999,
                                     border: `1px solid ${border}`,
                                     bgcolor: dark ? 'background.default' : alpha(theme.palette.primary.main, 0.03),
                                     fontWeight: 600, fontSize: 13,
