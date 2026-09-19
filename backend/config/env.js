@@ -61,6 +61,8 @@ const env = {
         // Optional shared secret sent by Telegram as the
         // X-Telegram-Bot-Api-Secret-Token header on every webhook update.
         webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
+        // TELEGRAM_LOGIN_ENABLED ("true") reopens sign-in via the widget —
+        // read per-request in auth.controller while the bot is finished.
     },
 };
 

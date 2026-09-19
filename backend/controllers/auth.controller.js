@@ -87,16 +87,16 @@ const me = asyncHandler(async (req, res) => {
     res.json({ user: publicUser(req.user) });
 });
 
+/**
+ * Telegram widget sign-in feature flag — read per request (not captured at
+ * boot) so it can be flipped without a redeploy while the bot is finished.
+ */
+const telegramLoginEnabled = () =>
+    String(process.env.TELEGRAM_LOGIN_ENABLED || '').toLowerCase() === 'true';
+
 /** PATCH /api/auth/password */
 const changePassword = asyncHandler(async (req, res) => {
     const { currentPassword, newPassword } = req.body;
-
-    // Class-card accounts (main teachers) arrive through the shared class
-    // card; the account password is issued and rotated by the administrator,
-    // never self-served.
-    if (req.user.role === 'main_teacher') {
-        throw new ForbiddenError('You sign in with your class card — password changes are handled by the administrator');
-    }
 
     const { data: user, error } = await supabase
         .from('users')
@@ -161,6 +161,85 @@ const updateProfile = asyncHandler(async (req, res) => {
     if (error) throw error;
 
     res.json({ user: publicUser(data), message: 'Profile updated successfully' });
+});
+
+/** The basic credential every subject-teacher seat starts (and resets) to. */
+const SUBJECT_BASIC_PASSWORD = 'BisNoc2026!';
+
+/**
+ * POST /api/auth/reset-password/:userId  (admin only)
+ *
+ * "Revoke to basic": when a teacher loses their personal password, an
+ * administrator resets the account back to its known basic credential —
+ *   · subject teachers → the shared placeholder BisNoc2026!
+ *   · main teachers    → their class card password (the class name)
+ * The teacher then signs in with email + basic and sets their own password.
+ */
+const resetUserPassword = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    const { data: target, error } = await supabase
+        .from('users')
+        .select('id, name, role, is_active')
+        .eq('id', userId)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!target) throw new NotFoundError('Account not found');
+    if (target.role === 'admin') {
+        throw new BadRequestError('Administrator passwords are rotated manually, not through reset.');
+    }
+
+    let basic = SUBJECT_BASIC_PASSWORD;
+    let describe = `the placeholder password (${SUBJECT_BASIC_PASSWORD})`;
+
+    if (target.role === 'main_teacher') {
+        const { data: year, error: yearError } = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('school_id', req.user.school_id)
+            .eq('is_current', true)
+            .maybeSingle();
+        if (yearError) throw yearError;
+
+        const seatResult = year ? await supabase
+            .from('class_staff')
+            .select('class_id')
+            .eq('academic_year_id', year.id)
+            .eq('user_id', target.id)
+            .eq('position', 'main')
+            .maybeSingle() : { data: null, error: null };
+        if (seatResult.error) throw seatResult.error;
+        if (!seatResult.data) {
+            throw new BadRequestError('This account seats no class as main teacher this year — rotate its password manually.');
+        }
+
+        const { data: klass, error: classError } = await supabase
+            .from('classes')
+            .select('name')
+            .eq('id', seatResult.data.class_id)
+            .maybeSingle();
+        if (classError) throw classError;
+
+        // The literal the teacher types into the email sign-in — the same
+        // normalization the login screen documents ('Year 3 - Blue' ->
+        // 'year 3 blue'). bcrypt compares exactly, no fuzzy matching here.
+        basic = klass.name.toLowerCase().replace(/\s*-\s*/g, ' ').replace(/\s+/g, ' ').trim();
+        describe = `the class card password (${basic})`;
+    }
+
+    const password_hash = await bcrypt.hash(basic, BCRYPT_ROUNDS);
+    const { error: updateError } = await supabase
+        .from('users')
+        .update({ password_hash })
+        .eq('id', target.id);
+    if (updateError) throw updateError;
+
+    res.json({
+        message: `${target.name}'s password was revoked to ${describe}. Ask them to sign in and set their own.`,
+        basic,
+    });
 });
 
 /** POST /api/auth/send-verification-code */
@@ -350,6 +429,12 @@ const gmailVerifyCode = asyncHandler(async (req, res) => {
  * staff account first (admins do that from the Staff page).
  */
 const telegramLogin = asyncHandler(async (req, res) => {
+    // Sign-in via Telegram is temporarily grayed out while the bot function
+    // is being finished. Account linking (link-telegram) is unaffected.
+    if (!telegramLoginEnabled()) {
+        throw new ForbiddenError('Telegram sign-in is temporarily disabled while the Telegram bot is being finished. Use your email and password.');
+    }
+
     // Guard: if the bot token is missing, this is a server config problem,
     // not a user error. Distinguish clearly so an admin can diagnose it.
     if (!env.telegram.botToken) {
@@ -409,6 +494,9 @@ const telegramConfig = asyncHandler(async (req, res) => {
     res.json({
         enabled,
         botUsername: enabled ? env.telegram.botUsername : null,
+        // The widget login is grayed out until the bot function is finished;
+        // account linking from the profile page remains available.
+        loginEnabled: enabled && telegramLoginEnabled(),
     });
 });
 
@@ -650,6 +738,7 @@ module.exports = {
     me,
     changePassword,
     updateProfile,
+    resetUserPassword,
     sendVerificationCode,
     verifyCode,
     gmailRequestCode,
