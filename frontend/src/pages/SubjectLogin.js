@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
-    Box, Button, Chip, Container, Grid, IconButton, Paper, Tooltip, Typography, useTheme,
+    Box, Chip, Container, Grid, IconButton, Paper, Tooltip, Typography, useTheme,
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
@@ -62,10 +62,6 @@ export default function SubjectLogin() {
                         <Typography sx={{ fontWeight: 800, fontSize: 15, lineHeight: 1.2 }}>BIS NOC Gerji</Typography>
                         <Typography variant="caption" color="text.secondary">Staff sign-in</Typography>
                     </Box>
-                    <Button component={RouterLink} to="/login" size="small"
-                        sx={{ textTransform: 'none', fontWeight: 700, mr: 0.5, minHeight: 40 }}>
-                        Staff email sign-in
-                    </Button>
                     <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
                         <IconButton size="small" onClick={toggleColorScheme}
                             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>

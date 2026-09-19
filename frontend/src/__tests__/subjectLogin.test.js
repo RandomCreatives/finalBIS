@@ -49,11 +49,12 @@ describe('SubjectLogin wall — class cards', () => {
         expect(screen.getAllByRole('button', { name: /Class Sign-In/i })).toHaveLength(CLASSES.length);
     });
 
-    test('offers the staff email sign-in fallback', () => {
+    test('no generic email sign-in — subject teachers go to their own wall instead', () => {
         renderWall();
-        const links = screen.getAllByRole('link', { name: /staff email sign-in|sign in with your staff email/i });
-        expect(links.length).toBeGreaterThan(0);
-        expect(links[0]).toHaveAttribute('href', '/login');
+        expect(screen.queryByRole('link', { name: /staff email sign-in|sign in with your staff email/i }))
+            .toBeNull();
+        const subjectLink = screen.getByRole('link', { name: /sign in with your teacher card/i });
+        expect(subjectLink).toHaveAttribute('href', '/subject-login');
     });
 
     test('tapping a card opens the shared class password dialog', () => {
