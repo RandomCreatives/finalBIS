@@ -63,11 +63,10 @@ describe('Landing Page', () => {
 
     test('role links land on the right sign-in surfaces', () => {
         renderWithProviders(<Landing />);
-        // Main teachers sign in with a class card; subject teachers use staff
-        // email (Login routes them to /subject-home). The class-card wall must
-        // NOT be offered to subject teachers — it opens the main teacher page.
+        // Main teachers sign in with a class card; subject teachers have their
+        // own teacher-card wall at /subject-login (opens the subject dashboard).
         expect(screen.getByRole('link', { name: /Subject Teacher/ }))
-            .toHaveAttribute('href', '/login');
+            .toHaveAttribute('href', '/subject-login');
         expect(screen.getByRole('link', { name: /Main Teacher/ }))
             .toHaveAttribute('href', '/classes');
         expect(screen.getByRole('link', { name: /Administrator/ }))
