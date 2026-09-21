@@ -292,6 +292,16 @@ describe('submission and review', () => {
         assert.equal(res.status, 403);
     });
 
+    test('a main teacher cannot review either — approval is the admin\'s desk', async () => {
+        reset(draft('submitted'));
+        const res = await request(app)
+            .post(`/api/planning/schemes/${SCHEME}/review`)
+            .auth(tokenFor(MAIN))
+            .send({ decision: 'approved' });
+
+        assert.equal(res.status, 403);
+    });
+
     test('reviewing an unsubmitted document is refused', async () => {
         reset(draft());
         supabaseStub._rpc.review_planning_document = () => ({
@@ -316,8 +326,9 @@ describe('submission and review', () => {
         assert.equal(res.status, 400);
     });
 
-    test('the planning overview is for reviewers only', async () => {
+    test('the planning overview is for the admin only', async () => {
         assert.equal((await request(app).get('/api/planning/overview').auth(tokenFor(ENG_T))).status, 403);
+        assert.equal((await request(app).get('/api/planning/overview').auth(tokenFor(MAIN))).status, 403);
         assert.equal((await request(app).get('/api/planning/overview').auth(tokenFor(ADMIN))).status, 200);
     });
 
@@ -329,6 +340,90 @@ describe('submission and review', () => {
         assert.equal(res.body.rows[0].schemeStatus, 'missing');
         assert.equal(res.body.summary.schemesMissing, 1);
         assert.equal(res.body.term.weekCount, 12);
+    });
+
+    test('the inbox lists every submitted document, oldest first, with its author', async () => {
+        reset({
+            ...tables(),
+            schemes_of_work: [{
+                id: SCHEME, school_id: SCHOOL, term_id: TERM, class_subject_id: CS_ENG_A,
+                author_id: ENG_T.id, title: 'English — Term 1', status: 'submitted',
+                submitted_at: '2026-09-20T08:00:00.000Z',
+            }],
+            lesson_plans: [{
+                id: PLAN, school_id: SCHOOL, term_id: TERM, class_subject_id: CS_ENG_A,
+                author_id: OTHER_T.id, week_number: 2, topic: 'Persuasive writing',
+                objectives: 'Write a persuasive paragraph', status: 'submitted',
+                submitted_at: '2026-09-19T08:00:00.000Z',
+            }],
+        });
+
+        const res = await request(app).get('/api/planning/overview').auth(tokenFor(ADMIN));
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body.awaiting.map((d) => d.kind), ['lesson-plans', 'schemes']);
+
+        const planDoc = res.body.awaiting[0];
+        assert.equal(planDoc.topic, 'Persuasive writing');
+        assert.equal(planDoc.objectives, 'Write a persuasive paragraph');
+        // The name shown is the AUTHOR's, even when she covers another seat.
+        assert.equal(planDoc.author.name, 'Hanna');
+        assert.equal(planDoc.class.name, 'Year 3A');
+        assert.equal(planDoc.subject.name, 'English');
+        assert.equal(res.body.awaiting[1].title, 'English — Term 1');
+        assert.equal(res.body.summary.awaitingReview, 2);
+    });
+
+    test('the tracker marks weeks with no handed-in plan as missing', async () => {
+        reset({
+            ...tables(),
+            lesson_plans: [
+                {
+                    id: PLAN, school_id: SCHOOL, term_id: TERM, class_subject_id: CS_ENG_A,
+                    author_id: ENG_T.id, week_number: 1, topic: 'Done', status: 'approved',
+                },
+                {
+                    id: 'a1b2c3d4-1a2b-4c3d-8e9f-0a1b2c3d4e5f', school_id: SCHOOL, term_id: TERM,
+                    class_subject_id: CS_ENG_A, author_id: ENG_T.id, week_number: 2,
+                    topic: 'Still drafting', status: 'draft',
+                },
+            ],
+        });
+
+        const res = await request(app).get('/api/planning/overview').auth(tokenFor(ADMIN));
+        const row = res.body.rows[0];
+
+        // Only submitted/approved weeks count as handed in — a draft does not.
+        assert.deepEqual(row.submittedWeeks, [1]);
+
+        // Mirror the controller's clock maths so the test holds on any date.
+        const today = new Date().toISOString().slice(0, 10);
+        let cw = null;
+        if (today >= TERM_ROW.starts_on && today <= TERM_ROW.ends_on) {
+            const total = Math.max(1, Math.ceil(((new Date(TERM_ROW.ends_on) - new Date(TERM_ROW.starts_on)) / 86400000 + 1) / 7));
+            cw = Math.min(total, Math.floor((new Date(today) - new Date(TERM_ROW.starts_on)) / 86400000 / 7) + 1);
+        }
+        if (cw === null) {
+            assert.deepEqual(row.missingWeeks, []);
+            assert.equal(res.body.summary.lateTeachers, 0);
+        } else {
+            assert.deepEqual(row.missingWeeks, Array.from({ length: cw }, (_, i) => i + 1).filter((w) => w !== 1));
+            assert.equal(res.body.summary.lateTeachers, 1);
+        }
+    });
+
+    test('outside the term dates nothing is flagged late', async () => {
+        reset({
+            ...tables(),
+            terms: [{ ...TERM_ROW, starts_on: '2030-09-01', ends_on: '2030-11-17' }],
+        });
+
+        const res = await request(app).get('/api/planning/overview').auth(tokenFor(ADMIN));
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.term.currentWeek, null);
+        assert.deepEqual(res.body.rows[0].missingWeeks, []);
+        assert.equal(res.body.summary.lateTeachers, 0);
     });
 });
 

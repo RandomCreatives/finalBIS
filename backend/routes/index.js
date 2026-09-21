@@ -658,9 +658,9 @@ router.delete('/terms/:id', authenticate, authorize(ROLES.ADMIN), uuid('id'), va
 // =============================================================================
 // PLANNING — schemes of work and lesson plans
 //
-// Teachers author their own; admins and main teachers review.
+// Teachers author their own; only the admin reviews and tracks them.
 // =============================================================================
-router.get('/planning/overview', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), planning.getPlanningOverview);
+router.get('/planning/overview', authenticate, authorize(ROLES.ADMIN), planning.getPlanningOverview);
 
 router.get('/planning/schemes', authenticate, planning.listSchemes);
 router.get('/planning/schemes/:id', authenticate, uuid('id'), validate, planning.getScheme);
@@ -716,7 +716,7 @@ router.post(
 router.post(
     '/planning/:kind/:id/review',
     authenticate,
-    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
+    authorize(ROLES.ADMIN),
     param('kind').isIn(['schemes', 'lesson-plans']),
     uuid('id'),
     body('decision').isIn(['approved', 'changes_requested']).withMessage('Invalid decision'),
