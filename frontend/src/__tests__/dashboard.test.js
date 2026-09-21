@@ -69,4 +69,24 @@ describe('Dashboard — collapsible data flow', () => {
         // the folded content unmounts once the exit transition settles
         await waitFor(() => expect(screen.queryByText('Flow health')).not.toBeInTheDocument());
     });
+
+    test('the sign-in activity card surfaces who needs a nudge', async () => {
+        dashboardApi.dataFlow.mockResolvedValue({
+            role: 'admin', healthScore: 70, openItems: 3,
+            flows: [{
+                id: 'signins', title: 'Staff sign-in activity',
+                source: 'Active staff accounts', destination: 'Teacher portals',
+                metric: '6/14 staff active this week',
+                detail: '8 never signed in · 0 quiet for 3+ days.',
+                progress: 43, status: 'critical', href: '/app/staff',
+                nextAction: 'Nudge the staff listed on the Staff page',
+            }],
+        });
+        renderDashboard();
+        fireEvent.click((await screen.findByText('Teacher ↔ Admin data flow')).closest('[class*="MuiStack-root"]'));
+
+        expect(await screen.findByText('Staff sign-in activity')).toBeInTheDocument();
+        expect(screen.getByText('6/14 staff active this week')).toBeInTheDocument();
+        expect(screen.getByText('8 never signed in · 0 quiet for 3+ days.')).toBeInTheDocument();
+    });
 });

@@ -181,8 +181,39 @@ describe('dashboard data-flow', () => {
         assert.equal(byId.messages.metric, '1 open thread(s)');
         assert.equal(byId.notices.metric, '1 ack(s) outstanding');
         assert.equal(byId.clinic.metric, '1 pending leave');
+        // Sign-in activity card: both active teachers never signed in.
+        assert.equal(byId.signins.metric, '0/2 staff active this week');
+        assert.equal(byId.signins.detail, '2 never signed in · 0 quiet for 3+ days.');
+        assert.equal(byId.signins.status, 'critical');
         assert.ok(res.body.healthScore < 100);
         assert.ok(res.body.openItems > 0);
+    });
+
+    test('sign-in card distinguishes fresh from quiet accounts', async () => {
+        const { reset: reseed } = require('./helpers');
+        const fresh = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(); // 6 h ago
+        const stale = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(); // 8 days ago
+        reseed({
+            users: [
+                ADMIN,
+                { ...MAIN, last_login_at: fresh },
+                { ...ASSISTANT, last_login_at: stale },
+            ],
+            academic_years: [
+                {
+                    id: YEAR, school_id: SCHOOL, name: '2026/2027',
+                    starts_on: isoDate(-7), ends_on: isoDate(180), is_current: true,
+                },
+            ],
+        });
+
+        const res = await request(app).get('/api/dashboard/data-flow').auth(tokenFor(ADMIN));
+        assert.equal(res.status, 200);
+
+        const byId = Object.fromEntries(res.body.flows.map((item) => [item.id, item]));
+        assert.equal(byId.signins.metric, '1/2 staff active this week');
+        assert.equal(byId.signins.detail, '0 never signed in · 1 quiet for 3+ days.');
+        assert.equal(byId.signins.status, 'critical'); // 1/2 = 50% — below the 60% 'attention' bar
     });
 
     test('scopes the flow map to a teacher\'s own responsibilities', async () => {
