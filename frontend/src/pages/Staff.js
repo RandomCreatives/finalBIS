@@ -14,6 +14,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { userApi, authApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
+import { signInMeta } from '../utils/time';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
@@ -249,9 +250,25 @@ export default function Staff() {
                                             )}
                                         </TableCell>
                                         <TableCell>
-                                            {m.lastLoginAt
-                                                ? new Date(m.lastLoginAt).toLocaleDateString()
-                                                : <Typography variant="caption" color="text.secondary">never</Typography>}
+                                            {(() => {
+                                                const meta = signInMeta(m.lastLoginAt);
+                                                if (meta.tone === 'never') {
+                                                    return (
+                                                        <Chip size="small" color="warning" label="Never"
+                                                            title={meta.title} sx={{ fontWeight: 700 }} />
+                                                    );
+                                                }
+                                                return (
+                                                    <Typography
+                                                        variant="caption"
+                                                        title={meta.title}
+                                                        color={meta.tone === 'stale' ? 'warning.main' : 'text.secondary'}
+                                                        sx={{ fontWeight: meta.tone === 'stale' ? 700 : 500 }}
+                                                    >
+                                                        {meta.text}
+                                                    </Typography>
+                                                );
+                                            })()}
                                         </TableCell>
                                         <TableCell align="right">
                                             <Tooltip title={m.telegramId ? 'Change Telegram link' : 'Link Telegram account'}>

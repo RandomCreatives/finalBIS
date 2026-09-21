@@ -501,7 +501,7 @@ const getDataFlow = asyncHandler(async (req, res) => {
     if (isAdmin) {
         const term = await getCurrentTermRecord(schoolId);
 
-        const [classRes, staffSeatRes, attendanceRes, schemesRes, plansRes, tasksRes, threadsRes, clinicRes] =
+        const [classRes, staffSeatRes, attendanceRes, schemesRes, plansRes, tasksRes, threadsRes, clinicRes, activeStaffRes] =
             await Promise.all([
                 countOf(schoolId, 'classes'),
                 yearId
@@ -528,9 +528,17 @@ const getDataFlow = asyncHandler(async (req, res) => {
                     .select('id, status, priority')
                     .eq('school_id', schoolId),
                 countOf(schoolId, 'clinic_visits', (q) => q.eq('leave_status', 'pending')),
+                // Active non-admin staff + their last sign-in — the office
+                // itself is excluded so the metric is who needs a nudge.
+                supabase
+                    .from('users')
+                    .select('id, last_login_at')
+                    .eq('school_id', schoolId)
+                    .eq('is_active', true)
+                    .neq('role', 'admin'),
             ]);
 
-        assertOk(classRes, staffSeatRes, attendanceRes, schemesRes, plansRes, tasksRes, threadsRes, clinicRes);
+        assertOk(classRes, staffSeatRes, attendanceRes, schemesRes, plansRes, tasksRes, threadsRes, clinicRes, activeStaffRes);
 
         const noticeStats = await getNoticeAckStats({ schoolId });
 
@@ -538,6 +546,19 @@ const getDataFlow = asyncHandler(async (req, res) => {
         const expectedSeats = totalClasses * 2;
         const filledSeats = staffSeatRes.count ?? 0;
         const staffingProgress = percent(filledSeats, expectedSeats);
+
+        // Sign-in activity: how many active staff accounts have EVER signed
+        // in, and how many of those went quiet for 3+ days.
+        const STALE_DAYS = 3;
+        const activeStaff = activeStaffRes.data || [];
+        const staffTotal = activeStaff.length;
+        const neverSignedIn = activeStaff.filter((u) => !u.last_login_at).length;
+        const cutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000;
+        const staleSignedIn = activeStaff
+            .filter((u) => u.last_login_at && new Date(u.last_login_at).getTime() < cutoff)
+            .length;
+        const freshSignedIn = staffTotal - neverSignedIn - staleSignedIn;
+        const signinProgress = percent(freshSignedIn, staffTotal);
 
         const attendanceRows = attendanceRes.data || [];
         const submittedClasses = new Set(attendanceRows.map((row) => row.class_id)).size;
@@ -579,6 +600,21 @@ const getDataFlow = asyncHandler(async (req, res) => {
                 progress: staffingProgress,
                 href: '/app/assignments',
                 nextAction: filledSeats < expectedSeats ? 'Fill every main and assistant teacher seat' : 'Staffing model is ready',
+            }),
+            flow({
+                id: 'signins',
+                title: 'Staff sign-in activity',
+                source: 'Active staff accounts',
+                destination: 'Teacher portals',
+                metric: `${freshSignedIn}/${staffTotal} staff active this week`,
+                detail: neverSignedIn + staleSignedIn === 0
+                    ? 'Every active staff account has signed in recently.'
+                    : `${neverSignedIn} never signed in · ${staleSignedIn} quiet for ${STALE_DAYS}+ days.`,
+                progress: signinProgress,
+                href: '/app/staff',
+                nextAction: neverSignedIn + staleSignedIn > 0
+                    ? 'Nudge the staff listed on the Staff page'
+                    : 'Everyone is in the system',
             }),
             flow({
                 id: 'attendance',

@@ -14,6 +14,7 @@ import FactCheckIcon from '@mui/icons-material/FactCheck';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import SyncAltIcon from '@mui/icons-material/SyncAlt';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
 import { dashboardApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -58,6 +59,7 @@ const FLOW_ICONS = {
     messages: <ForumIcon />,
     notices: <CampaignIcon />,
     clinic: <HealthAndSafetyIcon />,
+    signins: <HowToRegIcon />,
 };
 
 const STATUS_META = {
