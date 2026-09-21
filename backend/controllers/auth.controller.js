@@ -5,6 +5,7 @@ const { signToken } = require('../middleware/auth');
 const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, ForbiddenError, asyncHandler } = require('../utils/errors');
 const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
 const { verifyTelegramLogin } = require('../utils/telegram');
+const { isFixtureSubject } = require('../utils/subjects');
 
 const BCRYPT_ROUNDS = 12;
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -581,9 +582,12 @@ const normalizeClassPassword = (s) =>
 
 /**
  * GET /api/auth/subject-teachers — card directory for the subject-teacher
- * sign-in page. Returns only the safe fields needed to render the cards
- * (names are already public on the /teachers page); the password still
- * guards the actual sign-in.
+ * sign-in page. One card per active subject teacher who actually holds
+ * teaching seats this year, with those seats grouped by subject so the wall
+ * can file each card under what the person really teaches (real names for
+ * staffed seats, "Teacher N" for seats still on a placeholder). Only safe
+ * fields leave the server (names are already public on the /teachers
+ * page); the password still guards the actual sign-in.
  */
 const listSubjectTeachers = asyncHandler(async (req, res) => {
     const { data: school, error: schoolError } = await supabase
@@ -594,18 +598,60 @@ const listSubjectTeachers = asyncHandler(async (req, res) => {
     if (schoolError) throw schoolError;
     if (!school) throw new NotFoundError('School not found');
 
-    const { data, error } = await supabase
-        .from('users')
-        .select('id, name')
+    const { data: year, error: yearError } = await supabase
+        .from('academic_years')
+        .select('id')
         .eq('school_id', school.id)
-        .eq('role', 'subject_teacher')
-        .eq('is_active', true)
-        .order('name');
+        .eq('is_current', true)
+        .maybeSingle();
 
-    if (error) throw error;
+    if (yearError) throw yearError;
+
+    const [teachersRes, seatsRes] = await Promise.all([
+        supabase
+            .from('users')
+            .select('id, name')
+            .eq('school_id', school.id)
+            .eq('role', 'subject_teacher')
+            .eq('is_active', true)
+            .order('name'),
+        year
+            ? supabase
+                .from('class_subjects')
+                .select('teacher_id, subject:subjects(code, name)')
+                .eq('academic_year_id', year.id)
+            : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (teachersRes.error) throw teachersRes.error;
+    if (seatsRes.error) throw seatsRes.error;
+
+    // Aggregate each teacher's current-year seats by subject (registrations
+    // and other fixtures are not teaching assignments).
+    const seatsByTeacher = new Map();
+    for (const seat of seatsRes.data || []) {
+        if (isFixtureSubject(seat.subject)) continue;
+        if (!seat.subject) continue;
+        if (!seatsByTeacher.has(seat.teacher_id)) seatsByTeacher.set(seat.teacher_id, new Map());
+        const byCode = seatsByTeacher.get(seat.teacher_id);
+        const entry = byCode.get(seat.subject.code) || { code: seat.subject.code, name: seat.subject.name, seats: 0 };
+        entry.seats += 1;
+        byCode.set(seat.subject.code, entry);
+    }
+
     // Shape explicitly: the response guarantees only safe fields, whatever
-    // the query layer returns.
-    res.json({ teachers: (data || []).map((t) => ({ id: t.id, name: t.name })) });
+    // the query layer returns. Teachers with no seats this year have no
+    // card — there is nothing of theirs to sign in to.
+    const teachers = (teachersRes.data || [])
+        .map((t) => ({
+            id: t.id,
+            name: t.name,
+            subjects: [...(seatsByTeacher.get(t.id)?.values() || [])]
+                .sort((a, b) => (b.seats - a.seats) || a.name.localeCompare(b.name)),
+        }))
+        .filter((t) => t.subjects.length > 0);
+
+    res.json({ teachers });
 });
 
 /**
