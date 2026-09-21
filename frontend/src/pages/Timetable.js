@@ -39,7 +39,9 @@ export default function Timetable() {
     const { user, isAdmin } = useAuth();
 
     const [classId, setClassId] = useState('');
-    const [tab, setTab] = useState(0);
+    // Admins have no "my week" of lessons — land them on the class schedule
+    // grid where the work actually happens; teachers land on their own week.
+    const [tab, setTab] = useState(isAdmin ? 1 : 0);
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');

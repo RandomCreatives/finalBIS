@@ -30,9 +30,38 @@ export function StatCard({ icon, label, value, hint, color = 'primary.main' }) {
  * A collapsible card used to stack a section's former tabs as panels on one
  * scrollable dashboard page. `defaultExpanded` keeps the first/primary panel
  * open while the rest start collapsed to avoid an overwhelming wall of content.
+ *
+ * The fold state sticks: once someone opens or closes a panel it stays that
+ * way on their next visit (localStorage, scoped per page + panel title), so
+ * teachers aren't forced to re-tame the wall of panels every morning.
  */
-export function Section({ title, icon, action, children, defaultExpanded = false, sx, unmountOnExit = false }) {
-    const [open, setOpen] = useState(defaultExpanded);
+
+const slugify = (title) => String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+export const foldKeyFor = (title) => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    return `section-fold:${path}:${slugify(title)}`;
+};
+
+const readFold = (title, fallback) => {
+    try {
+        const saved = localStorage.getItem(foldKeyFor(title));
+        return saved === null ? fallback : saved === '1';
+    } catch {
+        return fallback;
+    }
+};
+
+export function Section({ title, icon, action, children, defaultExpanded = false, sx, unmountOnExit = false, persistFold = true }) {
+    const [open, setOpen] = useState(() => (persistFold ? readFold(title, defaultExpanded) : defaultExpanded));
+
+    const toggle = () => setOpen((v) => {
+        const next = !v;
+        if (persistFold) {
+            try { localStorage.setItem(foldKeyFor(title), next ? '1' : '0'); } catch { /* storage can be unavailable */ }
+        }
+        return next;
+    });
 
     return (
         <Card sx={{ mb: 2.5, ...sx }}>
@@ -41,7 +70,7 @@ export function Section({ title, icon, action, children, defaultExpanded = false
                 alignItems="center"
                 spacing={1}
                 sx={{ px: 2.5, py: 1.75, cursor: 'pointer', userSelect: 'none' }}
-                onClick={() => setOpen((v) => !v)}
+                onClick={toggle}
             >
                 {icon && (
                     <Box sx={{ color: 'primary.main', display: 'flex' }}>{icon}</Box>
