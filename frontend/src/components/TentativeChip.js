@@ -11,7 +11,7 @@ export default function TentativeChip({ sx = {} }) {
             size="small"
             color="warning"
             variant="outlined"
-            label="Tentative — may adjust as Term 1 settles"
+            label="Tentative"
             sx={{ fontWeight: 700, ...sx }}
         />
     );
