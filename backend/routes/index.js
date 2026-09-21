@@ -22,6 +22,7 @@ const planning = require('../controllers/planning.controller');
 const calendar = require('../controllers/calendar.controller');
 const timetable = require('../controllers/timetable.controller');
 const notices = require('../controllers/notice.controller');
+const bellNotifications = require('../controllers/notification.controller');
 const threads = require('../controllers/thread.controller');
 const tasks = require('../controllers/task.controller');
 const dashboard = require('../controllers/dashboard.controller');
@@ -944,10 +945,15 @@ router.delete('/conduct-reports/:id', authenticate, uuid('id'), validate, conduc
 // =============================================================================
 router.get('/notices', authenticate, notices.listNotices);
 
+// The bell — merged announcement + system-nudge feed.
+router.get('/notifications', authenticate, bellNotifications.listNotifications);
+router.post('/notifications/:id/read', authenticate, uuid('id'), validate, bellNotifications.markNotificationRead);
+
+// Announcements are pushed by the office only — admins, not teachers.
 router.post(
     '/notices',
     authenticate,
-    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
+    authorize(ROLES.ADMIN),
     body('title').trim().notEmpty().withMessage('Title is required'),
     body('body').trim().notEmpty().withMessage('Body is required'),
     body('audience').optional().isIn(['all', ...TEACHER_ROLES]),
@@ -957,7 +963,7 @@ router.post(
     notices.createNotice
 );
 
-router.patch('/notices/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, notices.updateNotice);
+router.patch('/notices/:id', authenticate, authorize(ROLES.ADMIN), uuid('id'), validate, notices.updateNotice);
 router.post('/notices/:id/read', authenticate, uuid('id'), validate, notices.markRead);
 router.get('/notices/:id/receipts', authenticate, authorize(ROLES.ADMIN), uuid('id'), validate, notices.getReceipts);
 router.delete('/notices/:id', authenticate, authorize(ROLES.ADMIN), uuid('id'), validate, notices.deleteNotice);

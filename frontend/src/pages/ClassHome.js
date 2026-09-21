@@ -44,6 +44,7 @@ import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termA
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
+import NotificationBell from '../components/NotificationBell';
 import { CalendarBoard } from './PublicCalendar';
 import PlanningSection from '../components/planning/PlanningDocs';
 import StoreSection from '../components/communications/StoreSection';
@@ -1422,6 +1423,7 @@ export default function ClassHome() {
                             </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <NotificationBell />
                             <Box onClick={toggleColorScheme} sx={{ display: 'flex', alignItems: 'center',
                                 justifyContent: 'center', width: 34, height: 34, borderRadius: 1,
                                 border: `1px solid ${border}`, cursor: 'pointer', color: 'text.secondary',

@@ -3,6 +3,7 @@ const { resolveTermId, requireTerm, weekCount } = require('./term.controller');
 const {
     NotFoundError, ConflictError, ForbiddenError, BadRequestError, asyncHandler,
 } = require('../utils/errors');
+const { notify, notifyAdmins } = require('../utils/nudges');
 const { isFixtureSubject } = require('../utils/subjects');
 
 /**
@@ -385,6 +386,18 @@ const submitDocument = asyncHandler(async (req, res) => {
 
     if (error) throw error;
 
+    // Bell nudge for the office — a planning document awaits review.
+    const kindWords = req.params.kind === 'schemes' ? 'A scheme of work' : 'A weekly lesson plan';
+    await notifyAdmins({
+        schoolId: req.user.school_id,
+        excludeUserId: req.user.id,
+        kind: 'plan_submitted',
+        title: 'Plan awaiting review',
+        body: `${kindWords} was submitted for review by ${req.user.name}`,
+        link: '/app/planning',
+        dedupeKey: `plan:${table}:${req.params.id}:${data.submitted_at}`,
+    });
+
     res.json({ document: { id: data.id, status: data.status, submittedAt: data.submitted_at } });
 });
 
@@ -408,6 +421,31 @@ const reviewDocument = asyncHandler(async (req, res) => {
             throw new ConflictError('This document has not been submitted for review yet');
         }
         throw error;
+    }
+
+    // Bell nudge for the author — their document got a decision.
+    const table = kind === 'scheme' ? 'schemes_of_work' : 'lesson_plans';
+    const { data: doc } = await supabase
+        .from(table)
+        .select('author_id')
+        .eq('id', req.params.id)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    if (doc?.author_id && doc.author_id !== req.user.id) {
+        const kindWords = kind === 'scheme' ? 'scheme of work' : 'weekly lesson plan';
+        const approved = decision === 'approved';
+        await notify({
+            schoolId: req.user.school_id,
+            userIds: [doc.author_id],
+            kind: 'plan_reviewed',
+            title: approved ? 'Plan approved' : 'Changes requested on your plan',
+            body: approved
+                ? `Your ${kindWords} was approved by ${req.user.name}`
+                : `${req.user.name} asked for changes on your ${kindWords}${note ? `: ${note}` : ''}`,
+            link: '/app/planning',
+            dedupeKey: `review:${kind}:${req.params.id}:${decision}`,
+        });
     }
 
     res.json({ document: data });

@@ -209,6 +209,11 @@ export const clinicApi = {
         client.post(`/clinic/visits/${id}/leave`, { decision }).then((r) => r.data),
 };
 
+export const notificationApi = {
+    feed: () => client.get('/notifications').then((r) => r.data),
+    markRead: (id) => client.post(`/notifications/${id}/read`).then((r) => r.data.receipt),
+};
+
 export const noticeApi = {
     list: () => client.get('/notices').then((r) => r.data.notices),
     markRead: (id, acknowledge) =>
