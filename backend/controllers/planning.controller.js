@@ -8,8 +8,8 @@ const { isFixtureSubject } = require('../utils/subjects');
 /**
  * Schemes of work and weekly lesson plans.
  *
- * Ownership: a teacher writes and edits their own documents. Admins and main
- * teachers review them. Once approved, a document is locked to its author —
+ * Ownership: a teacher writes and edits their own documents. The admin
+ * reviews them. Once approved, a document is locked to its author —
  * reopening it is a review action, not an edit.
  */
 
@@ -75,7 +75,9 @@ const shapePlan = (p) => ({
     subject: p.assignment?.subject ?? null,
 });
 
-const canReview = (user) => ['admin', 'main_teacher'].includes(user.role);
+// Reviews and the whole-staff overview belong to the admin alone. Main
+// teachers author their own documents like every other teacher.
+const canReview = (user) => user.role === 'admin';
 
 /** Authors edit their own work; nobody else does. */
 const requireAuthor = (doc, user) => {
@@ -414,13 +416,24 @@ const reviewDocument = asyncHandler(async (req, res) => {
 /**
  * GET /api/planning/overview
  *
- * Admin view of who has submitted what this term: one row per teaching
- * assignment, showing the scheme's state and how many weekly plans exist.
+ * The admin's planning hub. Two shapes in one response:
+ *  - rows: one per teaching assignment, showing the scheme's state, which
+ *    weekly plans have been handed in, and which due weeks are missing;
+ *  - awaiting: the review inbox — every submitted scheme and weekly plan,
+ *    oldest first, with enough content to read and decide on the spot.
  */
 const getPlanningOverview = asyncHandler(async (req, res) => {
     const termId = await resolveTermId(req);
     const term = await requireTerm(termId, req.user.school_id);
     const expectedWeeks = weekCount(term.starts_on, term.ends_on);
+
+    // Which teaching week are we in? Same math as GET /api/terms/current.
+    const today = new Date().toISOString().slice(0, 10);
+    let currentWeek = null;
+    if (today >= term.starts_on && today <= term.ends_on) {
+        const elapsed = (new Date(today) - new Date(term.starts_on)) / 86400000;
+        currentWeek = Math.min(expectedWeeks, Math.floor(elapsed / 7) + 1);
+    }
 
     const [assignmentRes, schemeRes, planRes] = await Promise.all([
         supabase
@@ -430,11 +443,14 @@ const getPlanningOverview = asyncHandler(async (req, res) => {
             .eq('academic_year_id', term.academic_year_id),
         supabase
             .from('schemes_of_work')
-            .select('id, class_subject_id, status')
+            .select('id, class_subject_id, title, status, author_id, submitted_at')
+            .eq('school_id', req.user.school_id)
             .eq('term_id', termId),
         supabase
             .from('lesson_plans')
-            .select('class_subject_id, status')
+            .select(`id, class_subject_id, week_number, status, author_id, submitted_at,
+                     topic, objectives, activities, resources, homework, reflection`)
+            .eq('school_id', req.user.school_id)
             .eq('term_id', termId),
     ]);
 
@@ -442,35 +458,101 @@ const getPlanningOverview = asyncHandler(async (req, res) => {
         if (r.error) throw r.error;
     }
 
-    // Registration seats carry no planning obligation — roll call is not taught.
-    const rows = (assignmentRes.data || [])
-        .filter((a) => a.teacher && !isFixtureSubject(a.subject))
-        .map((a) => {
-            const scheme = (schemeRes.data || []).find((s) => s.class_subject_id === a.id);
-            const plans = (planRes.data || []).filter((p) => p.class_subject_id === a.id);
+    const schemes = schemeRes.data || [];
+    const plans = planRes.data || [];
 
-            return {
-                classSubjectId: a.id,
-                class: a.class,
-                subject: a.subject,
-                teacher: a.teacher,
-                schemeId: scheme?.id ?? null,
-                schemeStatus: scheme?.status ?? 'missing',
-                lessonPlanCount: plans.length,
-                approvedPlans: plans.filter((p) => p.status === 'approved').length,
-                expectedWeeks,
+    // Registration seats carry no planning obligation — roll call is not taught.
+    const seats = (assignmentRes.data || [])
+        .filter((a) => a.teacher && !isFixtureSubject(a.subject));
+
+    const rows = seats.map((a) => {
+        const scheme = schemes.find((s) => s.class_subject_id === a.id);
+        const seatPlans = plans.filter((p) => p.class_subject_id === a.id);
+        // A week only counts once its plan is handed in (submitted) or approved.
+        const submittedWeeks = seatPlans
+            .filter((p) => ['submitted', 'approved'].includes(p.status))
+            .map((p) => p.week_number)
+            .sort((x, y) => x - y);
+        // Late = a week that has started (or passed) with no plan handed in.
+        const missingWeeks = currentWeek
+            ? Array.from({ length: currentWeek }, (_, i) => i + 1)
+                .filter((w) => !submittedWeeks.includes(w))
+            : [];
+
+        return {
+            classSubjectId: a.id,
+            class: a.class,
+            subject: a.subject,
+            teacher: a.teacher,
+            schemeId: scheme?.id ?? null,
+            schemeStatus: scheme?.status ?? 'missing',
+            lessonPlanCount: seatPlans.length,
+            approvedPlans: seatPlans.filter((p) => p.status === 'approved').length,
+            submittedWeeks,
+            missingWeeks,
+            expectedWeeks,
+        };
+    });
+
+    // The review inbox: everything handed in and not yet decided, oldest first.
+    const submittedDocs = [
+        ...schemes
+            .filter((s) => s.status === 'submitted')
+            .map((s) => ({ kind: 'schemes', ...s })),
+        ...plans
+            .filter((p) => p.status === 'submitted')
+            .map((p) => ({ kind: 'lesson-plans', ...p })),
+    ];
+
+    const authorIds = [...new Set(submittedDocs.map((d) => d.author_id).filter(Boolean))];
+    const { data: authorRows, error: authorError } = authorIds.length
+        ? await supabase.from('users').select('id, name').in('id', authorIds)
+        : { data: [], error: null };
+    if (authorError) throw authorError;
+
+    const authorById = new Map((authorRows || []).map((u) => [u.id, u]));
+    const seatById = new Map(seats.map((a) => [a.id, a]));
+
+    const awaiting = submittedDocs
+        .map((d) => {
+            const seat = seatById.get(d.class_subject_id);
+            const base = {
+                kind: d.kind,
+                id: d.id,
+                classSubjectId: d.class_subject_id,
+                status: d.status,
+                author: authorById.get(d.author_id) ?? null,
+                class: seat?.class ?? null,
+                subject: seat?.subject ?? null,
+                submittedAt: d.submitted_at ?? null,
             };
-        });
+            if (d.kind === 'schemes') return { ...base, title: d.title };
+            return {
+                ...base,
+                weekNumber: d.week_number,
+                topic: d.topic,
+                objectives: d.objectives ?? null,
+                activities: d.activities ?? null,
+                resources: d.resources ?? null,
+                homework: d.homework ?? null,
+                reflection: d.reflection ?? null,
+            };
+        })
+        .sort((a, b) => new Date(a.submittedAt || 0) - new Date(b.submittedAt || 0));
 
     res.json({
         termId,
-        term: { id: term.id, name: term.name, weekCount: expectedWeeks },
+        term: {
+            id: term.id, name: term.name, weekCount: expectedWeeks, currentWeek,
+        },
         rows,
+        awaiting,
         summary: {
             assignments: rows.length,
             schemesMissing: rows.filter((r) => r.schemeStatus === 'missing').length,
-            awaitingReview: rows.filter((r) => r.schemeStatus === 'submitted').length,
+            awaitingReview: awaiting.length,
             schemesApproved: rows.filter((r) => r.schemeStatus === 'approved').length,
+            lateTeachers: rows.filter((r) => r.missingWeeks.length > 0).length,
         },
     });
 });
