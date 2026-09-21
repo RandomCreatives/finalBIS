@@ -17,6 +17,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+import { lessonLabel } from '../utils/periods';
 
 const DAY_LABEL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -38,8 +39,6 @@ const DUTY_ITEMS = [
     { key: 'hallway', label: 'Hallway monitoring' },
     { key: 'dismissal', label: 'Dismissal supervision' },
 ];
-
-const hhmm = (t) => (t ? t.slice(0, 5) : '');
 
 /** Add / check-off / remove list used by Homework and To-Do sections. */
 function PlannerList({ items, placeholder, addLabel, onAdd, onToggle, onRemove }) {
@@ -170,7 +169,7 @@ export default function DailyPlanner() {
                                     <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
                                             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                                {hhmm(slot.startsAt)}–{hhmm(slot.endsAt)}
+                                                {lessonLabel(slot.startsAt, slot.endsAt)}
                                             </Typography>
                                             <Chip size="small" label={slot.subject?.name || 'Untitled'} color="primary" />
                                             {slot.class?.name && (

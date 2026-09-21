@@ -23,11 +23,14 @@ describe('timetableSheetRows', () => {
 
     test('places sessions in the right day column with teacher', () => {
         const rows = timetableSheetRows(slots, 'Year 4 Green');
-        const l1 = rows.find((r) => r[0] === '08:30–09:20');
+        // First column speaks school language: period names + 12-hour times.
+        const reg = rows.find((r) => r[0] === '8:10–8:30 AM'); // registration: no period name
+        expect(reg[1]).toBe('Registration (Ms. Main)');        // Monday
+        const l1 = rows.find((r) => r[0] === '1st period · 8:30–9:20 AM');
         expect(l1[1]).toBe('Mathematics (Ms. Main)');   // Monday
         expect(l1[2]).toBe('English (Teacher 1)');       // Tuesday
         expect(l1[3]).toBe('');                          // empty Wednesday
-        const l6 = rows.find((r) => r[0] === '14:10–15:00');
+        const l6 = rows.find((r) => r[0] === '6th period · 2:10–3:00 PM');
         expect(l6[5]).toBe('Spelling (Teacher 2)');      // Friday
     });
 });
