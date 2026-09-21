@@ -26,6 +26,7 @@ import {
 import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PlanningSection from '../components/planning/PlanningDocs';
+import TentativeChip from '../components/TentativeChip';
 import { CalendarBoard } from './PublicCalendar';
 import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
@@ -86,7 +87,11 @@ function WeekGrid({ slots }) {
         return <Alert severity="info">No lessons have been scheduled for you yet.</Alert>;
     }
     return (
-        <Grid container spacing={1.5}>
+        <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+                <TentativeChip />
+            </Box>
+            <Grid container spacing={1.5}>
             {DAYS.map((day) => {
                 const daySlots = slots
                     .filter((s) => s.dayOfWeek === day.value)
@@ -123,7 +128,8 @@ function WeekGrid({ slots }) {
                     </Grid>
                 );
             })}
-        </Grid>
+            </Grid>
+        </>
     );
 }
 

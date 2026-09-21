@@ -12,6 +12,7 @@ import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { timetableApi, classApi, assignmentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
+import TentativeChip from '../components/TentativeChip';
 import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
@@ -179,6 +180,7 @@ export default function Timetable() {
                         ? 'Your weekly teaching schedule.'
                         : 'Weekly schedules and who attends each class.'
                 }
+                action={<TentativeChip />}
             />
 
             {!isSubjectTeacher && (

@@ -15,7 +15,7 @@ describe('timetableSheetRows', () => {
 
     test('emits title, header row and one row per period', () => {
         const rows = timetableSheetRows(slots, 'Year 4 Green');
-        expect(rows[0][0]).toBe('Year 4 Green — Weekly Timetable 2026/2027');
+        expect(rows[0][0]).toBe('Year 4 Green — Weekly Timetable 2026/2027 (Tentative)');
         expect(rows[2]).toEqual(['Time', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
         // 3 distinct bell periods -> 3 grid rows after title + blank + header
         expect(rows.length).toBe(3 + 3);
