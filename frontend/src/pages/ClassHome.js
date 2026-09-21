@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { lessonLabel } from '../utils/periods';
+import { PaymentChip } from '../utils/payments';
 import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, Divider, Grid,
     IconButton, InputAdornment, MenuItem, Paper, Snackbar, Table, TableBody, TableCell,
@@ -40,7 +41,7 @@ import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
-import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi, timetableApi } from '../api/endpoints';
+import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi, timetableApi, paymentApi } from '../api/endpoints';
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
@@ -917,11 +918,47 @@ function MarksSection({ klass, classId, roster }) {
     );
 }
 
-function StudentsSection({ klass, roster, loading, error, reload, classNames, classIdByName }) {
+export function StudentsSection({ klass, roster, loading, error, reload, classNames, classIdByName, classId }) {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState('');
+
+    // Term-1 payment statuses for this class (decision: Mike, 2026-09-22 —
+    // status only; main teacher records, admin can correct).
+    const term = useApi(() => termApi.current(), []);
+    const termId = term.data?.term?.id;
+    const termName = term.data?.term?.name || 'Term 1';
+    const payments = useApi(
+        () => (classId && termId ? paymentApi.list({ classId, termId }) : Promise.resolve(null)),
+        [classId, termId],
+    );
+    const [payMap, setPayMap] = useState({});
+    useEffect(() => {
+        if (Array.isArray(payments.data))
+            setPayMap(Object.fromEntries(payments.data.map((p) => [p.studentId, p])));
+    }, [payments.data]);
+
+    const [paySaving, setPaySaving] = useState(false);
+    const markPayment = async (studentId, status) => {
+        if (!termId) return;
+        setPaySaving(true);
+        try {
+            const row = await paymentApi.set(studentId, termId, status);
+            setPayMap((m) => {
+                const next = { ...m };
+                if (status === 'unpaid') delete next[studentId]; else next[studentId] = row;
+                return next;
+            });
+            setToast(status === 'unpaid' ? 'Payment cleared' : `Payment recorded — ${row.status === 'paid_annum' ? 'Paid · Annum' : `Paid · ${termName}`}`);
+        } catch (err) {
+            setToast(err.message || 'Could not record the payment');
+        } finally {
+            setPaySaving(false);
+        }
+    };
+
+    const paidCount = roster.filter((s) => payMap[s.id]?.status).length;
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -982,6 +1019,7 @@ function StudentsSection({ klass, roster, loading, error, reload, classNames, cl
                 />
                 <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                     {filtered.length} of {roster.length} student{roster.length === 1 ? '' : 's'} in {klass.name}
+                    {termId && !payments.error && ` · ${paidCount} paid (${termName})`}
                 </Typography>
             </Box>
 
@@ -1011,6 +1049,7 @@ function StudentsSection({ klass, roster, loading, error, reload, classNames, cl
                                 <TableCell sx={{ width: 130, fontWeight: 700 }}>Admission</TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>Student name</TableCell>
                                 <TableCell sx={{ width: 150, fontWeight: 700 }}>Guardian phone</TableCell>
+                                <TableCell sx={{ width: 130, fontWeight: 700 }}>Payment</TableCell>
                                 <TableCell sx={{ width: 100 }} />
                             </TableRow>
                         </TableHead>
@@ -1021,6 +1060,15 @@ function StudentsSection({ klass, roster, loading, error, reload, classNames, cl
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNo || '—'}</TableCell>
                                     <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
                                     <TableCell sx={{ fontSize: 12.5 }}>{s.guardianPhone || '—'}</TableCell>
+                                    <TableCell>
+                                        {payments.error || !termId ? <span>—</span> : (
+                                            <PaymentChip
+                                                status={payMap[s.id]?.status || 'unpaid'}
+                                                termName={termName}
+                                                dataTestId={`payment-chip-${s.id}`}
+                                            />
+                                        )}
+                                    </TableCell>
                                     <TableCell onClick={(e) => e.stopPropagation()}>
                                         <Button size="small" onClick={() => setSelected(s.id)}
                                             sx={{ fontWeight: 700, textTransform: 'none', color: 'primary.main' }}>
@@ -1043,6 +1091,10 @@ function StudentsSection({ klass, roster, loading, error, reload, classNames, cl
                     onClose={() => setSelected(null)}
                     onSave={handleSave}
                     onTransfer={handleTransfer}
+                    payment={payMap[selectedStudent.id] || null}
+                    termName={termId ? termName : null}
+                    onMarkPayment={(status) => markPayment(selectedStudent.id, status)}
+                    paymentSaving={paySaving}
                 />
             )}
 
@@ -1520,7 +1572,8 @@ export default function ClassHome() {
                             <StudentsSection klass={klass} roster={roster}
                                 loading={liveRoster.loading} error={liveRoster.error}
                                 reload={liveRoster.reload}
-                                classNames={classNames} classIdByName={classIdByName} />
+                                classNames={classNames} classIdByName={classIdByName}
+                                classId={session.classId} />
                         )}
                         {section === 'timetable' && <TimetableSection classId={session.classId} klass={klass} />}
                         {section === 'store' && <StoreSection klass={klass} classId={session.classId} />}

@@ -142,6 +142,12 @@ export const studentApi = {
     }).then((r) => r.data),
 };
 
+export const paymentApi = {
+    list: (params) => client.get('/students/payments', { params }).then((r) => r.data.payments),
+    set: (studentId, termId, status) =>
+        client.put(`/students/${studentId}/payment`, { termId, status }).then((r) => r.data.payment),
+};
+
 export const classApi = {
     list: () => client.get('/classes').then((r) => r.data.classes),
     get: (id) => client.get(`/classes/${id}`).then((r) => r.data.class),

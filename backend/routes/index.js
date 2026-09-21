@@ -12,6 +12,7 @@ const classes = require('../controllers/class.controller');
 const subjects = require('../controllers/subject.controller');
 const assignments = require('../controllers/assignment.controller');
 const students = require('../controllers/student.controller');
+const payments = require('../controllers/payment.controller');
 const attendance = require('../controllers/attendance.controller');
 const marksheets = require('../controllers/marksheet.controller');
 const assessments = require('../controllers/assessment.controller');
@@ -352,7 +353,9 @@ router.get('/assignments/workload', authenticate, authorize(ROLES.ADMIN), assign
 // =============================================================================
 router.get('/students', authenticate, students.listStudents);
 router.get('/students/unassigned', authenticate, students.listUnassigned);
+router.get('/students/payments', authenticate, payments.listPayments);
 router.get('/students/:id', authenticate, uuid('id'), validate, students.getStudent);
+router.put('/students/:id/payment', authenticate, uuid('id'), validate, payments.setPayment);
 
 router.post(
     '/students/assign',

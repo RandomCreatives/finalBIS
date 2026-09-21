@@ -1,19 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Alert, Box, Button, Card, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
     FormControlLabel, IconButton, MenuItem, Paper, Snackbar, Stack, Switch, Table, TableBody,
-    TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip,
+    TableCell, TableContainer, TableHead, TableRow, TextField, Typography, Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
-import { studentApi, classApi } from '../api/endpoints';
+import { studentApi, classApi, termApi, paymentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
+import { PaymentChip, paymentLabel } from '../utils/payments';
 
 const EMPTY = {
     admissionNo: '', name: '', rollNum: '', classId: '', gender: '',
@@ -42,6 +43,42 @@ export default function Students() {
         () => studentApi.list({ classId: classFilter || undefined, search: search || undefined }),
         [classFilter, search]
     );
+
+    // Term payment statuses across the school — admins confirm the data the
+    // class teachers record (decision: Mike, 2026-09-22).
+    const term = useApi(() => termApi.current(), []);
+    const termId = term.data?.term?.id;
+    const termName = term.data?.term?.name || 'Term 1';
+    const payments = useApi(
+        () => (termId ? paymentApi.list({ termId }) : Promise.resolve(null)),
+        [termId],
+    );
+    const [payMap, setPayMap] = useState({});
+    useEffect(() => {
+        if (Array.isArray(payments.data))
+            setPayMap(Object.fromEntries(payments.data.map((p) => [p.studentId, p])));
+    }, [payments.data]);
+
+    const [payTarget, setPayTarget] = useState(null); // student being corrected
+    const [paySaving, setPaySaving] = useState(false);
+    const setPaymentStatus = async (status) => {
+        if (!payTarget || !termId) return;
+        setPaySaving(true);
+        try {
+            const row = await paymentApi.set(payTarget.id, termId, status);
+            setPayMap((m) => {
+                const next = { ...m };
+                if (status === 'unpaid') delete next[payTarget.id]; else next[payTarget.id] = row;
+                return next;
+            });
+            setToast(status === 'unpaid' ? 'Payment cleared' : `Payment recorded for ${payTarget.name}`);
+            setPayTarget(null);
+        } catch (err) {
+            setToast(err.message || 'Could not record the payment');
+        } finally {
+            setPaySaving(false);
+        }
+    };
 
     const openCreate = () => { setFormError(''); setDialog({ mode: 'create', values: { ...EMPTY } }); };
     const openEdit = (s) => {
@@ -198,6 +235,13 @@ export default function Students() {
                 </Stack>
             </Card>
 
+            {termId && !payments.error && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+                    {rows.filter((s) => payMap[s.id]?.status).length} of {rows.length} shown are paid for {termName}
+                    {user?.role === 'admin' ? ' — tap a status chip to confirm or correct it.' : '.'}
+                </Typography>
+            )}
+
             <DataState
                 loading={students.loading}
                 error={students.error}
@@ -213,6 +257,7 @@ export default function Students() {
                                 <TableCell>Class</TableCell>
                                 <TableCell>Guardian</TableCell>
                                 <TableCell>Flags</TableCell>
+                                <TableCell>Payment</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
@@ -235,6 +280,16 @@ export default function Students() {
                                             <Tooltip title={s.specialNeedsNote || 'Special educational needs'}>
                                                 <Chip label="SEN" size="small" color="secondary" />
                                             </Tooltip>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {payments.error || !termId ? <span>—</span> : (
+                                            <PaymentChip
+                                                status={payMap[s.id]?.status || 'unpaid'}
+                                                termName={termName}
+                                                dataTestId={`admin-payment-chip-${s.id}`}
+                                                onClick={user?.role === 'admin' ? () => setPayTarget(s) : undefined}
+                                            />
                                         )}
                                     </TableCell>
                                     <TableCell align="right">
@@ -347,6 +402,62 @@ export default function Students() {
             </Dialog>
 
             {/* Transfer --------------------------------------------------------- */}
+            {/* Payment confirmation / correction ---------------------------- */}
+            <Dialog open={Boolean(payTarget)} onClose={() => setPayTarget(null)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+                    Payment — {payTarget?.name}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
+                        {payTarget?.class?.name || 'Unassigned'} · {termName}
+                    </Typography>
+                </DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+                    <Box
+                        data-testid="payment-receipt"
+                        sx={{
+                            px: 2, py: 1.5, borderRadius: 1.25,
+                            border: '1.5px dashed', borderColor: 'divider',
+                            bgcolor: 'rgba(237,108,2,.04)',
+                        }}
+                    >
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography sx={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.4,
+                                color: 'text.secondary', fontFamily: 'monospace' }}>
+                                PAYMENT · {termName.toUpperCase()}
+                            </Typography>
+                            <PaymentChip status={payMap[payTarget?.id]?.status || 'unpaid'} termName={termName} />
+                        </Box>
+                        <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .75 }}>
+                            {payMap[payTarget?.id]?.status
+                                ? `Recorded by ${payMap[payTarget.id].markedBy || 'staff'}${payMap[payTarget.id].markedAt
+                                    ? ` · ${new Date(payMap[payTarget.id].markedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                    : ''}`
+                                : 'No payment recorded for this term yet.'}
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {['unpaid', 'paid_term', 'paid_annum'].map((st) => {
+                            const current = payMap[payTarget?.id]?.status || 'unpaid';
+                            return (
+                                <Button
+                                    key={st}
+                                    size="small"
+                                    variant={current === st ? 'contained' : 'outlined'}
+                                    disableElevation
+                                    disabled={paySaving}
+                                    onClick={() => current !== st && setPaymentStatus(st)}
+                                    sx={{ fontWeight: 700, textTransform: 'none' }}
+                                >
+                                    {paymentLabel(st, termName)}
+                                </Button>
+                            );
+                        })}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPayTarget(null)} sx={{ textTransform: 'none' }}>Close</Button>
+                </DialogActions>
+            </Dialog>
+
             <Dialog open={Boolean(transfer)} onClose={() => setTransfer(null)} maxWidth="xs" fullWidth>
                 <DialogTitle>Transfer student</DialogTitle>
                 <DialogContent>
