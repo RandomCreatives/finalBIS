@@ -21,21 +21,28 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 /*
  * Subject teacher sign-in: a wall of teacher cards grouped by subject.
  *
- * Tap your card, enter the password, land on your subject dashboard.
- * Main teachers use the class cards (public /classes wall) instead.
+ * The directory only lists active subject teachers who hold teaching seats
+ * this year — so cards carry real names once a seat is staffed ("Dihurwe
+ * Desire") and stay generic ("Teacher 3") for seats still on a placeholder
+ * account. Tap your card, enter the password, land on your subject
+ * dashboard. Main teachers use the class cards (public /classes wall).
  */
 
 /** "English Teacher 1" -> "English"; "Physical Education Teacher 2" -> "Physical Education". */
 export const subjectOf = (name) => name.replace(/\s+teacher\s+\d+$/i, '') || 'Other';
 
 /**
- * Placeholder seats are named "<Subject> Teacher N" (e.g. "English Teacher 1").
- * Only these get a card on the sign-in wall, labelled generically ("Teacher N").
- * Real names are revealed once staff are mapped to the seats — flip this predicate
- * (and teacherLabel) in the same change that renames the accounts.
+ * Seats still awaiting a confirmed hire are held by placeholder accounts
+ * named "<Subject> Teacher N" (e.g. "English Teacher 3"); their cards stay
+ * labelled generically ("Teacher 3") until the seat is assigned.
  */
 const PLACEHOLDER_RE = /\s+teacher\s+(\d+)$/i;
-export const isWallCard = (teacher) => PLACEHOLDER_RE.test(teacher.name);
+
+/**
+ * A card for every teacher the directory returns — it already filters to
+ * active seat holders; the client-side check simply guards empty payloads.
+ */
+export const isWallCard = (teacher) => (teacher.subjects || []).length > 0;
 
 /** "English Teacher 2" -> "Teacher 2"; anything else keeps its full name. */
 export const teacherLabel = (teacher) => {
@@ -43,11 +50,25 @@ export const teacherLabel = (teacher) => {
     return m ? `Teacher ${m[1]}` : teacher.name;
 };
 
+/**
+ * The subject a card files under. Placeholders trust their name; named
+ * teachers file under the seat subject they teach the most (ties break
+ * alphabetically), so a teacher holding English + Spelling seats lands
+ * under "English".
+ */
+export const primarySubject = (teacher) => {
+    if (PLACEHOLDER_RE.test(teacher.name)) return subjectOf(teacher.name);
+    const subjects = [...(teacher.subjects || [])];
+    if (subjects.length === 0) return 'Other';
+    subjects.sort((a, b) => (b.seats - a.seats) || a.name.localeCompare(b.name));
+    return subjects[0].name;
+};
+
 /** Groups the flat teacher list into subject sections for the card wall. */
 export const groupTeachers = (teachers) => {
     const groups = new Map();
     teachers.forEach((t) => {
-        const subject = subjectOf(t.name);
+        const subject = primarySubject(t);
         if (!groups.has(subject)) groups.set(subject, []);
         groups.get(subject).push(t);
     });
