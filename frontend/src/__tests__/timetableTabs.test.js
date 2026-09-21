@@ -40,15 +40,21 @@ beforeEach(() => {
 });
 
 describe('Timetable page', () => {
-    test('admin sees Week, Class schedule and Who attends as tabs, week first', async () => {
+    test('admin sees Week, Class schedule and Who attends as tabs — and lands on Class schedule', async () => {
         renderPage();
 
         const tabs = await screen.findAllByRole('tab');
         expect(tabs.map((t) => t.textContent)).toEqual(['Week', 'Class schedule', 'Who attends']);
 
-        // Week is the default view — its legend shows, roster prompts stay hidden.
-        expect(screen.getByText('Main-teacher subject')).toBeInTheDocument();
-        expect(screen.queryByText('Choose a class to see everyone attached to it.')).not.toBeInTheDocument();
+        // An admin has no week of their own, so the class-schedule grid is
+        // the landing view: its class picker shows, the week legend waits
+        // for the Week tab.
+        expect(await screen.findByLabelText('Class')).toBeInTheDocument();
+        expect(screen.queryByText('Main-teacher subject')).not.toBeInTheDocument();
+
+        // Week is still one tap away, legend included.
+        fireEvent.click(screen.getByRole('tab', { name: /^week$/i }));
+        expect(await screen.findByText('Main-teacher subject')).toBeInTheDocument();
     });
 
     test('switching to Who attends swaps the panel without the week legend', async () => {
