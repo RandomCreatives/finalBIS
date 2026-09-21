@@ -25,6 +25,7 @@ import {
 } from '../components/settings/profileCards';
 import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
+import { lessonLabel } from '../utils/periods';
 import PlanningSection from '../components/planning/PlanningDocs';
 import TentativeChip from '../components/TentativeChip';
 import { CalendarBoard } from './PublicCalendar';
@@ -41,7 +42,7 @@ const DAYS = [
     { value: 5, label: 'Friday' },
 ];
 
-const hhmm = (t) => (t ? t.slice(0, 5) : '');
+
 
 /** Same colour language as the admin and class timetables. */
 const tint = (slot) => {
@@ -110,7 +111,7 @@ function WeekGrid({ slots }) {
                                     <Box key={slot.id} sx={{ p: 1, borderRadius: 1.5, bgcolor: tint(slot),
                                         border: '1px solid', borderColor: 'divider' }}>
                                         <Typography variant="caption" color="text.secondary">
-                                            {hhmm(slot.startsAt)}–{hhmm(slot.endsAt)}
+                                            {lessonLabel(slot.startsAt, slot.endsAt)}
                                         </Typography>
                                         <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
                                             {slot.class?.name || 'Class'}
@@ -668,7 +669,7 @@ export default function SubjectHome() {
                                             <Paper key={slot.id} variant="outlined"
                                                 sx={{ p: 1.5, borderRadius: 1.5, display: 'flex', alignItems: 'center', gap: 2 }}>
                                                 <Chip size="small"
-                                                    label={`${hhmm(slot.startsAt)}–${hhmm(slot.endsAt)}`}
+                                                    label={lessonLabel(slot.startsAt, slot.endsAt)}
                                                     sx={{ fontWeight: 800, borderRadius: 1, bgcolor: tint(slot) }} />
                                                 <Box sx={{ flexGrow: 1 }}>
                                                     <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{slot.class?.name}</Typography>

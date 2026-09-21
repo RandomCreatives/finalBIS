@@ -16,6 +16,7 @@ import TentativeChip from '../components/TentativeChip';
 import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+import { lessonLabel } from '../utils/periods';
 
 const DAYS = [
     { value: 1, label: 'Monday', short: 'Mon' },
@@ -24,8 +25,6 @@ const DAYS = [
     { value: 4, label: 'Thursday', short: 'Thu' },
     { value: 5, label: 'Friday', short: 'Fri' },
 ];
-
-const hhmm = (t) => (t ? t.slice(0, 5) : '');
 
 /** Colour a period by who delivers it, so the grid reads at a glance.
  *  Spelling gets its own distinct colour as a reference for the planned
@@ -137,7 +136,7 @@ export default function Timetable() {
                                         }}
                                     >
                                         <Typography variant="caption" color="text.secondary">
-                                            {hhmm(slot.startsAt)}–{hhmm(slot.endsAt)}
+                                            {lessonLabel(slot.startsAt, slot.endsAt)}
                                         </Typography>
                                         <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                                             {slot.subject?.name}

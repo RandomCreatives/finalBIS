@@ -20,6 +20,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+import { lessonLabel } from '../utils/periods';
 
 const greeting = () => {
     const hour = new Date().getHours();
@@ -345,7 +346,7 @@ function TeacherDashboard() {
                                             <ListItem key={slot.id} disableGutters divider>
                                                 <ListItemText
                                                     primary={`${slot.subject?.name} — ${slot.class?.name}`}
-                                                    secondary={`${slot.startsAt?.slice(0, 5)}–${slot.endsAt?.slice(0, 5)}${slot.room ? ` · ${slot.room}` : ''}`}
+                                                    secondary={`${lessonLabel(slot.startsAt, slot.endsAt)}${slot.room ? ` · ${slot.room}` : ''}`}
                                                 />
                                             </ListItem>
                                         ))}

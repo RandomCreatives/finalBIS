@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
+import { lessonLabel } from '../utils/periods';
 import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, Divider, Grid,
     IconButton, InputAdornment, MenuItem, Paper, Snackbar, Table, TableBody, TableCell,
@@ -100,6 +101,15 @@ const ATTENDANCE_STATUSES = [
     { key: 'excused', label: 'E', full: 'Excused', color: '#0284c7' },
 ];
 
+/**
+ * The Admin Communications sections (store, permission requests, conduct
+ * reports) are introduced to teachers one at a time, on purpose: they stay
+ * visible on the sidebar but greyed out with a "soon" chip until launch.
+ * Flip a flag here the day that section goes live (decision: Mike,
+ * 2026-09-22).
+ */
+const COMING_SOON = { store: true, request: true, conduct: true };
+
 const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: DashboardIcon },
     { id: 'attendance', label: 'Attendance', icon: FactCheckIcon },
@@ -108,9 +118,9 @@ const SECTIONS = [
     { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'students', label: 'Students', icon: GroupsIcon },
     { id: 'timetable', label: 'Timetable', icon: EventIcon },
-    { id: 'store', label: 'Store', icon: StorefrontIcon },
-    { id: 'request', label: 'Request', icon: VerifiedUserOutlinedIcon },
-    { id: 'conduct', label: 'Conduct report', icon: ReportOutlinedIcon },
+    { id: 'store', label: 'Store', icon: StorefrontIcon, soon: COMING_SOON.store },
+    { id: 'request', label: 'Request', icon: VerifiedUserOutlinedIcon, soon: COMING_SOON.request },
+    { id: 'conduct', label: 'Conduct report', icon: ReportOutlinedIcon, soon: COMING_SOON.conduct },
     { id: 'profile', label: 'Profile', icon: PersonIcon },
 ];
 
@@ -1119,7 +1129,7 @@ const TT_DAYS = [
     { value: 5, label: 'Friday' },
 ];
 
-const ttHhmm = (t) => (t ? t.slice(0, 5) : '');
+
 
 /** Same palette as the admin Timetable page: Spelling purple, Registration
  *  neutral, main-teacher subjects indigo, subject-teacher subjects mint. */
@@ -1140,7 +1150,7 @@ export const timetableSheetRows = (slots, className) => {
     ];
     periodKeys.forEach((key) => {
         const [start, end] = key.split('|');
-        const row = [`${ttHhmm(start)}–${ttHhmm(end)}`];
+        const row = [lessonLabel(start, end)];
         TT_DAYS.forEach((day) => {
             const slot = slots.find(
                 (s) => s.dayOfWeek === day.value && s.startsAt === start && s.endsAt === end
@@ -1227,9 +1237,9 @@ function TimetableSection({ classId, klass }) {
                                     {daySlots.map((slot) => (
                                         <Box key={slot.id} sx={{ p: 1, borderRadius: 1.5, bgcolor: ttTint(slot),
                                             border: '1px solid', borderColor: 'divider' }}>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {ttHhmm(slot.startsAt)}–{ttHhmm(slot.endsAt)}
-                                            </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {lessonLabel(slot.startsAt, slot.endsAt)}
+                                        </Typography>
                                             <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
                                                 {slot.subject?.name || 'Period'}
                                             </Typography>

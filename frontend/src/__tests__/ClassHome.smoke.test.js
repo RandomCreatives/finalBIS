@@ -41,16 +41,19 @@ describe('ClassHome dashboard', () => {
         expect(buttons[buttons.length - 1]).toBe(profile);
     });
 
-    test('sidebar groups: Class Room Management, then Admin Communications (Store/Request/Conduct)', () => {
+    test('sidebar groups: Class Room Management, then Admin Communications — greyed "soon" until launch', () => {
         renderDash('year-3-blue');
         const nav = screen.getByTestId('side-nav');
         expect(screen.getByTestId('side-nav-group-0'))
             .toHaveTextContent('Class Room Management');
         expect(screen.getByTestId('side-nav-group-1'))
             .toHaveTextContent('Admin Communications');
-        expect(within(nav).getByRole('button', { name: 'Store' })).toBeInTheDocument();
-        expect(within(nav).getByRole('button', { name: 'Request' })).toBeInTheDocument();
-        expect(within(nav).getByRole('button', { name: 'Conduct report' })).toBeInTheDocument();
+        // Store / Request / Conduct stay visible but greyed with a "soon"
+        // chip while the channels are introduced one by one (2026-09-22).
+        const store = within(nav).getByRole('button', { name: /^Store soon$/ });
+        const request = within(nav).getByRole('button', { name: /^Request soon$/ });
+        const conduct = within(nav).getByRole('button', { name: /^Conduct report soon$/ });
+        for (const btn of [store, request, conduct]) expect(btn).toBeDisabled();
         // group order in the DOM: CRM group label comes before Admin Comms
         expect(nav.textContent.indexOf('Class Room Management'))
             .toBeLessThan(nav.textContent.indexOf('Admin Communications'));
