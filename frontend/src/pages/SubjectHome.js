@@ -24,6 +24,7 @@ import {
     IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
 } from '../components/settings/profileCards';
 import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
+import NotificationBell from '../components/NotificationBell';
 import useApi from '../hooks/useApi';
 import { lessonLabel } from '../utils/periods';
 import PlanningSection from '../components/planning/PlanningDocs';
@@ -588,6 +589,7 @@ export default function SubjectHome() {
                         <Typography sx={{ fontWeight: 800, fontSize: 15, lineHeight: 1.2 }}>BIS NOC Gerji</Typography>
                         <Typography variant="caption" color="text.secondary">Subject teacher dashboard · 2026/2027</Typography>
                     </Box>
+                    <NotificationBell />
                     <Chip size="small" label={user.name} sx={{ fontWeight: 700, borderRadius: 1, mr: 0.5 }} />
                     <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
                         <IconButton size="small" onClick={toggleColorScheme}

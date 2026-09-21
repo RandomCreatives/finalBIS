@@ -3,6 +3,7 @@ const { ROLES } = require('../middleware/auth');
 const { resolveTermId } = require('./term.controller');
 const { gradeFor } = require('./marksheet.controller');
 const { assertCanRecordMarks } = require('../utils/classAccess');
+const { notifyAdmins } = require('../utils/nudges');
 const {
     BadRequestError, ForbiddenError, NotFoundError, asyncHandler,
 } = require('../utils/errors');
@@ -93,8 +94,8 @@ const createAssessment = asyncHandler(async (req, res) => {
     const max = Number(maxMarks ?? 100);
     if (!(max > 0)) throw new BadRequestError('maxMarks must be greater than zero');
 
-    await fetchOwned('classes', 'id', [classId], req.user.school_id, 'class');
-    await fetchOwned('subjects', 'id', [subjectId], req.user.school_id, 'subject');
+    const [ownedClass] = await fetchOwned('classes', 'id, name', [classId], req.user.school_id, 'class');
+    const [ownedSubject] = await fetchOwned('subjects', 'id, name', [subjectId], req.user.school_id, 'subject');
     await assertCanRecordMarks(req, classId, subjectId);
 
     const { data: year } = await supabase
@@ -133,6 +134,17 @@ const createAssessment = asyncHandler(async (req, res) => {
         if (error.code === '23505') throw new BadRequestError('An assessment with that name already exists');
         throw error;
     }
+
+    // Bell nudge for the office — a new mark column appeared.
+    await notifyAdmins({
+        schoolId: req.user.school_id,
+        excludeUserId: req.user.id,
+        kind: 'mark_column',
+        title: 'New mark column',
+        body: `"${data.label}" was opened in ${ownedClass?.name || 'a class'} · ${ownedSubject?.name || 'a subject'} by ${req.user.name}`,
+        link: '/app/marksheets',
+        dedupeKey: `assessment:${data.id}`,
+    });
 
     res.status(201).json({ assessment: data });
 });

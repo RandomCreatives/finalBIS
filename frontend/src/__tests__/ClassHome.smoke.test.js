@@ -6,7 +6,16 @@ import ClassHome from '../pages/ClassHome';
 import { ThemeProvider } from '../theme';
 import { CLASS_LOGIN_KEY } from '../data/classes';
 
+// ClassHome normally renders inside <AuthProvider> (see App.js); the smoke
+// test renders it bare, so provide just enough auth for the bell.
+jest.mock('../auth/AuthContext', () => ({
+    useAuth: jest.fn(),
+}));
+
+const { useAuth } = jest.requireMock('../auth/AuthContext');
+
 const renderDash = (slug) => {
+    useAuth.mockReturnValue({ user: { id: 'u-1', name: 'Ms. Yeabsira A.', role: 'main_teacher' } });
     localStorage.setItem(CLASS_LOGIN_KEY, JSON.stringify({
         slug, className: 'Year 3 - Blue', teacher: 'Ms. Yeabsira A.',
         classId: '713bfeaa-d141-44f0-864a-cee594efb105', at: Date.now(),

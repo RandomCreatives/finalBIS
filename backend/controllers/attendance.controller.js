@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { BadRequestError, NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
+const { notifyAdmins } = require('../utils/nudges');
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
 
 /**
@@ -408,6 +409,25 @@ const submitMonth = asyncHandler(async (req, res) => {
         .maybeSingle();
 
     if (error) throw error;
+
+    // Bell nudge for the office — a month's attendance was handed in.
+    const { data: klass } = await supabase
+        .from('classes')
+        .select('name')
+        .eq('id', classId)
+        .eq('school_id', req.user.school_id)
+        .maybeSingle();
+
+    await notifyAdmins({
+        schoolId: req.user.school_id,
+        excludeUserId: req.user.id,
+        kind: 'attendance_submitted',
+        title: 'Monthly attendance submitted',
+        body: `${month} · ${klass?.name || 'Class'} — handed in by ${req.user.name}`,
+        link: '/app/attendance',
+        dedupeKey: `attendance:${classId}:${month}:${data?.submitted_at || 'resubmit'}`,
+    });
+
     res.json({ message: `Attendance for ${month} submitted`, submission: data });
 });
 
