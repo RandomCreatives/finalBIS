@@ -8,6 +8,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
+import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
+import { Link as RouterLink } from 'react-router-dom';
 import { assignmentApi, classApi, marksheetApi, studentApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -275,6 +277,13 @@ export default function Marksheets() {
         <>
             <PageHeader
                 title="Marksheets"
+                action={(
+                    <Button component={RouterLink} to="/app/report-cards" size="small"
+                        variant="outlined" startIcon={<SummarizeOutlinedIcon />}
+                        sx={{ textTransform: 'none', fontWeight: 700 }}>
+                        Report cards
+                    </Button>
+                )}
                 subtitle={isSubjectTeacher
                     ? 'Manage results class by class, for every class you teach.'
                     : 'Enter and edit marks per class, subject and term. Grades are computed by the server.'}
