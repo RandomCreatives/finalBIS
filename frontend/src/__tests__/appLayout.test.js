@@ -26,6 +26,7 @@ const renderShell = (role) => {
                 <Routes>
                     <Route path="/app" element={<AppLayout />}>
                         <Route index element={<div>page body</div>} />
+                        <Route path="notices" element={<div>notices page</div>} />
                     </Route>
                 </Routes>
             </MemoryRouter>
@@ -72,7 +73,8 @@ describe('AppLayout (staff workspace shell)', () => {
         expect(within(nav).queryByText('Staff')).not.toBeInTheDocument();
         expect(within(nav).queryByText('Subjects')).not.toBeInTheDocument();
         expect(within(nav).queryByText('Assignments')).not.toBeInTheDocument();
-        // teacher keeps the everyday items (+ dashboard/calendar/timetable)
+        // teacher keeps the everyday items (+ dashboard/calendar/timetable/notices)
+        expect(within(nav).getByText('Notices')).toBeInTheDocument();
         expect(within(nav).getByText('Daily Planner')).toBeInTheDocument();
         expect(within(nav).getByText('Attendance')).toBeInTheDocument();
         expect(within(nav).getByText('Students')).toBeInTheDocument();

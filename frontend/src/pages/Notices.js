@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
     DialogTitle, FormControlLabel, IconButton, List, ListItem, ListItemText, MenuItem,
@@ -35,6 +35,21 @@ export default function Notices() {
     const [toast, setToast] = useState('');
 
     const notices = useApi(() => noticeApi.list(), []);
+
+    // Seeing the board counts as reading: quietly mark every notice on
+    // screen as read so the admin's "read by X" figure means something.
+    // The upsert is idempotent; the ref stops each notice being marked
+    // more than once per visit (and the refetch loop that would cause).
+    const markedRef = useRef(new Set());
+    useEffect(() => {
+        const unread = (notices.data || [])
+            .filter((n) => !n.readAt && !markedRef.current.has(n.id));
+        if (unread.length === 0) return;
+        unread.forEach((n) => markedRef.current.add(n.id));
+        Promise.all(unread.map((n) => noticeApi.markRead(n.id, false).catch(() => null)))
+            .then(() => notices.reload());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notices.data]);
 
     const handleSave = async () => {
         setSaving(true);
