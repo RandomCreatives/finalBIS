@@ -48,6 +48,7 @@ import PlanningSection from '../components/planning/PlanningDocs';
 import StoreSection from '../components/communications/StoreSection';
 import RequestSection from '../components/communications/RequestSection';
 import ConductSection from '../components/communications/ConductSection';
+import TentativeChip from '../components/TentativeChip';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -1133,7 +1134,7 @@ const ttTint = (slot) => {
 export const timetableSheetRows = (slots, className) => {
     const periodKeys = [...new Set(slots.map((s) => `${s.startsAt}|${s.endsAt}`))].sort();
     const rows = [
-        [`${className} — Weekly Timetable 2026/2027`],
+        [`${className} — Weekly Timetable 2026/2027 (Tentative)`],
         [],
         ['Time', ...TT_DAYS.map((d) => d.label)],
     ];
@@ -1194,6 +1195,7 @@ function TimetableSection({ classId, klass }) {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2,
                 justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    <TentativeChip />
                     <Chip size="small" label={`${slots.length} sessions / week`} sx={{ fontWeight: 700 }} />
                     <Chip size="small" label="Main teacher" sx={{ bgcolor: '#eef2ff' }} />
                     <Chip size="small" label="Subject teacher" sx={{ bgcolor: '#ecfdf5' }} />
