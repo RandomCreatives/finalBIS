@@ -10,6 +10,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ClassIcon from '@mui/icons-material/Class';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import TodayIcon from '@mui/icons-material/Today';
 import GradeIcon from '@mui/icons-material/Grade';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
@@ -57,6 +58,10 @@ const NAV_GROUPS = [
             { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon fontSize="small" /> },
             {
                 label: 'Marksheets', to: '/app/marksheets', icon: <GradeIcon fontSize="small" />,
+                roles: ['admin', 'main_teacher', 'subject_teacher'],
+            },
+            {
+                label: 'Report Cards', to: '/app/report-cards', icon: <SummarizeOutlinedIcon fontSize="small" />,
                 roles: ['admin', 'main_teacher', 'subject_teacher'],
             },
         ],
