@@ -40,11 +40,11 @@ Vercel project settings (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
 | **Tasks** | Assignable action items with due dates and status |
 | **Notices** | Targeted announcements with read and acknowledgement receipts |
 
-> **v1.0 scope (term start).** Active modules: Dashboard, Daily Planner,
+> **Scope.** Active modules: Dashboard, Daily Planner,
 > Staff, Classes, Subjects, Assignments, Students, Attendance, Timetable,
-> Planning, Marksheets, Calendar, Tasks, Files, Settings. **Dormant — hidden
+> Planning, Marksheets, Calendar, Tasks, Files, Notices, Settings. **Dormant — hidden
 > from the UI but fully implemented and kept in the codebase:** Library,
-> Store, Clinic, Messages, Notices, Data Center. These return as later
+> Store, Clinic, Messages, Data Center. These return as later
 > versions by re-adding their nav entries; nothing is deleted.
 
 ---

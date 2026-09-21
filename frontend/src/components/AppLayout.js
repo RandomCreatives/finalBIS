@@ -16,6 +16,7 @@ import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import BadgeIcon from '@mui/icons-material/Badge';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -43,6 +44,7 @@ const NAV_GROUPS = [
             { label: 'Dashboard', to: '/app', icon: <DashboardIcon fontSize="small" />, end: true },
             { label: 'Calendar', to: '/app/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
             { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon fontSize="small" /> },
+            { label: 'Notices', to: '/app/notices', icon: <NotificationsNoneIcon fontSize="small" /> },
         ],
     },
     {
