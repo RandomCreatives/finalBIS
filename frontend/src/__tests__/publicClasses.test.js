@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '../theme';
 import PublicClasses from '../pages/PublicClasses';
+import { ClassLoginDialog } from '../components/ClassLoginCard';
 import { CLASSES } from '../data/classes';
 
 const renderPage = () =>
@@ -26,7 +27,7 @@ describe('PublicClasses (shared class cards)', () => {
         renderPage();
         const buttons = screen.getAllByRole('button', { name: /Main Teacher Login|Teacher Login/i });
         fireEvent.click(buttons[0]);
-        expect(screen.getByText(/Welcome, Ms. Yeabsira A./)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome, Ms. Mahilet N./)).toBeInTheDocument();
         expect(screen.getByLabelText(/Class password/i)).toBeInTheDocument();
     });
 
@@ -39,11 +40,16 @@ describe('PublicClasses (shared class cards)', () => {
         expect(screen.getByLabelText(/Class password/i)).toBeInTheDocument();
     });
 
-    test('unassigned classes get the placeholder dialog instead', () => {
-        renderPage();
-        // Year 3 - Red has no main teacher assigned.
-        fireEvent.click(screen.getByText('Year 3 - Red')
-            .closest('[data-testid="class-card"]').querySelector('button'));
+    test('classes with no main teacher get the placeholder dialog instead', () => {
+        // Every real class is assigned now — exercise the placeholder branch
+        // directly with a synthetic unassigned class.
+        render(
+            <ThemeProvider>
+                <MemoryRouter>
+                    <ClassLoginDialog loginClass={{ name: 'Year 5 - Test', mainTeacher: null }} onClose={() => {}} />
+                </MemoryRouter>
+            </ThemeProvider>,
+        );
         expect(screen.getByText(/No main teacher has been assigned/i)).toBeInTheDocument();
     });
 });

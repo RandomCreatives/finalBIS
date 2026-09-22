@@ -45,7 +45,7 @@ describe('SubjectLogin wall — class cards', () => {
 
     test('cards show the class team and a sign-in action', () => {
         renderWall();
-        expect(screen.getAllByText('Ms. Yeabsira A.').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Ms. Mahilet N.').length).toBeGreaterThan(0);
         expect(screen.getAllByRole('button', { name: /Class Sign-In/i })).toHaveLength(CLASSES.length);
     });
 
@@ -61,7 +61,7 @@ describe('SubjectLogin wall — class cards', () => {
         renderWall();
         const [firstCard] = screen.getAllByTestId('class-card');
         fireEvent.click(firstCard.closest('div').querySelector('button'));
-        expect(screen.getByText(/Welcome, Ms. Yeabsira A./)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome, Ms. Mahilet N./)).toBeInTheDocument();
         expect(screen.getByLabelText(/Class password/i)).toBeInTheDocument();
     });
 

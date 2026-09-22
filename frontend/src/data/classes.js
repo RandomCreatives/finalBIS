@@ -11,9 +11,9 @@
  */
 export const CLASSES = [
     // Year 3 — 4 homerooms
-    { id: 1,  name: 'Year 3 - Blue',    yearLevel: 3, mainTeacher: 'Ms. Yeabsira A.', assistantTeacher: null, studentCount: 26 },
+    { id: 1,  name: 'Year 3 - Blue',    yearLevel: 3, mainTeacher: 'Ms. Mahilet N.', assistantTeacher: null, studentCount: 26 },
     { id: 2,  name: 'Year 3 - Yellow',  yearLevel: 3, mainTeacher: 'Ms. Meron A.',    assistantTeacher: null, studentCount: 24 },
-    { id: 3,  name: 'Year 3 - Red',     yearLevel: 3, mainTeacher: null,              assistantTeacher: null, studentCount: 25 },
+    { id: 3,  name: 'Year 3 - Red',     yearLevel: 3, mainTeacher: 'Ms. Kalkidan Z.',              assistantTeacher: null, studentCount: 25 },
     { id: 4,  name: 'Year 3 - Green',   yearLevel: 3, mainTeacher: 'Mr. Deginet',     assistantTeacher: null, studentCount: 23 },
     // Year 4 — 10 homerooms
     { id: 5,  name: 'Year 4 - Blue',    yearLevel: 4, mainTeacher: 'Mr. Mulugeta J.', assistantTeacher: null, studentCount: 29 },
