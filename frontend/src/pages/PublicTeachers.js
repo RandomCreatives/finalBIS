@@ -26,9 +26,9 @@ const BASE_URL = process.env.REACT_APP_API_URL || '';
  */
 
 const MAIN_TEACHERS = [
-    { className: 'Year 3 - Blue',    teacher: 'Ms. Yeabsira A.' },
+    { className: 'Year 3 - Blue',    teacher: 'Ms. Mahilet N.' },
     { className: 'Year 3 - Yellow',  teacher: 'Ms. Meron A.' },
-    { className: 'Year 3 - Red',     teacher: null },
+    { className: 'Year 3 - Red',     teacher: 'Ms. Kalkidan Z.' },
     { className: 'Year 3 - Green',   teacher: 'Mr. Deginet' },
     { className: 'Year 4 - Blue',    teacher: 'Mr. Mulugeta J.' },
     { className: 'Year 4 - Purple',  teacher: 'Ms. Mekdelawit A.' },
