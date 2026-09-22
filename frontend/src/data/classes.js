@@ -20,7 +20,7 @@ export const CLASSES = [
     { id: 6,  name: 'Year 4 - Purple',  yearLevel: 4, mainTeacher: 'Ms. Mekdelawit A.',assistantTeacher: null, studentCount: 28 },
     { id: 7,  name: 'Year 4 - Lavender',yearLevel: 4, mainTeacher: 'Ms. Selam G.',    assistantTeacher: null, studentCount: 30 },
     { id: 8,  name: 'Year 4 - Crimson', yearLevel: 4, mainTeacher: 'Ms. Simegn Y.',   assistantTeacher: null, studentCount: 27 },
-    { id: 9,  name: 'Year 4 - Green',   yearLevel: 4, mainTeacher: null,              assistantTeacher: null, studentCount: 28 },
+    { id: 9,  name: 'Year 4 - Green',   yearLevel: 4, mainTeacher: 'Ms. Samrawit E.',              assistantTeacher: null, studentCount: 28 },
     { id: 10, name: 'Year 4 - Yellow',  yearLevel: 4, mainTeacher: 'Ms. Mariamawait B.',assistantTeacher: null, studentCount: 26 },
     { id: 11, name: 'Year 4 - Magenta', yearLevel: 4, mainTeacher: 'Ms. Abigail A.',  assistantTeacher: null, studentCount: 29 },
     { id: 12, name: 'Year 4 - Red',     yearLevel: 4, mainTeacher: 'Ms. Denebe A.',   assistantTeacher: null, studentCount: 25 },

@@ -30,6 +30,15 @@ describe('PublicClasses (shared class cards)', () => {
         expect(screen.getByLabelText(/Class password/i)).toBeInTheDocument();
     });
 
+    test('Year 4 - Green names Ms. Samrawit E. and opens the password dialog', () => {
+        renderPage();
+        const card = screen.getByText('Year 4 - Green').closest('[data-testid="class-card"]');
+        expect(card).toHaveTextContent('Ms. Samrawit E.');
+        fireEvent.click(card.querySelector('button'));
+        expect(screen.getByText(/Welcome, Ms. Samrawit E./)).toBeInTheDocument();
+        expect(screen.getByLabelText(/Class password/i)).toBeInTheDocument();
+    });
+
     test('unassigned classes get the placeholder dialog instead', () => {
         renderPage();
         // Year 3 - Red has no main teacher assigned.
