@@ -8,6 +8,8 @@ import SchoolIcon from '@mui/icons-material/School';
 import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CloseIcon from '@mui/icons-material/Close';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import { PaymentChip, paymentLabel } from '../utils/payments';
 
 /*
  * Student ID card popup.
@@ -76,7 +78,16 @@ const viewRows = (student) => {
     return rows;
 };
 
-export default function StudentIdCard({ student, canManage, classes, onClose, onSave, onTransfer, saving }) {
+const markedLine = (payment) => {
+    const fmt = new Date(payment.markedAt);
+    const date = Number.isNaN(fmt.getTime())
+        ? ''
+        : fmt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `Recorded by ${payment.markedBy || 'staff'}${date ? ` · ${date}` : ''}`;
+};
+
+export default function StudentIdCard({ student, canManage, classes, onClose, onSave, onTransfer, saving,
+    payment, termName, onMarkPayment, paymentSaving }) {
     const theme = useTheme();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(null);
@@ -189,6 +200,53 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                     span={['Guardian phone', 'Guardian email', 'Address', 'Previous school', 'Medical notes', 'Special needs note'].includes(label)} />
                             ))}
                         </Box>
+
+                        {/* payment receipt — dotted slip under the record, filled
+                            in by the class teacher when the parent pays */}
+                        {termName && (
+                            <Box
+                                data-testid="payment-receipt"
+                                sx={{
+                                    mt: 2, px: 2, py: 1.5, borderRadius: 1.25,
+                                    border: '1.5px dashed', borderColor: 'divider',
+                                    bgcolor: alpha(theme.palette.warning.main, 0.04),
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <ReceiptLongOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Typography sx={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.4,
+                                        color: 'text.secondary', fontFamily: 'monospace', flexGrow: 1 }}>
+                                        PAYMENT · {(termName || '').toUpperCase()}
+                                    </Typography>
+                                    <PaymentChip status={payment?.status || 'unpaid'} termName={termName} />
+                                </Box>
+                                <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .75 }}>
+                                    {payment?.status
+                                        ? markedLine(payment)
+                                        : 'Not recorded yet — once the parent pays, mark it here.'}
+                                </Typography>
+                                {canManage && onMarkPayment && (
+                                    <Box sx={{ display: 'flex', gap: .75, mt: 1.25, flexWrap: 'wrap' }}>
+                                        {['unpaid', 'paid_term', 'paid_annum'].map((st) => {
+                                            const current = payment?.status || 'unpaid';
+                                            return (
+                                                <Button
+                                                    key={st}
+                                                    size="small"
+                                                    variant={current === st ? 'contained' : 'outlined'}
+                                                    disableElevation
+                                                    disabled={paymentSaving}
+                                                    onClick={() => current !== st && onMarkPayment(st)}
+                                                    sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1, fontSize: 12 }}
+                                                >
+                                                    {paymentSaving && current !== st ? '…' : paymentLabel(st, termName)}
+                                                </Button>
+                                            );
+                                        })}
+                                    </Box>
+                                )}
+                            </Box>
+                        )}
 
                         {/* actions */}
                         <Box sx={{ display: 'flex', gap: 1, mt: 2.5, alignItems: 'center' }}>
