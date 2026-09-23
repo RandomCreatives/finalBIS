@@ -3,8 +3,9 @@ import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-rout
 import { lessonLabel } from '../utils/periods';
 import { PaymentChip } from '../utils/payments';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, Divider, Grid,
-    IconButton, InputAdornment, MenuItem, Paper, Snackbar, Table, TableBody, TableCell,
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Dialog, DialogActions,
+    DialogContent, DialogTitle, Divider, FormControlLabel, Grid,
+    IconButton, InputAdornment, MenuItem, Paper, Snackbar, Switch, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
     Tooltip, Typography, useTheme,
 } from '@mui/material';
@@ -41,7 +42,7 @@ import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
-import { studentApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi, timetableApi, paymentApi } from '../api/endpoints';
+import { studentApi, studentRequestApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi, timetableApi, paymentApi } from '../api/endpoints';
 import { clearToken } from '../api/client';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
@@ -919,6 +920,108 @@ function MarksSection({ klass, classId, roster }) {
     );
 }
 
+const EMPTY_REQUEST = {
+    name: '', gender: '', dateOfBirth: '', guardianName: '',
+    guardianPhone: '', guardianEmail: '', specialNeeds: false, specialNeedsNote: '',
+};
+
+/*
+ * "Add student" for a class's own main teacher (Mike, 2026-09-23). The
+ * request goes to the office queue; the student joins the register only
+ * after an admin approves, and the teacher is nudged either way.
+ */
+export function AddStudentDialog({ open, onClose, className, onSubmitted }) {
+    const [form, setForm] = useState(EMPTY_REQUEST);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+
+    const field = (key) => ({
+        value: form[key],
+        onChange: (e) => setForm((f) => ({ ...f, [key]: e.target.value })),
+    });
+
+    const reset = () => { setForm(EMPTY_REQUEST); setError(''); };
+    const close = () => { reset(); onClose(); };
+
+    const submit = async (e) => {
+        e.preventDefault();
+        if (saving) return;
+        setSaving(true);
+        setError('');
+        try {
+            const requestState = await studentRequestApi.create({
+                name: form.name.trim(),
+                gender: form.gender || null,
+                dateOfBirth: form.dateOfBirth || null,
+                guardianName: form.guardianName.trim() || null,
+                guardianPhone: form.guardianPhone.trim() || null,
+                guardianEmail: form.guardianEmail.trim() || null,
+                specialNeeds: form.specialNeeds,
+                specialNeedsNote: form.specialNeedsNote.trim() || null,
+            });
+            reset();
+            onSubmitted(requestState);
+        } catch (err) {
+            setError(err.message || 'Could not send the request');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onClose={close} maxWidth="sm" fullWidth data-testid="add-student-dialog">
+            <form onSubmit={submit}>
+                <DialogTitle sx={{ fontWeight: 800 }}>Add a student — {className}</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                        The office approves every new student before they join your register —
+                        you'll get a notification as soon as it's reviewed.
+                    </Alert>
+                    {error && <Alert severity="error" sx={{ borderRadius: 1.5 }}>{error}</Alert>}
+                    <TextField label="Student's full name" required autoFocus {...field('name')} inputProps={{ 'data-testid': 'req-name' }} />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField select label="Gender" sx={{ flex: 1 }} {...field('gender')}>
+                            <MenuItem value="">Not known</MenuItem>
+                            <MenuItem value="male">Male</MenuItem>
+                            <MenuItem value="female">Female</MenuItem>
+                        </TextField>
+                        <TextField label="Date of birth" type="date" sx={{ flex: 1 }}
+                            InputLabelProps={{ shrink: true }} {...field('dateOfBirth')} />
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField label="Guardian name" sx={{ flex: 1 }} {...field('guardianName')} />
+                        <TextField label="Guardian phone" sx={{ flex: 1 }} {...field('guardianPhone')} />
+                    </Box>
+                    <TextField label="Guardian email (optional)" type="email" {...field('guardianEmail')} />
+                    <FormControlLabel
+                        control={(
+                            <Switch
+                                checked={form.specialNeeds}
+                                onChange={(e) => setForm((f) => ({ ...f, specialNeeds: e.target.checked }))}
+                            />
+                        )}
+                        label="Special educational needs"
+                    />
+                    {form.specialNeeds && (
+                        <TextField label="Support note" multiline minRows={2} {...field('specialNeedsNote')} />
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+                    <Button onClick={close} sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" variant="contained" disableElevation
+                        disabled={!form.name.trim() || saving}
+                        data-testid="req-submit"
+                        sx={{ fontWeight: 700, textTransform: 'none', px: 3 }}>
+                        {saving ? 'Sending…' : 'Send request'}
+                    </Button>
+                </DialogActions>
+            </form>
+        </Dialog>
+    );
+}
+
 export function StudentsSection({ klass, roster, loading, error, reload, classNames, classIdByName, classId }) {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
@@ -939,6 +1042,12 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
         if (Array.isArray(payments.data))
             setPayMap(Object.fromEntries(payments.data.map((p) => [p.studentId, p])));
     }, [payments.data]);
+
+    // New-student intake: this class's pending office approvals (migration 019).
+    const pendings = useApi(
+        () => studentRequestApi.list({ status: 'pending' }).catch(() => []), [],
+    );
+    const [addOpen, setAddOpen] = useState(false);
 
     const [paySaving, setPaySaving] = useState(false);
     const markPayment = async (studentId, status) => {
@@ -1022,7 +1131,31 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                     {filtered.length} of {roster.length} student{roster.length === 1 ? '' : 's'} in {klass.name}
                     {termId && !payments.error && ` · ${paidCount} paid (${termName})`}
                 </Typography>
+                <Button
+                    variant="contained" size="small" startIcon={<AddIcon />}
+                    onClick={() => setAddOpen(true)} data-testid="add-student-btn" disableElevation
+                    sx={{ ml: 'auto', fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                    Add student
+                </Button>
             </Box>
+
+            {pendings.data?.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2, borderRadius: 1.5 }} data-testid="pending-strip">
+                    <strong>{pendings.data.length}</strong>&nbsp;waiting for office approval:&nbsp;
+                    {pendings.data.map((r) => r.name).join(' · ')}
+                </Alert>
+            )}
+
+            <AddStudentDialog
+                open={addOpen}
+                onClose={() => setAddOpen(false)}
+                className={klass.name}
+                onSubmitted={(requestState) => {
+                    setAddOpen(false);
+                    setToast(`Request sent — the office will review ${requestState.name}`);
+                    pendings.reload?.();
+                }}
+            />
 
             {loading && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
