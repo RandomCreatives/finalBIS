@@ -107,10 +107,9 @@ export default function Landing() {
                         </Box>
 
                         <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3 }}>
-                            <NavLink component={RouterLink} to="/classes">Classes</NavLink>
-                            <NavLink component={RouterLink} to="/teachers">Teachers</NavLink>
                             <NavLink component={RouterLink} to="/students">Students</NavLink>
                             <NavLink component={RouterLink} to="/calendar">Calendar</NavLink>
+                            <NavLink component={RouterLink} to="/data-center">Data Center</NavLink>
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -303,9 +302,9 @@ export default function Landing() {
                                     variant="outlined"
                                     startIcon={<Icon />}
                                     endIcon={<Box component="span" sx={{
-                                        px: .5, py: .1, borderRadius: 999,
-                                        fontSize: 8, lineHeight: 1.2, fontWeight: 800,
-                                        letterSpacing: '.03em', textTransform: 'uppercase',
+                                        px: .35, py: 0, borderRadius: 999,
+                                        fontSize: 7, lineHeight: 1, fontWeight: 700,
+                                        letterSpacing: '.02em', textTransform: 'uppercase',
                                         bgcolor: 'action.disabledBackground',
                                         color: 'text.disabled',
                                     }}>Soon</Box>}
