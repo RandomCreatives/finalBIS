@@ -48,6 +48,15 @@ describe('Landing Page', () => {
         }
     });
 
+    test('shows Students, Calendar and Data Center in the public navigation', () => {
+        renderWithProviders(<Landing />);
+        expect(screen.getByRole('link', { name: 'Students' })).toHaveAttribute('href', '/students');
+        expect(screen.getByRole('link', { name: 'Calendar' })).toHaveAttribute('href', '/calendar');
+        expect(screen.getByRole('link', { name: 'Data Center' })).toHaveAttribute('href', '/data-center');
+        expect(screen.queryByRole('link', { name: 'Classes' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Teachers' })).not.toBeInTheDocument();
+    });
+
     test('renders the sign-in card above the fold', () => {
         renderWithProviders(<Landing />);
         expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();

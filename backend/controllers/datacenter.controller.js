@@ -13,8 +13,36 @@ const gradeFor = (percentage) => {
     return 'F';
 };
 
+// Data Center is a public, single-school aggregate view. Authenticated
+// callers still use their school from the token; public callers resolve the
+// one deployed school without exposing account or guardian data.
+const schoolIdFor = async (req) => {
+    if (req.user?.school_id) return req.user.school_id;
+    const { data: school, error } = await supabase
+        .from('schools')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+    if (error) throw error;
+    return school?.id || null;
+};
+
 const getStats = asyncHandler(async (req, res) => {
-    const schoolId = req.user.school_id;
+    const schoolId = await schoolIdFor(req);
+    if (!schoolId) {
+        return res.json({
+            totalStudents: 0,
+            maleStudents: 0,
+            femaleStudents: 0,
+            otherGenderStudents: 0,
+            totalClasses: 0,
+            totalTeachers: 0,
+            teachersByRole: {},
+            totalSubjects: 0,
+            studentsByClass: [],
+            attendanceRate: null,
+        });
+    }
 
     const [
         studentsRes,
@@ -169,7 +197,10 @@ const getStats = asyncHandler(async (req, res) => {
  * partially-entered terms simply show fewer ranked students.
  */
 const getAcademic = asyncHandler(async (req, res) => {
-    const schoolId = req.user.school_id;
+    const schoolId = await schoolIdFor(req);
+    if (!schoolId) {
+        return res.json({ termName: null, perClassTop3: [], schoolTop10: [], subjectAverages: [] });
+    }
 
     const { data: term, error: termError } = await supabase
         .from('terms')
