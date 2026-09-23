@@ -15,6 +15,10 @@ import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
+import { marksheetSubjectsFor } from '../utils/marksheetSubjects';
+
+// Kept as page exports for existing consumers/tests.
+export { MAIN_TEACHER_MARKSHEET_CODES, marksheetSubjectsFor } from '../utils/marksheetSubjects';
 
 /** Mirrors gradeFor() in backend/controllers/marksheet.controller.js. */
 const gradeFor = (percentage) => {
@@ -33,33 +37,6 @@ const GRADE_COLORS = {
 };
 
 const isNumber = (v) => v !== '' && !Number.isNaN(Number(v));
-
-// Main teachers enter the term marks for the three subjects they teach in
-// their own class. Spelling remains a timetable/teaching seat, but is not a
-// marksheet subject in the main-teacher workflow.
-export const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS']);
-
-/**
- * Keep the subject picker aligned with the caller's teaching responsibility.
- * Admins see every subject; teachers see only their own assignments. Main
- * teachers' term marks are deliberately limited to MAT, SCI and GLS.
- */
-export const marksheetSubjectsFor = (assignments, { user, isAdmin = false } = {}) => {
-    const list = assignments || [];
-    const visible = isAdmin
-        ? list
-        : list.filter((assignment) => assignment.teacherId === user?.id)
-            .filter((assignment) => user?.role !== 'main_teacher'
-                || MAIN_TEACHER_MARKSHEET_CODES.has(assignment.subject?.code));
-
-    const bySubject = new Map();
-    visible.forEach((assignment) => {
-        if (assignment.subject?.id && !bySubject.has(assignment.subject.id)) {
-            bySubject.set(assignment.subject.id, assignment.subject);
-        }
-    });
-    return [...bySubject.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-};
 
 export default function Marksheets() {
     const { user, isAdmin } = useAuth();
