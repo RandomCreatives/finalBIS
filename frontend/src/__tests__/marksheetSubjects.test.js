@@ -1,4 +1,5 @@
 import { MAIN_TEACHER_MARKSHEET_CODES, marksheetSubjectsFor } from '../pages/Marksheets';
+import { mainTeacherMarksheetSubjectsFor } from '../utils/marksheetSubjects';
 
 describe('marksheet subject options', () => {
     const assignments = [
@@ -19,6 +20,13 @@ describe('marksheet subject options', () => {
         expect(options.map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
         expect(options.map((subject) => subject.name)).not.toContain('Spelling');
         expect(options.map((subject) => subject.name)).not.toContain('English');
+    });
+
+
+    test('class-home filters by the logged-in main teacher seat as well', () => {
+        const options = mainTeacherMarksheetSubjectsFor(assignments, 'main-1');
+
+        expect(options.map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
     });
 
     test('subject teachers see only their own assigned subjects', () => {

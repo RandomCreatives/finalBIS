@@ -53,6 +53,7 @@ import StoreSection from '../components/communications/StoreSection';
 import RequestSection from '../components/communications/RequestSection';
 import ConductSection from '../components/communications/ConductSection';
 import TentativeChip from '../components/TentativeChip';
+import { mainTeacherMarksheetSubjectsFor } from '../utils/marksheetSubjects';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -613,7 +614,7 @@ function AttendanceSection({ klass, classId, roster }) {
 
 /* ── marksheets section ───────────────────────────────────── */
 
-function MarksSection({ klass, classId, roster }) {
+function MarksSection({ klass, classId, roster, teacherId }) {
     const [subjectId, setSubjectId] = useState('');
     const [edits, setEdits] = useState({});
     const [saving, setSaving] = useState(false);
@@ -636,16 +637,14 @@ function MarksSection({ klass, classId, roster }) {
             : Promise.resolve([])),
         [classId]
     );
-    const subjects = useMemo(() => {
-        const seen = new Map();
-        (classSubjects.data || []).forEach((a) => {
-            // Registration is a timetable fixture, not a marked subject.
-            if (a.subject?.id && a.subject.code !== 'REG' && !seen.has(a.subject.id)) {
-                seen.set(a.subject.id, a.subject);
-            }
-        });
-        return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-    }, [classSubjects.data]);
+    // The class-home session is a main-teacher session. Keep this dropdown
+    // to that teacher's Term 1 subjects, not every subject offered by the
+    // class. Old sessions without userId still get the safe MAT/SCI/GLS code
+    // filter.
+    const subjects = useMemo(
+        () => mainTeacherMarksheetSubjectsFor(classSubjects.data, teacherId),
+        [classSubjects.data, teacherId]
+    );
 
     useEffect(() => {
         if (!subjectId && subjects.length > 0) setSubjectId(subjects[0].id);
@@ -1700,7 +1699,7 @@ export default function ClassHome() {
 
                         {section === 'overview' && <OverviewSection klass={klass} classId={session.classId} roster={roster} goTo={setSection} />}
                         {section === 'attendance' && <AttendanceSection klass={klass} classId={session.classId} roster={roster} />}
-                        {section === 'marks' && <MarksSection klass={klass} classId={session.classId} roster={roster} />}
+                        {section === 'marks' && <MarksSection klass={klass} classId={session.classId} roster={roster} teacherId={session.userId} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
 {section === 'calendar' && <CalendarBoard />}
                         {section === 'students' && (
