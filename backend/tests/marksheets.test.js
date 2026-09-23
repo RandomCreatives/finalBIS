@@ -47,12 +47,14 @@ const tables = () => ({
         { id: SUBJ_MAT, school_id: SCHOOL, name: 'Mathematics', code: 'MAT', taught_by: 'main_teacher' },
     ],
     class_staff: [
-        // MAIN_A runs CLASS_A — anything in that class is theirs to record.
+        // MAIN_A runs CLASS_A, but marksheet access still follows subject seats.
         { id: 'cs-a', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, user_id: MAIN_A.id, position: 'main' },
     ],
     class_subjects: [
         // ENG_T teaches English in CLASS_A only — not CLASS_B, not Maths.
         { id: 'asg-1', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_ENG, teacher_id: ENG_T.id, sessions_per_week: 5 },
+        // MAIN_A teaches Maths in CLASS_A.
+        { id: 'asg-2', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_MAT, teacher_id: MAIN_A.id, sessions_per_week: 6 },
     ],
     students: [
         { id: STU_1, school_id: SCHOOL, name: 'Abel Tesfaye', admission_no: 'A001', roll_num: 1, class_id: CLASS_A, is_active: true },
@@ -73,7 +75,7 @@ describe('single marksheet entry', () => {
         const res = await request(app)
             .put('/api/marksheets')
             .auth(tokenFor(MAIN_A))
-            .send({ studentId: STU_1, subjectId: SUBJ_ENG, classId: CLASS_A, marks: 72, maxMarks: 80 });
+            .send({ studentId: STU_1, subjectId: SUBJ_MAT, classId: CLASS_A, marks: 72, maxMarks: 80 });
 
         assert.equal(res.status, 200);
         assert.equal(res.body.marksheet.percentage, 90);
@@ -197,14 +199,14 @@ describe('write ownership', () => {
         assert.equal(res.status, 403);
     });
 
-    test('a main teacher records any subject of the class they run, even unassigned', async () => {
+    test('a main teacher cannot record a subject in their class that is not assigned to them', async () => {
         const res = await request(app)
             .put('/api/marksheets')
             .auth(tokenFor(MAIN_A))
-            .send({ studentId: STU_1, subjectId: SUBJ_MAT, classId: CLASS_A, marks: 62 });
+            .send({ studentId: STU_1, subjectId: SUBJ_ENG, classId: CLASS_A, marks: 62 });
 
-        assert.equal(res.status, 200);
-        assert.equal(rowsOf('marksheets')[0].class_id, CLASS_A);
+        assert.equal(res.status, 403);
+        assert.equal(rowsOf('marksheets').length, 0);
     });
 
     test('a main teacher cannot write marks for another teacher\'s class', async () => {
