@@ -17,16 +17,17 @@ const renderWithProviders = (ui) =>
     );
 
 describe('Landing Page', () => {
-    test('renders school branding and sign-in button', () => {
+    test('renders school branding without a confusing top login button', () => {
         renderWithProviders(<Landing />);
         expect(screen.getAllByText(/BIS NOC Gerji/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByRole('link', { name: /Sign In/i }).length).toBeGreaterThan(0);
+        expect(screen.queryByRole('link', { name: /^Sign In$/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Administrator/ })).toBeInTheDocument();
     });
 
-    test('renders hero heading', () => {
+    test('renders the school welcome heading with clear hierarchy', () => {
         renderWithProviders(<Landing />);
         expect(
-            screen.getByRole('heading', { name: /Run the whole school day, from one place/i })
+            screen.getByRole('heading', { name: /Welcome to British International School Gerji Primary 2/i })
         ).toBeInTheDocument();
     });
 
@@ -37,9 +38,14 @@ describe('Landing Page', () => {
         ).toBeInTheDocument();
     });
 
-    test('renders the playful shape strip', () => {
+    test('renders disabled Store, Library and Nurse buttons marked Soon', () => {
         renderWithProviders(<Landing />);
-        expect(screen.getByTestId('hero-shape-strip')).toBeInTheDocument();
+        const modules = screen.getByTestId('coming-soon-modules');
+        for (const label of ['Store', 'Library', 'Nurse']) {
+            const button = screen.getByRole('button', { name: new RegExp(`${label} Soon`, 'i') });
+            expect(button).toBeDisabled();
+            expect(modules).toContainElement(button);
+        }
     });
 
     test('renders the sign-in card above the fold', () => {

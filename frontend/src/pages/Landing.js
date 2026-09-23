@@ -7,7 +7,6 @@ import {
     useTheme,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
-import LoginIcon from '@mui/icons-material/Login';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SchoolIcon from '@mui/icons-material/School';
@@ -16,9 +15,10 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import GradeIcon from '@mui/icons-material/Grade';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 
 /* ── styled primitives ───────────────────────────────────── */
@@ -55,39 +55,24 @@ const roles = [
     // and Library roles return with their modules.
 ];
 
-/* ── decorative shape-circle with an icon ────────────────── */
-const IconCircle = ({ bg, size, icon, desktopOnly = false }) => (
-    <Box sx={{
-        display: desktopOnly ? { xs: 'none', sm: 'flex' } : 'flex',
-        width: { xs: size[0], md: size[1] }, height: { xs: size[0], md: size[1] },
-        borderRadius: '50%', bgcolor: bg, flexShrink: 0,
-        alignItems: 'center', justifyContent: 'center',
-    }}>
-        {icon}
-    </Box>
-);
+const comingSoonModules = [
+    { label: 'Store', icon: StorefrontIcon },
+    { label: 'Library', icon: MenuBookIcon },
+    { label: 'Nurse', icon: LocalHospitalIcon },
+];
 
 /* ── component ───────────────────────────────────────────── */
 export default function Landing() {
-    const { isAuthenticated } = useAuth();
     const { toggleColorScheme } = useColorScheme();
     const theme = useTheme();
     const dark = theme.palette.mode === 'dark';
 
     const surface = dark ? theme.palette.background.paper : '#ffffff';
     const border = dark ? theme.palette.divider : '#e2e8f0';
-    const homeTo = isAuthenticated ? '/app' : '/login';
-    const signInLabel = isAuthenticated ? 'Dashboard' : 'Sign In';
-
-    // Siddhi-style playful accents on top of the brand palette.
     const accent = {
         blue: dark ? '#60a5fa' : '#3b82f6',
         teal: dark ? '#2dd4bf' : '#0d9488',
         amber: dark ? '#fbbf24' : '#f59e0b',
-        yellow: '#fde68a',
-        pink: dark ? '#f9a8d4' : '#f9a8d4',
-        pinkSoft: '#fbcfe8',
-        navy: '#1e3a8a',
     };
 
     return (
@@ -139,11 +124,6 @@ export default function Landing() {
                                 {dark ? <LightModeIcon sx={{ fontSize: 18 }} />
                                        : <DarkModeIcon  sx={{ fontSize: 18 }} />}
                             </Box>
-                            <Button component={RouterLink} to={homeTo}
-                                variant="contained" size="small" startIcon={<LoginIcon />}
-                                sx={{ fontWeight: 700, borderRadius: 999, px: 2.5, textTransform: 'none' }}>
-                                {signInLabel}
-                            </Button>
                         </Box>
                     </Box>
                 </Container>
@@ -190,8 +170,22 @@ export default function Landing() {
                                 lineHeight: 1.05, letterSpacing: '-.03em', mb: 2.5,
                                 color: dark ? '#f8fafc' : '#0f172a',
                             }}>
-                                Run the whole school day, from{' '}
-                                <Box component="span" sx={{ color: 'primary.main' }}>one place</Box>.
+                                <Box component="span" sx={{
+                                    display: 'block', fontSize: { xs: '1.1rem', sm: '1.35rem', md: '1.55rem' },
+                                    letterSpacing: '-.01em', mb: 1,
+                                    color: 'text.secondary',
+                                }}>
+                                    Welcome to
+                                </Box>
+                                <Box component="span" sx={{ display: 'block', color: 'primary.main' }}>
+                                    British International School
+                                </Box>
+                                <Box component="span" sx={{
+                                    display: 'block', fontSize: { xs: '1.75rem', sm: '2.35rem', md: '2.7rem' },
+                                    mt: 1, color: dark ? '#f8fafc' : '#0f172a',
+                                }}>
+                                    Gerji Primary 2
+                                </Box>
                             </Typography>
                             <Typography sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, lineHeight: 1.7,
                                 color: 'text.secondary', maxWidth: 520, mb: 3 }}>
@@ -289,41 +283,45 @@ export default function Landing() {
                         </Box>
                     </Box>
 
-                    {/* playful shape strip (Siddhi-style collage, icons instead of photos) */}
+                    {/* dormant campus services — ready to switch on later */}
                     <Box
-                        data-testid="hero-shape-strip"
-                        aria-hidden="true"
+                        data-testid="coming-soon-modules"
                         sx={{
-                            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-                            gap: { xs: 1.25, sm: 2 }, userSelect: 'none',
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+                            gap: 1.5,
+                            maxWidth: 760,
+                            mx: 'auto',
                         }}
                     >
-                        <Box sx={{
-                            display: { xs: 'none', sm: 'block' },
-                            width: { sm: 44, md: 58 }, height: { sm: 88, md: 116 },
-                            bgcolor: accent.amber, borderRadius: '0 999px 999px 0',
-                        }} />
-                        <IconCircle bg={accent.blue} size={[84, 116]} desktopOnly
-                            icon={<CalendarMonthIcon sx={{ fontSize: { sm: 38, md: 52 }, color: '#fff' }} />} />
-                        <Box sx={{
-                            width: { xs: 60, md: 96 }, height: { xs: 60, md: 96 },
-                            bgcolor: accent.pink,
-                            borderRadius: '999px 999px 999px 20px',
-                        }} />
-                        <IconCircle bg={accent.yellow} size={[92, 124]}
-                            icon={<GradeIcon sx={{ fontSize: { xs: 42, md: 56 }, color: accent.navy }} />} />
-                        <Box sx={{
-                            display: { xs: 'none', sm: 'block' },
-                            width: { sm: 84, md: 116 }, height: { sm: 42, md: 58 },
-                            bgcolor: accent.teal, borderRadius: '999px 999px 0 0',
-                        }} />
-                        <IconCircle bg={accent.pinkSoft} size={[76, 104]} desktopOnly
-                            icon={<EventAvailableIcon sx={{ fontSize: { sm: 34, md: 46 }, color: accent.navy }} />} />
-                        <Box sx={{
-                            display: { xs: 'none', sm: 'block' },
-                            width: { sm: 44, md: 58 }, height: { sm: 88, md: 116 },
-                            bgcolor: accent.blue, borderRadius: '999px 0 0 999px',
-                        }} />
+                        {comingSoonModules.map((module) => {
+                            const Icon = module.icon;
+                            return (
+                                <Button
+                                    key={module.label}
+                                    disabled
+                                    variant="outlined"
+                                    startIcon={<Icon />}
+                                    endIcon={<Box component="span" sx={{
+                                        px: .75, py: .2, borderRadius: 999,
+                                        fontSize: 10, fontWeight: 800,
+                                        letterSpacing: '.04em', textTransform: 'uppercase',
+                                        bgcolor: 'action.disabledBackground',
+                                        color: 'text.disabled',
+                                    }}>Soon</Box>}
+                                    sx={{
+                                        minHeight: 58, justifyContent: 'space-between',
+                                        borderRadius: 2, px: 2,
+                                        textTransform: 'none', fontWeight: 800,
+                                        color: 'text.disabled',
+                                        borderColor: 'divider',
+                                        '&.Mui-disabled': { color: 'text.disabled', borderColor: 'divider' },
+                                    }}
+                                >
+                                    {module.label}
+                                </Button>
+                            );
+                        })}
                     </Box>
                 </Container>
             </Box>
