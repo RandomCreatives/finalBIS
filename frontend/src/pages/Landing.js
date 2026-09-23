@@ -303,9 +303,9 @@ export default function Landing() {
                                     variant="outlined"
                                     startIcon={<Icon />}
                                     endIcon={<Box component="span" sx={{
-                                        px: .75, py: .2, borderRadius: 999,
-                                        fontSize: 10, fontWeight: 800,
-                                        letterSpacing: '.04em', textTransform: 'uppercase',
+                                        px: .5, py: .1, borderRadius: 999,
+                                        fontSize: 8, lineHeight: 1.2, fontWeight: 800,
+                                        letterSpacing: '.03em', textTransform: 'uppercase',
                                         bgcolor: 'action.disabledBackground',
                                         color: 'text.disabled',
                                     }}>Soon</Box>}
