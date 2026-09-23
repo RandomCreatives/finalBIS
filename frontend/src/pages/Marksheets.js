@@ -34,6 +34,33 @@ const GRADE_COLORS = {
 
 const isNumber = (v) => v !== '' && !Number.isNaN(Number(v));
 
+// Main teachers enter the term marks for the three subjects they teach in
+// their own class. Spelling remains a timetable/teaching seat, but is not a
+// marksheet subject in the main-teacher workflow.
+export const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS']);
+
+/**
+ * Keep the subject picker aligned with the caller's teaching responsibility.
+ * Admins see every subject; teachers see only their own assignments. Main
+ * teachers' term marks are deliberately limited to MAT, SCI and GLS.
+ */
+export const marksheetSubjectsFor = (assignments, { user, isAdmin = false } = {}) => {
+    const list = assignments || [];
+    const visible = isAdmin
+        ? list
+        : list.filter((assignment) => assignment.teacherId === user?.id)
+            .filter((assignment) => user?.role !== 'main_teacher'
+                || MAIN_TEACHER_MARKSHEET_CODES.has(assignment.subject?.code));
+
+    const bySubject = new Map();
+    visible.forEach((assignment) => {
+        if (assignment.subject?.id && !bySubject.has(assignment.subject.id)) {
+            bySubject.set(assignment.subject.id, assignment.subject);
+        }
+    });
+    return [...bySubject.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+};
+
 export default function Marksheets() {
     const { user, isAdmin } = useAuth();
     const isSubjectTeacher = user?.role === 'subject_teacher';
@@ -96,7 +123,9 @@ export default function Marksheets() {
         }
     }, [terms.data, termId]);
 
-    // Subjects offered in the chosen class; subject teachers only manage their own.
+    // Subjects offered in the chosen class. The picker is deliberately
+    // assignment-driven for every teacher; main teachers see only their Term 1
+    // marksheet subjects (Math, Science and Global Citizenship).
     const classSubjects = useApi(
         () => (classId
             ? assignmentApi.subjects({ classId }).then((r) => r.assignments)
@@ -104,18 +133,10 @@ export default function Marksheets() {
         [classId]
     );
 
-    const subjectOptions = useMemo(() => {
-        const list = classSubjects.data || [];
-        const visible = isSubjectTeacher && !isAdmin
-            ? list.filter((a) => a.teacherId === user.id)
-            : list;
-
-        const bySubject = new Map();
-        visible.forEach((a) => {
-            if (a.subject?.id && !bySubject.has(a.subject.id)) bySubject.set(a.subject.id, a.subject);
-        });
-        return [...bySubject.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    }, [classSubjects.data, isSubjectTeacher, isAdmin, user?.id]);
+    const subjectOptions = useMemo(
+        () => marksheetSubjectsFor(classSubjects.data, { user, isAdmin }),
+        [classSubjects.data, isAdmin, user]
+    );
 
     // Keep the subject choice valid when the class changes.
     useEffect(() => {

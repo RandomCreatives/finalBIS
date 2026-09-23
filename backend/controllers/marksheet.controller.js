@@ -45,10 +45,8 @@ const SELECT = `
 //
 // Writes are scoped the same way the timetable scopes visibility:
 //   * admins may record anywhere in their school
-//   * a main teacher may record any subject of a class they run (their seat
-//     in class_staff), plus any subject explicitly assigned to them
-//   * a subject teacher may record only a (class, subject) pair that names
-//     them in class_subjects for the current academic year
+//   * a main or subject teacher may record only a (class, subject) pair that
+//     names them in class_subjects for the current academic year
 // Everything is also checked against req.user.school_id, so ids from another
 // school can never be attached to a marksheet.
 // ---------------------------------------------------------------------------
@@ -84,36 +82,20 @@ const assertCanRecord = async (req, pairs) => {
     const yearId = await resolveAcademicYearId(req);
     const classIds = [...new Set(pairs.map((p) => p.classId))];
 
-    // Main teachers: classes they run are fully theirs.
-    let mainClassIds = new Set();
-    if (req.user.role === ROLES.MAIN_TEACHER) {
-        const { data, error } = await supabase
-            .from('class_staff')
-            .select('class_id')
-            .eq('academic_year_id', yearId)
-            .eq('user_id', req.user.id)
-            .eq('position', 'main')
-            .in('class_id', classIds);
-
-        if (error) throw error;
-        mainClassIds = new Set((data || []).map((r) => r.class_id));
-    }
-
-    const remaining = pairs.filter((p) => !mainClassIds.has(p.classId));
-    if (remaining.length === 0) return;
-
-    // Otherwise an explicit teaching assignment must name them.
+    // Both teacher roles must have an explicit subject seat. A main-teacher
+    // class seat alone is not enough: it must be one of the subjects they
+    // teach for the academic year/term workflow (MAT, SCI or GLS in Term 1).
     const { data: assignments, error } = await supabase
         .from('class_subjects')
         .select('class_id, subject_id')
         .eq('academic_year_id', yearId)
         .eq('teacher_id', req.user.id)
-        .in('class_id', [...new Set(remaining.map((p) => p.classId))]);
+        .in('class_id', classIds);
 
     if (error) throw error;
 
     const have = new Set((assignments || []).map((a) => `${a.class_id}|${a.subject_id}`));
-    if (remaining.some((p) => !have.has(`${p.classId}|${p.subjectId}`))) {
+    if (pairs.some((p) => !have.has(`${p.classId}|${p.subjectId}`))) {
         throw new ForbiddenError(
             'You are not assigned to teach this subject for this class'
         );
