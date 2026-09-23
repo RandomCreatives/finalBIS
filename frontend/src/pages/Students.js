@@ -9,7 +9,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
-import { studentApi, classApi, termApi, paymentApi } from '../api/endpoints';
+import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
@@ -191,6 +191,48 @@ export default function Students() {
         window.URL.revokeObjectURL(url);
     };
 
+    // Office queue: main-teacher intake waiting for approval (migration 019).
+    const pendingReqs = useApi(
+        () => (user?.role === 'admin'
+            ? studentRequestApi.list({ status: 'pending' }).catch(() => [])
+            : Promise.resolve([])),
+        [user?.role],
+    );
+    const [reqSaving, setReqSaving] = useState(false);
+    const [declineTarget, setDeclineTarget] = useState(null);
+    const [declineNote, setDeclineNote] = useState('');
+
+    const approveRequest = async (r) => {
+        if (reqSaving) return;
+        setReqSaving(true);
+        try {
+            const res = await studentRequestApi.approve(r.id);
+            setToast(`${r.name} added to ${res.request.className} — roll ${res.student.rollNum} · ${res.student.admissionNo}`);
+            await pendingReqs.reload();
+            await students.reload();
+        } catch (err) {
+            setToast(err.message || 'Could not approve the request');
+        } finally {
+            setReqSaving(false);
+        }
+    };
+
+    const declineRequest = async () => {
+        if (!declineTarget || reqSaving) return;
+        setReqSaving(true);
+        try {
+            await studentRequestApi.reject(declineTarget.id, declineNote.trim());
+            setToast(`Request for ${declineTarget.name} declined`);
+            setDeclineTarget(null);
+            setDeclineNote('');
+            await pendingReqs.reload();
+        } catch (err) {
+            setToast(err.message || 'Could not decline the request');
+        } finally {
+            setReqSaving(false);
+        }
+    };
+
     const rows = students.data || [];
 
     return (
@@ -209,6 +251,42 @@ export default function Students() {
                     </>
                 )}
             />
+
+            {user?.role === 'admin' && !pendingReqs.error && (pendingReqs.data || []).length > 0 && (
+                <Card sx={{ p: 2, mb: 2.5, borderLeft: 4, borderColor: 'warning.main' }} data-testid="student-requests">
+                    <Typography sx={{ fontWeight: 800, mb: 1.5 }}>
+                        New student requests ({pendingReqs.data.length})
+                    </Typography>
+                    <Stack spacing={1.5}>
+                        {pendingReqs.data.map((r) => (
+                            <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                                <Box sx={{ minWidth: 240 }}>
+                                    <Typography sx={{ fontWeight: 700 }}>{r.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                        {r.requestedByName} · {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                        {r.guardianPhone ? ` · ${r.guardianPhone}` : ''}
+                                    </Typography>
+                                </Box>
+                                <Chip size="small" label={r.className} sx={{ fontWeight: 600 }} />
+                                <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                                    <Button size="small" variant="contained" color="success" disableElevation
+                                        data-testid={`approve-${r.id}`} disabled={reqSaving}
+                                        onClick={() => approveRequest(r)}
+                                        sx={{ fontWeight: 700, textTransform: 'none' }}>
+                                        Approve
+                                    </Button>
+                                    <Button size="small" variant="outlined" color="error"
+                                        data-testid={`decline-${r.id}`} disabled={reqSaving}
+                                        onClick={() => setDeclineTarget(r)}
+                                        sx={{ fontWeight: 700, textTransform: 'none' }}>
+                                        Decline
+                                    </Button>
+                                </Box>
+                            </Box>
+                        ))}
+                    </Stack>
+                </Card>
+            )}
 
             <Card sx={{ p: 2, mb: 2.5 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -537,6 +615,28 @@ export default function Students() {
                         startIcon={importing ? undefined : <FileUploadIcon />}
                     >
                         {importing ? 'Importing...' : 'Import'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={Boolean(declineTarget)} onClose={() => setDeclineTarget(null)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ fontWeight: 800 }}>Decline {declineTarget?.name}?</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        label="Note for the teacher (optional)" fullWidth multiline minRows={2}
+                        value={declineNote} onChange={(e) => setDeclineNote(e.target.value)}
+                        inputProps={{ 'data-testid': 'decline-note' }}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+                    <Button onClick={() => setDeclineTarget(null)}
+                        sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
+                        Cancel
+                    </Button>
+                    <Button color="error" variant="contained" disableElevation onClick={declineRequest}
+                        disabled={reqSaving} data-testid="decline-confirm"
+                        sx={{ fontWeight: 700, textTransform: 'none', px: 3 }}>
+                        Decline request
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -12,6 +12,7 @@ const classes = require('../controllers/class.controller');
 const subjects = require('../controllers/subject.controller');
 const assignments = require('../controllers/assignment.controller');
 const students = require('../controllers/student.controller');
+const studentRequests = require('../controllers/studentRequest.controller');
 const payments = require('../controllers/payment.controller');
 const attendance = require('../controllers/attendance.controller');
 const marksheets = require('../controllers/marksheet.controller');
@@ -399,6 +400,44 @@ router.patch(
     body('guardianEmail').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail(),
     validate,
     students.updateStudent
+);
+
+router.get(
+    '/student-requests',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
+    studentRequests.listRequests
+);
+
+router.post(
+    '/student-requests',
+    authenticate,
+    authorize(ROLES.MAIN_TEACHER),
+    body('name').trim().notEmpty().withMessage('The student\'s full name is required'),
+    body('gender').optional({ nullable: true }).isIn(['male', 'female', 'other']),
+    body('dateOfBirth').optional({ nullable: true, checkFalsy: true }).isISO8601(),
+    body('guardianEmail').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail(),
+    body('specialNeeds').optional({ nullable: true }).isBoolean(),
+    validate,
+    studentRequests.submitRequest
+);
+
+router.patch(
+    '/student-requests/:id/approve',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    uuid('id'),
+    validate,
+    studentRequests.approveRequest
+);
+
+router.patch(
+    '/student-requests/:id/reject',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    uuid('id'),
+    validate,
+    studentRequests.rejectRequest
 );
 
 router.post(

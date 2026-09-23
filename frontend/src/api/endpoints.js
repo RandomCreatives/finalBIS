@@ -137,6 +137,14 @@ export const studentApi = {
     transfer: (id, toClassId, reason) =>
         client.post(`/students/${id}/transfer`, { toClassId, reason }).then((r) => r.data),
     transfers: (id) => client.get(`/students/${id}/transfers`).then((r) => r.data.transfers),
+};
+
+/* Main-teacher intake -> office approval (migration 019). */
+export const studentRequestApi = {
+    list: (params) => client.get('/student-requests', { params }).then((r) => r.data.requests),
+    create: (payload) => client.post('/student-requests', payload).then((r) => r.data.request),
+    approve: (id) => client.patch(`/student-requests/${id}/approve`).then((r) => r.data),
+    reject: (id, note) => client.patch(`/student-requests/${id}/reject`, note ? { note } : {}).then((r) => r.data.request),
     import: (formData) => client.post('/students/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data),
