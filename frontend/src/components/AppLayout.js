@@ -75,6 +75,7 @@ const NAV_GROUPS = [
             { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Files', to: '/app/files', icon: <FolderIcon fontSize="small" /> },
+            { label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" />, roles: ['admin', 'store_manager'] },
         ],
     },
     {
