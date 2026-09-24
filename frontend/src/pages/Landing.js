@@ -56,9 +56,9 @@ const roles = [
 ];
 
 const comingSoonModules = [
-    { label: 'Store', icon: StorefrontIcon },
-    { label: 'Library', icon: MenuBookIcon },
-    { label: 'Nurse', icon: LocalHospitalIcon },
+    { label: 'Store', icon: StorefrontIcon, disabled: true },
+    { label: 'Library', icon: MenuBookIcon, disabled: false, to: '/login' },
+    { label: 'Nurse', icon: LocalHospitalIcon, disabled: true },
 ];
 
 /* ── component ───────────────────────────────────────────── */
@@ -298,23 +298,28 @@ export default function Landing() {
                             return (
                                 <Button
                                     key={module.label}
-                                    disabled
-                                    variant="outlined"
+                                    component={module.disabled ? 'button' : RouterLink}
+                                    to={module.disabled ? undefined : module.to}
+                                    disabled={module.disabled}
+                                    variant={module.disabled ? 'outlined' : 'contained'}
                                     startIcon={<Icon />}
-                                    endIcon={<Box component="span" sx={{
+                                    endIcon={module.disabled ? <Box component="span" sx={{
                                         px: .35, py: 0, borderRadius: 999,
                                         fontSize: 7, lineHeight: 1, fontWeight: 700,
                                         letterSpacing: '.02em', textTransform: 'uppercase',
                                         bgcolor: 'action.disabledBackground',
                                         color: 'text.disabled',
-                                    }}>Soon</Box>}
+                                    }}>Soon</Box> : null}
                                     sx={{
                                         minHeight: 58, justifyContent: 'space-between',
                                         borderRadius: 2, px: 2,
                                         textTransform: 'none', fontWeight: 800,
-                                        color: 'text.disabled',
-                                        borderColor: 'divider',
-                                        '&.Mui-disabled': { color: 'text.disabled', borderColor: 'divider' },
+                                        ...(module.disabled
+                                            ? {
+                                                color: 'text.disabled', borderColor: 'divider',
+                                                '&.Mui-disabled': { color: 'text.disabled', borderColor: 'divider' },
+                                            }
+                                            : { color: '#fff', textDecoration: 'none' }),
                                     }}
                                 >
                                     {module.label}
