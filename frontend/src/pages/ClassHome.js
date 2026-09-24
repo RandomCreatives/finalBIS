@@ -1027,14 +1027,22 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState('');
 
-    // Term-1 payment statuses for this class (decision: Mike, 2026-09-22 —
-    // status only; main teacher records, admin can correct).
-    const term = useApi(() => termApi.current(), []);
+    // Payment is an office responsibility. Admins can switch this school-wide
+    // teacher panel on when they want main teachers to see it; it is off by
+    // default and remains hidden until the setting says true.
+    const paymentVisibility = useApi(() => paymentApi.teacherVisibility(), []);
+    const teacherPaymentsEnabled = paymentVisibility.data?.teacherPaymentsEnabled === true;
+    const term = useApi(
+        () => (teacherPaymentsEnabled ? termApi.current() : Promise.resolve(null)),
+        [teacherPaymentsEnabled],
+    );
     const termId = term.data?.term?.id;
     const termName = term.data?.term?.name || 'Term 1';
     const payments = useApi(
-        () => (classId && termId ? paymentApi.list({ classId, termId }) : Promise.resolve(null)),
-        [classId, termId],
+        () => (teacherPaymentsEnabled && classId && termId
+            ? paymentApi.list({ classId, termId })
+            : Promise.resolve(null)),
+        [classId, termId, teacherPaymentsEnabled],
     );
     const [payMap, setPayMap] = useState({});
     useEffect(() => {
@@ -1128,7 +1136,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                 />
                 <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                     {filtered.length} of {roster.length} student{roster.length === 1 ? '' : 's'} in {klass.name}
-                    {termId && !payments.error && ` · ${paidCount} paid (${termName})`}
+                    {teacherPaymentsEnabled && termId && !payments.error && ` · ${paidCount} paid (${termName})`}
                 </Typography>
                 <Button
                     variant="contained" size="small" startIcon={<AddIcon />}
@@ -1182,7 +1190,9 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                 <TableCell sx={{ width: 130, fontWeight: 700 }}>Admission</TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>Student name</TableCell>
                                 <TableCell sx={{ width: 150, fontWeight: 700 }}>Guardian phone</TableCell>
-                                <TableCell sx={{ width: 130, fontWeight: 700 }}>Payment</TableCell>
+                                {teacherPaymentsEnabled && (
+                                    <TableCell sx={{ width: 130, fontWeight: 700 }}>Payment</TableCell>
+                                )}
                                 <TableCell sx={{ width: 100 }} />
                             </TableRow>
                         </TableHead>
@@ -1193,15 +1203,17 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNo || '—'}</TableCell>
                                     <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
                                     <TableCell sx={{ fontSize: 12.5 }}>{s.guardianPhone || '—'}</TableCell>
-                                    <TableCell>
-                                        {payments.error || !termId ? <span>—</span> : (
-                                            <PaymentChip
-                                                status={payMap[s.id]?.status || 'unpaid'}
-                                                termName={termName}
-                                                dataTestId={`payment-chip-${s.id}`}
-                                            />
-                                        )}
-                                    </TableCell>
+                                    {teacherPaymentsEnabled && (
+                                        <TableCell>
+                                            {payments.error || !termId ? <span>—</span> : (
+                                                <PaymentChip
+                                                    status={payMap[s.id]?.status || 'unpaid'}
+                                                    termName={termName}
+                                                    dataTestId={`payment-chip-${s.id}`}
+                                                />
+                                            )}
+                                        </TableCell>
+                                    )}
                                     <TableCell onClick={(e) => e.stopPropagation()}>
                                         <Button size="small" onClick={() => setSelected(s.id)}
                                             sx={{ fontWeight: 700, textTransform: 'none', color: 'primary.main' }}>
@@ -1224,9 +1236,11 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                     onClose={() => setSelected(null)}
                     onSave={handleSave}
                     onTransfer={handleTransfer}
-                    payment={payMap[selectedStudent.id] || null}
-                    termName={termId ? termName : null}
-                    onMarkPayment={(status) => markPayment(selectedStudent.id, status)}
+                    payment={teacherPaymentsEnabled ? (payMap[selectedStudent.id] || null) : null}
+                    termName={teacherPaymentsEnabled && termId ? termName : null}
+                    onMarkPayment={teacherPaymentsEnabled
+                        ? (status) => markPayment(selectedStudent.id, status)
+                        : undefined}
                     paymentSaving={paySaving}
                 />
             )}

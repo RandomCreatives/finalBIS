@@ -45,6 +45,39 @@ beforeEach(() => {
             { id: STU_B, school_id: SCHOOL, name: 'Sara K', admission_no: 'A002', roll_num: 2, class_id: CLASS_B, is_active: true },
         ],
         student_payments: [],
+        school_settings: [{ school_id: SCHOOL, teacher_payment_enabled: true, updated_by: null }],
+    });
+});
+
+describe('teacher payment panel visibility', () => {
+    test('teachers read the admin-controlled switch', async () => {
+        const res = await request(app)
+            .get('/api/settings/teacher-payments').auth(tokenFor(MAIN_A));
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.teacherPaymentsEnabled, true);
+    });
+
+    test('only an admin can switch teacher payment visibility', async () => {
+        const refused = await request(app)
+            .patch('/api/settings/teacher-payments').auth(tokenFor(MAIN_A))
+            .send({ enabled: false });
+        assert.equal(refused.status, 403);
+
+        const changed = await request(app)
+            .patch('/api/settings/teacher-payments').auth(tokenFor(ADMIN))
+            .send({ enabled: false });
+        assert.equal(changed.status, 200);
+        assert.equal(changed.body.teacherPaymentsEnabled, false);
+
+        const visible = await request(app)
+            .get('/api/settings/teacher-payments').auth(tokenFor(MAIN_A));
+        assert.equal(visible.body.teacherPaymentsEnabled, false);
+
+        const blocked = await request(app)
+            .put(`/api/students/${STU_A}/payment`).auth(tokenFor(MAIN_A))
+            .send({ termId: TERM, status: 'paid_term' });
+        assert.equal(blocked.status, 403);
     });
 });
 

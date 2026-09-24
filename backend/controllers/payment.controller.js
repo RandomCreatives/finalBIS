@@ -1,15 +1,36 @@
 const supabase = require('../config/supabase');
-const { BadRequestError, ForbiddenError, NotFoundError, asyncHandler } = require('../utils/errors');
+const { AppError, BadRequestError, ForbiddenError, NotFoundError, asyncHandler } = require('../utils/errors');
 
 /*
  * Student fee payments — one status per student per term ('paid_term',
  * 'paid_annum'; no row = unpaid). Recording is done by the class's main
- * teacher (from the class student card); admins can view everywhere and
- * correct (decision: Mike, 2026-09-22). Status-only by design — amounts
+ * teacher (from the class student card) only when the admin switch is on;
+ * admins can view everywhere and correct. Status-only by design — amounts
  * and receipts stay with the office paperwork.
  */
 
 const WRITABLE_STATUSES = ['paid_term', 'paid_annum', 'unpaid'];
+const missingSettingsTable = (error) =>
+    error?.code === '42P01' || /school_settings.*does not exist/i.test(error?.message || '');
+
+const readTeacherPaymentSetting = async (schoolId) => {
+    const { data, error } = await supabase
+        .from('school_settings')
+        .select('teacher_payment_enabled')
+        .eq('school_id', schoolId)
+        .maybeSingle();
+    if (error && missingSettingsTable(error)) return { enabled: false, migrationPending: true };
+    if (error) throw error;
+    return { enabled: Boolean(data?.teacher_payment_enabled), migrationPending: false };
+};
+
+const assertTeacherPaymentEnabled = async (req) => {
+    if (req.user.role === 'admin') return;
+    const setting = await readTeacherPaymentSetting(req.user.school_id);
+    if (!setting.enabled) {
+        throw new ForbiddenError('Teacher payment panel is disabled by the administrator');
+    }
+};
 
 const shape = (row) => ({
     studentId: row.student_id,
@@ -17,6 +38,42 @@ const shape = (row) => ({
     status: row.status,
     markedBy: row.marker?.name || null,
     markedAt: row.marked_at,
+});
+
+
+/** GET /api/settings/teacher-payments — visible to signed-in staff. */
+const getTeacherPaymentVisibility = asyncHandler(async (req, res) => {
+    // Safe default: until migration 020 is pasted, teachers do not see or
+    // manage payments. Admins can still use the office Students page.
+    const setting = await readTeacherPaymentSetting(req.user.school_id);
+    res.json({ teacherPaymentsEnabled: setting.enabled, migrationPending: setting.migrationPending });
+});
+
+/** PATCH /api/settings/teacher-payments — admin-only school-wide switch. */
+const setTeacherPaymentVisibility = asyncHandler(async (req, res) => {
+    const enabled = Boolean(req.body?.enabled);
+    const { error: deleteError } = await supabase
+        .from('school_settings')
+        .delete()
+        .eq('school_id', req.user.school_id);
+    if (deleteError && missingSettingsTable(deleteError)) {
+        throw new AppError('Payment visibility settings need migration 020 first', 503);
+    }
+    if (deleteError) throw deleteError;
+
+    const { error: insertError } = await supabase
+        .from('school_settings')
+        .insert({
+            school_id: req.user.school_id,
+            teacher_payment_enabled: enabled,
+            updated_by: req.user.id,
+            updated_at: new Date().toISOString(),
+        });
+    if (insertError && missingSettingsTable(insertError)) {
+        throw new AppError('Payment visibility settings need migration 020 first', 503);
+    }
+    if (insertError) throw insertError;
+    res.json({ teacherPaymentsEnabled: enabled, migrationPending: false });
 });
 
 /**
@@ -27,6 +84,7 @@ const shape = (row) => ({
 const listPayments = asyncHandler(async (req, res) => {
     const { termId, classId } = req.query;
     if (!termId) throw new BadRequestError('termId is required');
+    await assertTeacherPaymentEnabled(req);
 
     let studentIds = null;
     if (classId) {
@@ -62,6 +120,7 @@ const setPayment = asyncHandler(async (req, res) => {
     if (!termId) throw new BadRequestError('termId is required');
     if (!WRITABLE_STATUSES.includes(status))
         throw new BadRequestError(`status must be one of ${WRITABLE_STATUSES.join(', ')}`);
+    await assertTeacherPaymentEnabled(req);
 
     const [{ data: student, error: sErr }, { data: term, error: tErr }] = await Promise.all([
         supabase.from('students').select('id, name, class_id')
@@ -135,4 +194,6 @@ const setPayment = asyncHandler(async (req, res) => {
     res.json({ payment: row ? shape(row) : { studentId: student.id, termId, status, markedBy: req.user.name, markedAt: now } });
 });
 
-module.exports = { listPayments, setPayment };
+module.exports = {
+    listPayments, setPayment, getTeacherPaymentVisibility, setTeacherPaymentVisibility,
+};

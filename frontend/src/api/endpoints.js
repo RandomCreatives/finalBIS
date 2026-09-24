@@ -151,6 +151,9 @@ export const studentRequestApi = {
 };
 
 export const paymentApi = {
+    teacherVisibility: () => client.get('/settings/teacher-payments').then((r) => r.data),
+    setTeacherVisibility: (enabled) =>
+        client.patch('/settings/teacher-payments', { enabled }).then((r) => r.data),
     list: (params) => client.get('/students/payments', { params }).then((r) => r.data.payments),
     set: (studentId, termId, status) =>
         client.put(`/students/${studentId}/payment`, { termId, status }).then((r) => r.data.payment),

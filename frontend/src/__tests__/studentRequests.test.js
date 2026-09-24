@@ -18,7 +18,7 @@ jest.mock('../api/endpoints', () => {
     return {
         ...actual,
         termApi: { current: jest.fn() },
-        paymentApi: { list: jest.fn() },
+        paymentApi: { teacherVisibility: jest.fn(), list: jest.fn() },
         studentApi: { list: jest.fn(), update: jest.fn(), transfer: jest.fn() },
         classApi: { list: jest.fn() },
         studentRequestApi: { list: jest.fn(), create: jest.fn(), approve: jest.fn(), reject: jest.fn() },
@@ -55,6 +55,7 @@ const renderSection = () => wrap(
 beforeEach(() => {
     jest.clearAllMocks();
     termApi.current.mockResolvedValue(TERM);
+    paymentApi.teacherVisibility.mockResolvedValue({ teacherPaymentsEnabled: true });
     paymentApi.list.mockResolvedValue([]);
     studentRequestApi.list.mockResolvedValue([]);
 });
