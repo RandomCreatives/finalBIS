@@ -153,7 +153,9 @@ export default function AppLayout() {
     const groups = isLibrarian
         ? [{
             label: 'Library',
-            items: [{ label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" /> }],
+            items: [{ label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" /> },
+                { label: 'Borrowed', to: '/app/library?view=borrowed', icon: <MenuBookIcon fontSize="small" /> },
+                { label: 'Returned', to: '/app/library?view=returned', icon: <MenuBookIcon fontSize="small" /> }],
         }]
         : NAV_GROUPS
             .map((g) => ({
@@ -253,7 +255,7 @@ export default function AppLayout() {
                         ))}
                     </Fragment>
                 ))}
-                {!isLibrarian && <Button
+                {<Button
                     component={NavLink}
                     to={SETTINGS_ITEM.to}
                     size="small"
@@ -310,11 +312,9 @@ export default function AppLayout() {
 
                     <Box sx={{ flexGrow: 1 }} data-testid="side-nav-spacer" />
                     <Divider sx={{ my: 1 }} />
-                    {!isLibrarian && (
-                        <Box data-testid="side-nav-settings">
-                            <NavButton item={SETTINGS_ITEM} />
-                        </Box>
-                    )}
+                    <Box data-testid="side-nav-settings">
+                        <NavButton item={SETTINGS_ITEM} />
+                    </Box>
                     </Box>
                 </Box>
 
