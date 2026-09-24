@@ -26,7 +26,7 @@ const inTwoWeeks = () => {
 
 export default function Library() {
     const { user } = useAuth();
-    const canIssue = ['admin', 'store_manager'].includes(user?.role);
+    const canIssue = ['admin', 'librarian'].includes(user?.role);
 
     const [filter, setFilter] = useState('onloan');
     const [student, setStudent] = useState(null);

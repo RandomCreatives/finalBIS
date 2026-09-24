@@ -75,7 +75,7 @@ const NAV_GROUPS = [
             { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Files', to: '/app/files', icon: <FolderIcon fontSize="small" /> },
-            { label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" />, roles: ['admin', 'store_manager'] },
+            { label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" />, roles: ['admin', 'librarian'] },
         ],
     },
     {
@@ -97,6 +97,7 @@ const ROLE_CAPTION = {
     assistant_teacher: 'Assistant teacher workspace',
     subject_teacher: 'Subject teacher workspace',
     store_manager: 'Store workspace',
+    librarian: 'Library workspace',
 };
 
 function NavButton({ item }) {

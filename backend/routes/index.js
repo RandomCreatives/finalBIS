@@ -185,7 +185,7 @@ router.post(
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().normalizeEmail().withMessage('A valid email is required'),
     body('password').isLength({ min: 10 }).withMessage('Password must be at least 10 characters'),
-    body('role').isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER]).withMessage('Invalid role'),
+    body('role').isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER, ROLES.LIBRARIAN]).withMessage('Invalid role'),
     validate,
     users.createUser
 );
@@ -195,7 +195,7 @@ router.patch(
     authenticate,
     authorize(ROLES.ADMIN),
     uuid('id'),
-    body('role').optional().isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER]),
+    body('role').optional().isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER, ROLES.LIBRARIAN]),
     body('isActive').optional().isBoolean(),
     validate,
     users.updateUser
@@ -637,14 +637,14 @@ router.delete('/assessments/:id', authenticate, authorize(...TEACHING), uuid('id
 // =============================================================================
 // LIBRARY
 // =============================================================================
-router.get('/library/students', authenticate, authorize(ROLES.ADMIN, ROLES.STORE_MANAGER), library.listLibraryStudents);
-router.get('/library/loans', authenticate, library.listLoans);
-router.get('/library/summary', authenticate, library.getLibrarySummary);
+router.get('/library/students', authenticate, authorize(ROLES.ADMIN, ROLES.LIBRARIAN), library.listLibraryStudents);
+router.get('/library/loans', authenticate, authorize(ROLES.ADMIN, ROLES.LIBRARIAN), library.listLoans);
+router.get('/library/summary', authenticate, authorize(ROLES.ADMIN, ROLES.LIBRARIAN), library.getLibrarySummary);
 
 router.post(
     '/library/loans',
     authenticate,
-    authorize(ROLES.ADMIN, ROLES.STORE_MANAGER),
+    authorize(ROLES.ADMIN, ROLES.LIBRARIAN),
     body('studentId').isUUID(),
     body('bookTitle').trim().notEmpty().withMessage('Book title is required'),
     body('dueOn').isISO8601().withMessage('A due date is required'),
@@ -652,7 +652,7 @@ router.post(
     library.issueBook
 );
 
-router.post('/library/loans/:id/return', authenticate, authorize(ROLES.ADMIN, ROLES.STORE_MANAGER), uuid('id'), validate, library.returnBook);
+router.post('/library/loans/:id/return', authenticate, authorize(ROLES.ADMIN, ROLES.LIBRARIAN), uuid('id'), validate, library.returnBook);
 
 // =============================================================================
 // CLINIC

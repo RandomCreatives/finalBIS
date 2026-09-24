@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS users (
     phone              TEXT,
     password_hash      TEXT NOT NULL,
     role               TEXT NOT NULL CONSTRAINT users_role_check CHECK (role IN (
-                       'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager')),
+                       'admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager', 'librarian')),
     is_active          BOOLEAN NOT NULL DEFAULT TRUE,
     is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
     pending_email      TEXT,
@@ -162,7 +162,7 @@ DO $$ BEGIN
         ALTER TABLE users DROP CONSTRAINT users_role_check;
     END IF;
     ALTER TABLE users ADD CONSTRAINT users_role_check
-        CHECK (role IN ('admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager'));
+        CHECK (role IN ('admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager', 'librarian'));
 END $$;
 
 
