@@ -42,7 +42,7 @@ describe('Landing Page', () => {
         renderWithProviders(<Landing />);
         const modules = screen.getByTestId('coming-soon-modules');
         const library = screen.getByRole('link', { name: 'Library' });
-        expect(library).toHaveAttribute('href', '/login');
+        expect(library).toHaveAttribute('href', '/librarian-login');
         expect(modules).toContainElement(library);
 
         for (const label of ['Store', 'Nurse']) {
