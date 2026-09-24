@@ -57,7 +57,7 @@ const roles = [
 
 const comingSoonModules = [
     { label: 'Store', icon: StorefrontIcon, disabled: true },
-    { label: 'Library', icon: MenuBookIcon, disabled: false, to: '/login' },
+    { label: 'Library', icon: MenuBookIcon, disabled: false, to: '/librarian-login' },
     { label: 'Nurse', icon: LocalHospitalIcon, disabled: true },
 ];
 
