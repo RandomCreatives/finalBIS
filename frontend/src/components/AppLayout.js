@@ -137,6 +137,7 @@ export default function AppLayout() {
     const dark = theme.palette.mode === 'dark';
 
     const isAdmin = user?.role === 'admin';
+    const isLibrarian = user?.role === 'librarian';
 
     // Live pending count for the Admin Communications badge (admin only).
     const commsBadges = useApi(
@@ -149,14 +150,21 @@ export default function AppLayout() {
             + (commsBadges.data.conductReportsPending || 0)
         : 0;
 
-    const groups = NAV_GROUPS
-        .map((g) => ({
-            ...g,
-            items: g.items
-                .filter((item) => !item.roles || item.roles.includes(user?.role))
-                .map((item) => (item.badge === 'communications' ? { ...item, unread: commsPending } : item)),
-        }))
-        .filter((g) => g.items.length > 0);
+    const groups = isLibrarian
+        ? [{
+            label: 'Library',
+            items: [{ label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" /> },
+                { label: 'Borrowed', to: '/app/library?view=borrowed', icon: <MenuBookIcon fontSize="small" /> },
+                { label: 'Returned', to: '/app/library?view=returned', icon: <MenuBookIcon fontSize="small" /> }],
+        }]
+        : NAV_GROUPS
+            .map((g) => ({
+                ...g,
+                items: g.items
+                    .filter((item) => !item.roles || item.roles.includes(user?.role))
+                    .map((item) => (item.badge === 'communications' ? { ...item, unread: commsPending } : item)),
+            }))
+            .filter((g) => g.items.length > 0);
 
     const signOut = () => {
         logout();
@@ -247,7 +255,7 @@ export default function AppLayout() {
                         ))}
                     </Fragment>
                 ))}
-                <Button
+                {<Button
                     component={NavLink}
                     to={SETTINGS_ITEM.to}
                     size="small"
@@ -259,7 +267,7 @@ export default function AppLayout() {
                     }}
                 >
                     Settings
-                </Button>
+                </Button>}
             </Box>
 
             <Box sx={{

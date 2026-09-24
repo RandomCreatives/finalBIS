@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    Alert, Autocomplete, Button, Chip, Dialog, DialogActions, DialogContent,
+    Alert, Autocomplete, Button, Dialog, DialogActions, DialogContent,
     DialogTitle, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
@@ -9,14 +9,9 @@ import { libraryApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
-import { FilterChips, StatGrid, StatCard } from '../components/DashboardSections';
+import { StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
-
-const FILTERS = [
-    { value: 'onloan', label: 'On loan' },
-    { value: 'overdue', label: 'Overdue' },
-    { value: 'returned', label: 'Returned' },
-];
+import { useSearchParams } from 'react-router-dom';
 
 const inTwoWeeks = () => {
     const d = new Date();
@@ -28,14 +23,15 @@ export default function Library() {
     const { user } = useAuth();
     const canIssue = ['admin', 'librarian'].includes(user?.role);
 
-    const [filter, setFilter] = useState('onloan');
+    const [searchParams] = useSearchParams();
+    const filter = searchParams.get('view') === 'returned' ? 'returned' : 'borrowed';
     const [student, setStudent] = useState(null);
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const filters = filter === 'onloan' ? { status: 'borrowed' } : filter === 'overdue' ? { overdue: 'true' } : { status: 'returned' };
+    const filters = { status: filter };
     const loans = useApi(() => libraryApi.loans(filters), [filter]);
     const summary = useApi(() => libraryApi.summary(), []);
     const students = useApi(() => libraryApi.students(), []);
@@ -128,8 +124,6 @@ export default function Library() {
                 </Paper>
             )}
 
-            <FilterChips options={FILTERS} value={filter} onChange={setFilter} />
-
             <DataState
                 loading={loans.loading}
                 error={loans.error}
@@ -144,7 +138,6 @@ export default function Library() {
                                 <TableCell>Student</TableCell>
                                 <TableCell>Date taken</TableCell>
                                 <TableCell>Status</TableCell>
-                                <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -156,20 +149,24 @@ export default function Library() {
                                     <TableCell>{loan.student?.name}</TableCell>
                                     <TableCell>{loan.borrowedOn || '—'}</TableCell>
                                     <TableCell>
-                                        {loan.status === 'returned' ? (
-                                            <Chip size="small" label="Returned" color="success" variant="outlined" />
-                                        ) : loan.isOverdue ? (
-                                            <Chip size="small" label="Overdue" color="error" />
-                                        ) : (
-                                            <Chip size="small" label="On loan" variant="outlined" />
-                                        )}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {loan.status === 'borrowed' && canIssue && (
-                                            <Button size="small" onClick={() => handleReturn(loan)}>
-                                                Mark returned
+                                        <Stack direction="row" spacing={.75}>
+                                            <Button
+                                                size="small" variant={loan.status === 'borrowed' ? 'contained' : 'outlined'}
+                                                disabled
+                                                sx={{ minWidth: 82, textTransform: 'none', fontWeight: 700 }}
+                                            >
+                                                Borrowed
                                             </Button>
-                                        )}
+                                            <Button
+                                                size="small" variant={loan.status === 'returned' ? 'contained' : 'outlined'}
+                                                color="success"
+                                                disabled={loan.status === 'returned' || !canIssue}
+                                                onClick={() => handleReturn(loan)}
+                                                sx={{ minWidth: 82, textTransform: 'none', fontWeight: 700 }}
+                                            >
+                                                Returned
+                                            </Button>
+                                        </Stack>
                                     </TableCell>
                                 </TableRow>
                             ))}
