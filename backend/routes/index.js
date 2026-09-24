@@ -355,6 +355,17 @@ router.get('/assignments/workload', authenticate, authorize(ROLES.ADMIN), assign
 // =============================================================================
 router.get('/students', authenticate, students.listStudents);
 router.get('/students/unassigned', authenticate, students.listUnassigned);
+
+router.get('/settings/teacher-payments', authenticate, payments.getTeacherPaymentVisibility);
+router.patch(
+    '/settings/teacher-payments',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    body('enabled').isBoolean().withMessage('enabled must be true or false'),
+    validate,
+    payments.setTeacherPaymentVisibility
+);
+
 router.get('/students/payments', authenticate, payments.listPayments);
 router.get('/students/:id', authenticate, uuid('id'), validate, students.getStudent);
 router.put('/students/:id/payment', authenticate, uuid('id'), validate, payments.setPayment);

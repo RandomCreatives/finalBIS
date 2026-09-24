@@ -24,6 +24,13 @@ const EMPTY = {
 
 export default function Students() {
     const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const teacherPaymentSetting = useApi(
+        () => (isAdmin ? Promise.resolve({ teacherPaymentsEnabled: true }) : paymentApi.teacherVisibility()),
+        [isAdmin],
+    );
+    const teacherPaymentsEnabled = isAdmin
+        || teacherPaymentSetting.data?.teacherPaymentsEnabled === true;
     const canEdit = ['admin', 'main_teacher', 'assistant_teacher'].includes(user?.role);
     const canTransfer = ['admin', 'main_teacher'].includes(user?.role);
 
@@ -44,14 +51,17 @@ export default function Students() {
         [classFilter, search]
     );
 
-    // Term payment statuses across the school — admins confirm the data the
-    // class teachers record (decision: Mike, 2026-09-22).
-    const term = useApi(() => termApi.current(), []);
+    // Payment is an office responsibility. Admins always see this panel;
+    // teachers see it only when the admin switch is on.
+    const term = useApi(
+        () => (teacherPaymentsEnabled ? termApi.current() : Promise.resolve(null)),
+        [teacherPaymentsEnabled],
+    );
     const termId = term.data?.term?.id;
     const termName = term.data?.term?.name || 'Term 1';
     const payments = useApi(
-        () => (termId ? paymentApi.list({ termId }) : Promise.resolve(null)),
-        [termId],
+        () => (teacherPaymentsEnabled && termId ? paymentApi.list({ termId }) : Promise.resolve(null)),
+        [termId, teacherPaymentsEnabled],
     );
     const [payMap, setPayMap] = useState({});
     useEffect(() => {
@@ -313,10 +323,10 @@ export default function Students() {
                 </Stack>
             </Card>
 
-            {termId && !payments.error && (
+            {teacherPaymentsEnabled && termId && !payments.error && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
                     {rows.filter((s) => payMap[s.id]?.status).length} of {rows.length} shown are paid for {termName}
-                    {user?.role === 'admin' ? ' — tap a status chip to confirm or correct it.' : '.'}
+                    {isAdmin ? ' — tap a status chip to confirm or correct it.' : '.'}
                 </Typography>
             )}
 
@@ -335,7 +345,7 @@ export default function Students() {
                                 <TableCell>Class</TableCell>
                                 <TableCell>Guardian</TableCell>
                                 <TableCell>Flags</TableCell>
-                                <TableCell>Payment</TableCell>
+                                {teacherPaymentsEnabled && <TableCell>Payment</TableCell>}
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
@@ -360,16 +370,18 @@ export default function Students() {
                                             </Tooltip>
                                         )}
                                     </TableCell>
-                                    <TableCell>
-                                        {payments.error || !termId ? <span>—</span> : (
-                                            <PaymentChip
-                                                status={payMap[s.id]?.status || 'unpaid'}
-                                                termName={termName}
-                                                dataTestId={`admin-payment-chip-${s.id}`}
-                                                onClick={user?.role === 'admin' ? () => setPayTarget(s) : undefined}
-                                            />
-                                        )}
-                                    </TableCell>
+                                    {teacherPaymentsEnabled && (
+                                        <TableCell>
+                                            {payments.error || !termId ? <span>—</span> : (
+                                                <PaymentChip
+                                                    status={payMap[s.id]?.status || 'unpaid'}
+                                                    termName={termName}
+                                                    dataTestId={`admin-payment-chip-${s.id}`}
+                                                    onClick={isAdmin ? () => setPayTarget(s) : undefined}
+                                                />
+                                            )}
+                                        </TableCell>
+                                    )}
                                     <TableCell align="right">
                                         {canEdit && (
                                             <Tooltip title="Edit">
