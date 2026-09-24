@@ -9,7 +9,7 @@ import { libraryApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
-import { StatGrid, StatCard } from '../components/DashboardSections';
+import { StatGrid } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 
@@ -18,6 +18,13 @@ const inTwoWeeks = () => {
     d.setDate(d.getDate() + 14);
     return d.toISOString().slice(0, 10);
 };
+
+const CompactLibraryStat = ({ label, value, color = 'primary.main' }) => (
+    <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 1.5 }}>
+        <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>{label}</Typography>
+        <Typography sx={{ fontSize: 23, lineHeight: 1.15, fontWeight: 800, color }}>{value}</Typography>
+    </Paper>
+);
 
 export default function Library() {
     const { user } = useAuth();
@@ -88,9 +95,9 @@ export default function Library() {
 
             {summary.data && (
                 <StatGrid>
-                    <StatCard label="On loan" value={summary.data.onLoan} />
-                    <StatCard label="Overdue" value={summary.data.overdue} color={summary.data.overdue > 0 ? 'error.main' : 'success.main'} />
-                    <StatCard label="Total loans" value={summary.data.totalLoans} color="secondary.main" />
+                    <CompactLibraryStat label="On loan" value={summary.data.onLoan} />
+                    <CompactLibraryStat label="Overdue" value={summary.data.overdue} color={summary.data.overdue > 0 ? 'error.main' : 'success.main'} />
+                    <CompactLibraryStat label="Total loans" value={summary.data.totalLoans} color="secondary.main" />
                 </StatGrid>
             )}
 
