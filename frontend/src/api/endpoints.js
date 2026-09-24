@@ -212,6 +212,7 @@ export const marksheetApi = {
 };
 
 export const libraryApi = {
+    students: () => client.get('/library/students').then((r) => r.data.students),
     loans: (params) => client.get('/library/loans', { params }).then((r) => r.data.loans),
     summary: () => client.get('/library/summary').then((r) => r.data),
     issue: (payload) => client.post('/library/loans', payload).then((r) => r.data.loan),

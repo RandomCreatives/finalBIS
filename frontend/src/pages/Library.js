@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
-    Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    MenuItem, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
+    Alert, Autocomplete, Button, Chip, Dialog, DialogActions, DialogContent,
+    DialogTitle, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { libraryApi, studentApi } from '../api/endpoints';
+import { libraryApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
@@ -26,21 +26,27 @@ const inTwoWeeks = () => {
 
 export default function Library() {
     const { user } = useAuth();
-    const canIssue = ['admin', 'main_teacher', 'assistant_teacher'].includes(user?.role);
+    const canIssue = ['admin', 'store_manager'].includes(user?.role);
 
     const [filter, setFilter] = useState('onloan');
+    const [student, setStudent] = useState(null);
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
     const filters = filter === 'onloan' ? { status: 'borrowed' } : filter === 'overdue' ? { overdue: 'true' } : { status: 'returned' };
-
     const loans = useApi(() => libraryApi.loans(filters), [filter]);
     const summary = useApi(() => libraryApi.summary(), []);
-    const students = useApi(() => studentApi.list(), []);
+    const students = useApi(() => libraryApi.students(), []);
 
     const refresh = () => { loans.reload(); summary.reload(); };
+
+    const openIssue = () => {
+        if (!student) return;
+        setFormError('');
+        setDialog({ studentId: student.id, studentName: student.name, bookTitle: '' });
+    };
 
     const handleIssue = async () => {
         setSaving(true);
@@ -49,15 +55,17 @@ export default function Library() {
             await libraryApi.issue({
                 studentId: dialog.studentId,
                 bookTitle: dialog.bookTitle.trim(),
-                bookAuthor: dialog.bookAuthor || null,
-                bookIsbn: dialog.bookIsbn || null,
-                dueOn: dialog.dueOn,
+                // The office only needs the issue date for this simple flow.
+                // The API stores borrowed_on automatically and uses a normal
+                // two-week return window for the existing loan rule.
+                dueOn: inTwoWeeks(),
             });
             setToast('Book issued');
             setDialog(null);
+            setStudent(null);
             refresh();
         } catch (err) {
-            setFormError(err.message);
+            setFormError(err.message || 'Could not issue the book');
         } finally {
             setSaving(false);
         }
@@ -69,7 +77,7 @@ export default function Library() {
             setToast(result.message);
             refresh();
         } catch (err) {
-            setToast(err.message);
+            setToast(err.message || 'Could not return the book');
         }
     };
 
@@ -79,18 +87,7 @@ export default function Library() {
         <>
             <PageHeader
                 title="Library"
-                subtitle="Book loans and returns — borrowing is free for all."
-                action={canIssue && (
-                    <Button
-                        variant="contained" startIcon={<AddIcon />}
-                        onClick={() => {
-                            setFormError('');
-                            setDialog({ studentId: '', bookTitle: '', bookAuthor: '', bookIsbn: '', dueOn: inTwoWeeks() });
-                        }}
-                    >
-                        Issue book
-                    </Button>
-                )}
+                subtitle="Search a student, record the book they take, and mark it returned."
             />
 
             {summary.data && (
@@ -99,6 +96,36 @@ export default function Library() {
                     <StatCard label="Overdue" value={summary.data.overdue} color={summary.data.overdue > 0 ? 'error.main' : 'success.main'} />
                     <StatCard label="Total loans" value={summary.data.totalLoans} color="secondary.main" />
                 </StatGrid>
+            )}
+
+            {canIssue && (
+                <Paper variant="outlined" sx={{ p: 2, mb: 2.5 }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                        <Autocomplete
+                            options={students.data || []}
+                            value={student}
+                            onChange={(_, value) => setStudent(value)}
+                            getOptionLabel={(option) => `${option.name} — ${option.class?.name || 'No class'}`}
+                            isOptionEqualToValue={(option, value) => option.id === value.id}
+                            loading={students.loading}
+                            sx={{ minWidth: { sm: 360 }, flexGrow: 1 }}
+                            renderInput={(params) => (
+                                <TextField {...params} label="Search student" placeholder="Name or class" size="small" />
+                            )}
+                        />
+                        <Button
+                            variant="contained" startIcon={<AddIcon />} onClick={openIssue}
+                            disabled={!student} sx={{ whiteSpace: 'nowrap' }}
+                        >
+                            Add book
+                        </Button>
+                    </Stack>
+                    {student && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                            Selected: <strong>{student.name}</strong> · {student.class?.name || 'No class'}
+                        </Typography>
+                    )}
+                </Paper>
             )}
 
             <FilterChips options={FILTERS} value={filter} onChange={setFilter} />
@@ -115,7 +142,7 @@ export default function Library() {
                             <TableRow>
                                 <TableCell>Book</TableCell>
                                 <TableCell>Student</TableCell>
-                                <TableCell>Due</TableCell>
+                                <TableCell>Date taken</TableCell>
                                 <TableCell>Status</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
@@ -124,13 +151,10 @@ export default function Library() {
                             {rows.map((loan) => (
                                 <TableRow key={loan.id} hover>
                                     <TableCell>
-                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{loan.bookTitle}</Typography>
-                                        {loan.bookAuthor && (
-                                            <Typography variant="caption" color="text.secondary">{loan.bookAuthor}</Typography>
-                                        )}
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{loan.bookTitle}</Typography>
                                     </TableCell>
                                     <TableCell>{loan.student?.name}</TableCell>
-                                    <TableCell>{loan.dueOn}</TableCell>
+                                    <TableCell>{loan.borrowedOn || '—'}</TableCell>
                                     <TableCell>
                                         {loan.status === 'returned' ? (
                                             <Chip size="small" label="Returned" color="success" variant="outlined" />
@@ -141,11 +165,11 @@ export default function Library() {
                                         )}
                                     </TableCell>
                                     <TableCell align="right">
-                                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                            {loan.status === 'borrowed' && canIssue && (
-                                                <Button size="small" onClick={() => handleReturn(loan)}>Return</Button>
-                                            )}
-                                        </Stack>
+                                        {loan.status === 'borrowed' && canIssue && (
+                                            <Button size="small" onClick={() => handleReturn(loan)}>
+                                                Mark returned
+                                            </Button>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -155,44 +179,20 @@ export default function Library() {
             </DataState>
 
             <Dialog open={Boolean(dialog)} onClose={() => setDialog(null)} maxWidth="xs" fullWidth>
-                <DialogTitle>Issue a book</DialogTitle>
+                <DialogTitle>Add book</DialogTitle>
                 <DialogContent>
                     {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
                     <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Student: <strong>{dialog?.studentName}</strong>
+                        </Typography>
                         <TextField
-                            select label="Student" required fullWidth
-                            value={dialog?.studentId || ''}
-                            onChange={(e) => setDialog((d) => ({ ...d, studentId: e.target.value }))}
-                        >
-                            {(students.data || []).map((s) => (
-                                <MenuItem key={s.id} value={s.id}>
-                                    {s.name} — {s.class?.name || 'no class'}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                        <TextField
-                            label="Book title" required fullWidth
+                            label="Book title" required fullWidth autoFocus
                             value={dialog?.bookTitle || ''}
                             onChange={(e) => setDialog((d) => ({ ...d, bookTitle: e.target.value }))}
                         />
-                        <TextField
-                            label="Author" fullWidth
-                            value={dialog?.bookAuthor || ''}
-                            onChange={(e) => setDialog((d) => ({ ...d, bookAuthor: e.target.value }))}
-                        />
-                        <TextField
-                            label="ISBN" fullWidth
-                            value={dialog?.bookIsbn || ''}
-                            onChange={(e) => setDialog((d) => ({ ...d, bookIsbn: e.target.value }))}
-                        />
-                        <TextField
-                            label="Due date" type="date" required fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            value={dialog?.dueOn || ''}
-                            onChange={(e) => setDialog((d) => ({ ...d, dueOn: e.target.value }))}
-                        />
                         <Typography variant="caption" color="text.secondary">
-                            A student may hold up to 3 books, and none while a book is overdue.
+                            Today’s date is saved automatically. The normal return window is two weeks.
                         </Typography>
                     </Stack>
                 </DialogContent>
@@ -200,9 +200,9 @@ export default function Library() {
                     <Button onClick={() => setDialog(null)}>Cancel</Button>
                     <Button
                         variant="contained" onClick={handleIssue}
-                        disabled={saving || !dialog?.studentId || !dialog?.bookTitle?.trim() || !dialog?.dueOn}
+                        disabled={saving || !dialog?.bookTitle?.trim()}
                     >
-                        Issue
+                        Save book
                     </Button>
                 </DialogActions>
             </Dialog>

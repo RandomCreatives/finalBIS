@@ -637,13 +637,14 @@ router.delete('/assessments/:id', authenticate, authorize(...TEACHING), uuid('id
 // =============================================================================
 // LIBRARY
 // =============================================================================
+router.get('/library/students', authenticate, authorize(ROLES.ADMIN, ROLES.STORE_MANAGER), library.listLibraryStudents);
 router.get('/library/loans', authenticate, library.listLoans);
 router.get('/library/summary', authenticate, library.getLibrarySummary);
 
 router.post(
     '/library/loans',
     authenticate,
-    authorize(...PASTORAL),
+    authorize(ROLES.ADMIN, ROLES.STORE_MANAGER),
     body('studentId').isUUID(),
     body('bookTitle').trim().notEmpty().withMessage('Book title is required'),
     body('dueOn').isISO8601().withMessage('A due date is required'),
@@ -651,7 +652,7 @@ router.post(
     library.issueBook
 );
 
-router.post('/library/loans/:id/return', authenticate, authorize(...PASTORAL), uuid('id'), validate, library.returnBook);
+router.post('/library/loans/:id/return', authenticate, authorize(ROLES.ADMIN, ROLES.STORE_MANAGER), uuid('id'), validate, library.returnBook);
 
 // =============================================================================
 // CLINIC

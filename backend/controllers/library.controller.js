@@ -23,6 +23,20 @@ const shape = (l) => ({
     student: l.student,
 });
 
+
+/** GET /api/library/students — safe directory for the librarian search. */
+const listLibraryStudents = asyncHandler(async (req, res) => {
+    const { data, error } = await supabase
+        .from('students')
+        .select('id, name, admission_no, class:classes(id, name)')
+        .eq('school_id', req.user.school_id)
+        .eq('is_active', true)
+        .order('name');
+
+    if (error) throw error;
+    res.json({ students: data || [] });
+});
+
 /** POST /api/library/loans — issue a book. */
 const issueBook = asyncHandler(async (req, res) => {
     const { studentId, bookTitle, bookAuthor, bookIsbn, dueOn } = req.body;
@@ -129,4 +143,4 @@ const getLibrarySummary = asyncHandler(async (req, res) => {
     });
 });
 
-module.exports = { issueBook, returnBook, listLoans, getLibrarySummary };
+module.exports = { listLibraryStudents, issueBook, returnBook, listLoans, getLibrarySummary };
