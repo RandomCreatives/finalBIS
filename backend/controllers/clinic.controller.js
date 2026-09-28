@@ -24,6 +24,19 @@ const shape = (v) => ({
     attendedBy: v.attendant,
 });
 
+
+/** GET /api/clinic/students — safe directory for the nurse search. */
+const listClinicStudents = asyncHandler(async (req, res) => {
+    const { data, error } = await supabase
+        .from('students')
+        .select('id, name, admission_no, class:classes(id, name)')
+        .eq('school_id', req.user.school_id)
+        .eq('is_active', true)
+        .order('name');
+    if (error) throw error;
+    res.json({ students: data || [] });
+});
+
 /** POST /api/clinic/visits */
 const recordVisit = asyncHandler(async (req, res) => {
     const {
@@ -140,4 +153,4 @@ const getClinicSummary = asyncHandler(async (req, res) => {
     });
 });
 
-module.exports = { recordVisit, listVisits, reviewLeaveRequest, getClinicSummary };
+module.exports = { listClinicStudents, recordVisit, listVisits, reviewLeaveRequest, getClinicSummary };

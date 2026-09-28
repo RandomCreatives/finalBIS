@@ -220,6 +220,7 @@ export const libraryApi = {
 };
 
 export const clinicApi = {
+    students: () => client.get('/clinic/students').then((r) => r.data.students),
     visits: (params) => client.get('/clinic/visits', { params }).then((r) => r.data.visits),
     summary: () => client.get('/clinic/summary').then((r) => r.data),
     record: (payload) => client.post('/clinic/visits', payload).then((r) => r.data.visit),

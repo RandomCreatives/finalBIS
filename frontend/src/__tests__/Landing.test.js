@@ -38,19 +38,21 @@ describe('Landing Page', () => {
         ).toBeInTheDocument();
     });
 
-    test('activates Library while Store and Nurse remain Soon', () => {
+    test('activates Library and Nurse while Store remains Soon', () => {
         renderWithProviders(<Landing />);
         const modules = screen.getByTestId('coming-soon-modules');
         const library = screen.getByRole('link', { name: 'Library' });
+        const nurse = screen.getByRole('link', { name: 'Nurse' });
         expect(library).toHaveAttribute('href', '/librarian-login');
+        expect(nurse).toHaveAttribute('href', '/nurse-login');
         expect(modules).toContainElement(library);
+        expect(modules).toContainElement(nurse);
 
-        for (const label of ['Store', 'Nurse']) {
-            const button = screen.getByRole('button', { name: new RegExp(`${label} Soon`, 'i') });
-            expect(button).toBeDisabled();
-            expect(modules).toContainElement(button);
-        }
+        const store = screen.getByRole('button', { name: /Store Soon/i });
+        expect(store).toBeDisabled();
+        expect(modules).toContainElement(store);
         expect(screen.queryByRole('button', { name: /Library Soon/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Nurse Soon/i })).not.toBeInTheDocument();
     });
 
     test('shows Students, Calendar and Data Center in the public navigation', () => {

@@ -162,7 +162,7 @@ DO $$ BEGIN
         ALTER TABLE users DROP CONSTRAINT users_role_check;
     END IF;
     ALTER TABLE users ADD CONSTRAINT users_role_check
-        CHECK (role IN ('admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager', 'librarian'));
+        CHECK (role IN ('admin', 'main_teacher', 'assistant_teacher', 'subject_teacher', 'store_manager', 'librarian', 'nurse'));
 END $$;
 
 

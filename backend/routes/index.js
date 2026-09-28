@@ -185,7 +185,7 @@ router.post(
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().normalizeEmail().withMessage('A valid email is required'),
     body('password').isLength({ min: 10 }).withMessage('Password must be at least 10 characters'),
-    body('role').isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER, ROLES.LIBRARIAN]).withMessage('Invalid role'),
+    body('role').isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER, ROLES.LIBRARIAN, ROLES.NURSE]).withMessage('Invalid role'),
     validate,
     users.createUser
 );
@@ -195,7 +195,7 @@ router.patch(
     authenticate,
     authorize(ROLES.ADMIN),
     uuid('id'),
-    body('role').optional().isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER, ROLES.LIBRARIAN]),
+    body('role').optional().isIn([ROLES.ADMIN, ...TEACHER_ROLES, ROLES.STORE_MANAGER, ROLES.LIBRARIAN, ROLES.NURSE]),
     body('isActive').optional().isBoolean(),
     validate,
     users.updateUser
@@ -657,13 +657,14 @@ router.post('/library/loans/:id/return', authenticate, authorize(ROLES.ADMIN, RO
 // =============================================================================
 // CLINIC
 // =============================================================================
-router.get('/clinic/visits', authenticate, clinic.listVisits);
-router.get('/clinic/summary', authenticate, clinic.getClinicSummary);
+router.get('/clinic/students', authenticate, authorize(ROLES.ADMIN, ROLES.NURSE), clinic.listClinicStudents);
+router.get('/clinic/visits', authenticate, authorize(ROLES.ADMIN, ROLES.NURSE), clinic.listVisits);
+router.get('/clinic/summary', authenticate, authorize(ROLES.ADMIN, ROLES.NURSE), clinic.getClinicSummary);
 
 router.post(
     '/clinic/visits',
     authenticate,
-    authorize(...PASTORAL),
+    authorize(ROLES.ADMIN, ROLES.NURSE),
     body('studentId').isUUID(),
     body('complaint').trim().notEmpty().withMessage('A complaint description is required'),
     body('incidentType').isIn([
