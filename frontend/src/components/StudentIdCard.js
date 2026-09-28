@@ -68,7 +68,8 @@ function EditField({ label, value, onChange, span, type = 'text', options }) {
 /** Build the view grid from whatever fields the record carries. */
 const viewRows = (student) => {
     const rows = [];
-    if (student.admissionNo) rows.push(['Admission no.', student.admissionNo]);
+    const classCardId = classIdFor(student);
+    if (classCardId) rows.push(['Student ID', classCardId]);
     if (student.rollNum != null) rows.push(['Roll no.', student.rollNum]);
     if (student.className) rows.push(['Class', student.className]);
     if (student.dateOfBirth) rows.push(['Date of birth', student.dateOfBirth]);
@@ -184,13 +185,8 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                 </Typography>
                                 <Typography sx={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 800,
                                     color: 'primary.main', letterSpacing: .8, mt: .25 }}>
-                                    {classCardId || student.admissionNo || '—'}
+                                    {classCardId || 'Not assigned'}
                                 </Typography>
-                                {classCardId && (
-                                    <Typography sx={{ fontFamily: 'monospace', fontSize: 10.5, color: 'text.secondary', mt: .15 }}>
-                                        Admission: {student.admissionNo || '—'}
-                                    </Typography>
-                                )}
                                 <Box sx={{ display: 'flex', gap: .75, mt: 1, flexWrap: 'wrap' }}>
                                     {student.className && (
                                         <Chip label={student.className} size="small"
