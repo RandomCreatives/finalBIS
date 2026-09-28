@@ -28,6 +28,15 @@ export const ageFromDob = (dob) => {
     return Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
 };
 
+/** Current class-based card identifier; admissionNo remains permanent. */
+export const classIdFor = (student, academicYear = '2026/27') => {
+    const year = String(student?.className || '').match(/year\s*(\d+)/i)?.[1];
+    const color = String(student?.className || '').match(/-\s*([a-z]+)/i)?.[1];
+    const roll = Number(student?.rollNum);
+    if (!year || !color || !Number.isInteger(roll) || roll < 1) return null;
+    return `Y${year}-${color.toUpperCase()}-${String(roll).padStart(2, '0')}-${academicYear}`;
+};
+
 function Field({ label, value, span }) {
     return (
         <Box sx={{ gridColumn: span ? 'span 2' : undefined, minWidth: 0 }}>
@@ -138,6 +147,7 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
 
     const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));
     const rows = viewRows(student);
+    const classCardId = classIdFor(student);
 
     return (
         <Dialog open onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 2, overflow: 'hidden' } }}>
@@ -172,10 +182,15 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                 <Typography sx={{ fontWeight: 800, fontSize: 18, lineHeight: 1.15 }}>
                                     {student.name}
                                 </Typography>
-                                <Typography sx={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700,
-                                    color: 'text.secondary', letterSpacing: .8, mt: .25 }}>
-                                    {student.admissionNo || '—'}
+                                <Typography sx={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 800,
+                                    color: 'primary.main', letterSpacing: .8, mt: .25 }}>
+                                    {classCardId || student.admissionNo || '—'}
                                 </Typography>
+                                {classCardId && (
+                                    <Typography sx={{ fontFamily: 'monospace', fontSize: 10.5, color: 'text.secondary', mt: .15 }}>
+                                        Admission: {student.admissionNo || '—'}
+                                    </Typography>
+                                )}
                                 <Box sx={{ display: 'flex', gap: .75, mt: 1, flexWrap: 'wrap' }}>
                                     {student.className && (
                                         <Chip label={student.className} size="small"

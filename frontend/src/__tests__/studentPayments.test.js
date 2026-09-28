@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import StudentIdCard from '../components/StudentIdCard';
+import StudentIdCard, { classIdFor } from '../components/StudentIdCard';
 import { StudentsSection } from '../pages/ClassHome';
 import Students from '../pages/Students';
 import { PaymentChip, paymentLabel } from '../utils/payments';
@@ -45,6 +45,12 @@ beforeEach(() => {
         { studentId: 's1', termId: 't1', status: 'paid_term', markedBy: 'Ms Alpha', markedAt: '2026-09-22T08:00:00Z' },
         { studentId: 's2', termId: 't1', status: 'paid_annum', markedBy: 'Ms Alpha', markedAt: '2026-09-22T08:10:00Z' },
     ]);
+});
+
+describe('class-based student card ID', () => {
+    test('formats the current class, roll and academic year while leaving admission number separate', () => {
+        expect(classIdFor({ className: 'Year 4 - Purple', rollNum: 1 })).toBe('Y4-PURPLE-01-2026/27');
+    });
 });
 
 describe('paymentLabel / PaymentChip', () => {
