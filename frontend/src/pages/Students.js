@@ -9,6 +9,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
+import PrintIcon from '@mui/icons-material/Print';
 import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -16,6 +17,7 @@ import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import { classIdFor } from '../components/StudentIdCard';
+import { openStudentCardPrint } from '../utils/studentCardPrint';
 
 const EMPTY = {
     admissionNo: '', name: '', rollNum: '', classId: '', gender: '',
@@ -256,6 +258,18 @@ export default function Students() {
                         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
                             Add student
                         </Button>
+                        {isAdmin && (
+                            <Button
+                                variant="outlined" startIcon={<PrintIcon />}
+                                disabled={!rows.length}
+                                onClick={() => openStudentCardPrint(rows.map((s) => ({
+                                    ...s,
+                                    className: s.class?.name || s.className,
+                                })))}
+                            >
+                                Print / Save ID cards
+                            </Button>
+                        )}
                         <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportDialog(true)}>
                             Import Excel
                         </Button>

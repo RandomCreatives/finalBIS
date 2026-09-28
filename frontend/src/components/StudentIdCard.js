@@ -9,7 +9,12 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CloseIcon from '@mui/icons-material/Close';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import PrintIcon from '@mui/icons-material/Print';
 import { PaymentChip, paymentLabel } from '../utils/payments';
+import { classIdFor } from '../utils/studentIds';
+import { openStudentCardPrint } from '../utils/studentCardPrint';
+
+export { classIdFor } from '../utils/studentIds';
 
 /*
  * Student ID card popup.
@@ -26,15 +31,6 @@ export const ageFromDob = (dob) => {
     const d = new Date(dob);
     if (Number.isNaN(d.getTime())) return null;
     return Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
-};
-
-/** Current class-based card identifier; admissionNo remains permanent. */
-export const classIdFor = (student, academicYear = '2026/27') => {
-    const year = String(student?.className || '').match(/year\s*(\d+)/i)?.[1];
-    const color = String(student?.className || '').match(/-\s*([a-z]+)/i)?.[1];
-    const roll = Number(student?.rollNum);
-    if (!year || !color || !Number.isInteger(roll) || roll < 1) return null;
-    return `Y${year}-${color.toUpperCase()}-${String(roll).padStart(2, '0')}-${academicYear}`;
 };
 
 function Field({ label, value, span }) {
@@ -286,6 +282,11 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
 
                         {/* actions */}
                         <Box sx={{ display: 'flex', gap: 1, mt: 2.5, alignItems: 'center' }}>
+                            <Button size="small" variant="outlined" startIcon={<PrintIcon sx={{ fontSize: 15 }} />}
+                                onClick={() => openStudentCardPrint([student])}
+                                sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                                Print card
+                            </Button>
                             {canManage && (
                                 <>
                                     <Button size="small" variant="outlined" startIcon={<EditIcon sx={{ fontSize: 15 }} />}
