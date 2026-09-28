@@ -201,6 +201,31 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                             ))}
                         </Box>
 
+                        {/* The same school-location QR appears on every student card.
+                            It contains no student data. */}
+                        <Box
+                            data-testid="school-location-qr"
+                            sx={{
+                                mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider',
+                                display: 'flex', alignItems: 'center', gap: 1.5,
+                            }}
+                        >
+                            <Box
+                                component="img"
+                                src="/bis-gerji-location-qr.png"
+                                alt="Scan for BIS NOC Gerji school location"
+                                sx={{ width: 82, height: 82, imageRendering: 'pixelated', flexShrink: 0 }}
+                            />
+                            <Box>
+                                <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: .6 }}>
+                                    School location
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Scan to open BIS NOC Gerji in Google Maps.
+                                </Typography>
+                            </Box>
+                        </Box>
+
                         {/* payment receipt — dotted slip under the record, filled
                             in by the class teacher when the parent pays */}
                         {termName && (
