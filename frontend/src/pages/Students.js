@@ -15,6 +15,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 import { PaymentChip, paymentLabel } from '../utils/payments';
+import { classIdFor } from '../components/StudentIdCard';
 
 const EMPTY = {
     admissionNo: '', name: '', rollNum: '', classId: '', gender: '',
@@ -340,7 +341,7 @@ export default function Students() {
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Admission no.</TableCell>
+                                <TableCell>Student ID</TableCell>
                                 <TableCell>Name</TableCell>
                                 <TableCell>Class</TableCell>
                                 <TableCell>Guardian</TableCell>
@@ -352,7 +353,7 @@ export default function Students() {
                         <TableBody>
                             {rows.map((s) => (
                                 <TableRow key={s.id} hover>
-                                    <TableCell>{s.admissionNo}</TableCell>
+                                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{classIdFor({ className: s.class?.name, rollNum: s.rollNum }) || 'Not assigned'}</TableCell>
                                     <TableCell sx={{ fontWeight: 500 }}>{s.name}</TableCell>
                                     <TableCell>{s.class?.name || <em>Unassigned</em>}</TableCell>
                                     <TableCell>
