@@ -98,6 +98,7 @@ const ROLE_CAPTION = {
     subject_teacher: 'Subject teacher workspace',
     store_manager: 'Store workspace',
     librarian: 'Library workspace',
+    nurse: 'Nurse workspace',
 };
 
 function NavButton({ item }) {
@@ -138,6 +139,7 @@ export default function AppLayout() {
 
     const isAdmin = user?.role === 'admin';
     const isLibrarian = user?.role === 'librarian';
+    const isNurse = user?.role === 'nurse';
 
     // Live pending count for the Admin Communications badge (admin only).
     const commsBadges = useApi(
@@ -157,7 +159,13 @@ export default function AppLayout() {
                 { label: 'Borrowed', to: '/app/library?view=borrowed', icon: <MenuBookIcon fontSize="small" /> },
                 { label: 'Returned', to: '/app/library?view=returned', icon: <MenuBookIcon fontSize="small" /> }],
         }]
-        : NAV_GROUPS
+        : isNurse
+            ? [{
+                label: 'Nurse',
+                items: [{ label: 'Nurse', to: '/app/clinic', icon: <MenuBookIcon fontSize="small" /> },
+                    { label: 'Admitted', to: '/app/clinic?view=admitted', icon: <MenuBookIcon fontSize="small" /> }],
+            }]
+            : NAV_GROUPS
             .map((g) => ({
                 ...g,
                 items: g.items

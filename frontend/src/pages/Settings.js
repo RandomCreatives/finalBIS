@@ -15,6 +15,7 @@ const ROLE_LABELS = {
     subject_teacher: 'Subject Teacher',
     store_manager: 'Store Manager',
     librarian: 'Librarian',
+    nurse: 'Nurse',
 };
 
 /** Admin shell: /app/settings. Shared cards, full rights (name editable). */

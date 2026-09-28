@@ -10,6 +10,7 @@ const ROLES = {
     SUBJECT_TEACHER: 'subject_teacher',
     STORE_MANAGER: 'store_manager',
     LIBRARIAN: 'librarian',
+    NURSE: 'nurse',
 };
 
 const ALL_ROLES = Object.values(ROLES);
