@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-    Alert, Box, Button, Card, CardContent, Container, Stack, TextField, Typography,
+    Alert, Box, Button, Card, CardContent, Container, IconButton, InputAdornment, Stack, TextField, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../auth/AuthContext';
 
 const NURSE_EMAIL = 'nurse@bisnoc.local';
@@ -13,6 +15,7 @@ export default function NurseLogin() {
     const { login } = useAuth();
     const navigate = useNavigate();
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -53,9 +56,25 @@ export default function NurseLogin() {
                             Enter the nurse password to admit students and record care.
                         </Typography>
                         <Box component="form" onSubmit={submit}>
-                            <TextField autoFocus fullWidth required type="password" label="Password"
+                            <TextField
+                                autoFocus fullWidth required label="Password"
+                                type={showPassword ? 'text' : 'password'}
                                 value={password} onChange={(e) => setPassword(e.target.value)}
-                                inputProps={{ 'data-testid': 'nurse-password' }} />
+                                inputProps={{ 'data-testid': 'nurse-password' }}
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                                onClick={() => setShowPassword((v) => !v)}
+                                                edge="end"
+                                            >
+                                                {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
                             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
                             <Button type="submit" fullWidth variant="contained" disableElevation
                                 disabled={loading || !password}
