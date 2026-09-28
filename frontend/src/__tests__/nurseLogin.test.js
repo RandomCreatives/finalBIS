@@ -12,10 +12,18 @@ test('nurse login asks only for a password', async () => {
     useAuth.mockReturnValue({ login });
 
     render(<ThemeProvider><MemoryRouter><NurseLogin /></MemoryRouter></ThemeProvider>);
-    expect(screen.getByTestId('nurse-password')).toBeInTheDocument();
+    const passwordInput = screen.getByTestId('nurse-password');
+    expect(passwordInput).toBeInTheDocument();
+    expect(passwordInput).toHaveAttribute('type', 'password');
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByTestId('nurse-password'), { target: { value: '1234' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(passwordInput).toHaveAttribute('type', 'text');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    fireEvent.change(passwordInput, { target: { value: '123456' } });
+
     fireEvent.click(screen.getByRole('button', { name: 'Open Nurse Dashboard' }));
-    await waitFor(() => expect(login).toHaveBeenCalledWith('nurse@bisnoc.local', '1234'));
+    await waitFor(() => expect(login).toHaveBeenCalledWith('nurse@bisnoc.local', '123456'));
 });
