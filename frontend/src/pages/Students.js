@@ -9,8 +9,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import PrintIcon from '@mui/icons-material/Print';
-import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
+import { studentApi, studentRequestApi, classApi, termApi, paymentApi, filesApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
@@ -47,6 +48,7 @@ export default function Students() {
     const [importDialog, setImportDialog] = useState(false);
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
+    const [photoSavingId, setPhotoSavingId] = useState(null);
 
     const classes = useApi(() => classApi.list(), []);
     const students = useApi(
@@ -90,6 +92,35 @@ export default function Students() {
             setToast(err.message || 'Could not record the payment');
         } finally {
             setPaySaving(false);
+        }
+    };
+
+    const uploadPhoto = async (student, event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        if (!['image/jpeg', 'image/png'].includes(file.type)) {
+            setToast('Please choose a JPG or PNG image.');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            setToast('Photo must be 5 MB or smaller.');
+            return;
+        }
+        setPhotoSavingId(student.id);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('category', 'student');
+            formData.append('description', `Student photo · ${student.name}`);
+            const stored = await filesApi.upload(formData);
+            await studentApi.update(student.id, { photoFileId: stored.id });
+            await students.reload();
+            setToast(`Photo saved for ${student.name}`);
+        } catch (err) {
+            setToast(err.message || 'Could not upload the photo.');
+        } finally {
+            setPhotoSavingId(null);
         }
     };
 
@@ -404,6 +435,19 @@ export default function Students() {
                                                     <EditIcon fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
+                                        )}
+                                        {['admin', 'main_teacher'].includes(user?.role) && (
+                                            <Button
+                                                component="label" size="small" startIcon={<PhotoCameraIcon sx={{ fontSize: 16 }} />}
+                                                disabled={photoSavingId === s.id}
+                                                sx={{ fontWeight: 700, textTransform: 'none', color: 'primary.main' }}
+                                            >
+                                                {photoSavingId === s.id ? 'Uploading…' : 'Upload photo'}
+                                                <input
+                                                    hidden type="file" accept="image/jpeg,image/png"
+                                                    onChange={(event) => uploadPhoto(s, event)}
+                                                />
+                                            </Button>
                                         )}
                                         {canTransfer && (
                                             <Tooltip title="Transfer to another class">
