@@ -124,7 +124,7 @@ describe('PATCH /api/student-requests/:id/approve', () => {
 
         assert.equal(res.status, 200);
         assert.equal(res.body.student.admissionNo, 'BIS2026-316');
-        assert.equal(res.body.student.rollNum, 25);
+        assert.equal(res.body.student.rollNum, 2);
         assert.equal(res.body.request.status, 'approved');
 
         const students = rowsOf('students');

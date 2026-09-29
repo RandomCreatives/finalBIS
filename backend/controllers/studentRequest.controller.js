@@ -194,17 +194,44 @@ const nextAdmissionNo = async (req) => {
     return `BIS2026-${String(max + 1).padStart(3, '0')}`;
 };
 
-/** Next roll number inside the class (1 when the class is empty). */
-const nextRollNum = async (req, classId) => {
+/**
+ * Alphabetical roll placement inside the class. Existing students below the
+ * new student's position shift down so rolls remain 1..N by full displayed
+ * name; the permanent admission number never changes.
+ */
+const nextRollNum = async (req, classId, studentName) => {
     const { data, error } = await supabase
         .from('students')
-        .select('roll_num')
+        .select('id, name, roll_num')
         .eq('school_id', req.user.school_id)
         .eq('class_id', classId)
-        .order('roll_num', { ascending: false })
-        .limit(1);
+        .order('roll_num', { ascending: true });
     if (error) throw error;
-    return ((data && data[0] && data[0].roll_num) || 0) + 1;
+
+    const rows = (data || [])
+        .filter((row) => Number.isInteger(row.roll_num))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' })
+            || (a.id || '').localeCompare(b.id || ''));
+    const position = rows.findIndex((row) =>
+        (studentName || '').localeCompare(row.name || '', 'en', { sensitivity: 'base' }) < 0
+    );
+    return position === -1 ? rows.length + 1 : position + 1;
+};
+
+const shiftRollsAfter = async (req, classId, insertionRoll) => {
+    const { data, error } = await supabase
+        .from('students')
+        .select('id, roll_num')
+        .eq('school_id', req.user.school_id)
+        .eq('class_id', classId)
+        .gte('roll_num', insertionRoll)
+        .order('roll_num', { ascending: false });
+    if (error) throw error;
+    for (const row of data || []) {
+        const { error: updateError } = await supabase
+            .from('students').update({ roll_num: row.roll_num + 1 }).eq('id', row.id);
+        if (updateError) throw updateError;
+    }
 };
 
 const markReviewed = async (req, requestId, patch) => {
@@ -229,7 +256,7 @@ const approveRequest = asyncHandler(async (req, res) => {
             class_id: request.class_id,
             admission_no: await nextAdmissionNo(req),
             name: request.name,
-            roll_num: await nextRollNum(req, request.class_id),
+            roll_num: await nextRollNum(req, request.class_id, request.name),
             date_of_birth: request.date_of_birth,
             gender: request.gender,
             guardian_name: request.guardian_name,
@@ -242,6 +269,7 @@ const approveRequest = asyncHandler(async (req, res) => {
         const { error } = await supabase.from('students').insert(candidate);
         if (error && error.code === '23505' && /admission/i.test(error.message || '')) continue;
         if (error) throw error;
+        await shiftRollsAfter(req, request.class_id, candidate.roll_num);
         student = { id: candidate.id, admission_no: candidate.admission_no, roll_num: candidate.roll_num };
     }
     if (!student) throw new ConflictError('Could not allocate an admission number — try again');
