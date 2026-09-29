@@ -17,7 +17,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 import { PaymentChip, paymentLabel } from '../utils/payments';
-import { classIdFor } from '../components/StudentIdCard';
+import StudentIdCard, { classIdFor } from '../components/StudentIdCard';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
 
 const EMPTY = {
@@ -41,6 +41,7 @@ export default function Students() {
     const [classFilter, setClassFilter] = useState('');
     const [search, setSearch] = useState('');
     const [dialog, setDialog] = useState(null);   // { mode: 'create'|'edit', values }
+    const [selectedCard, setSelectedCard] = useState(null);
     const [transfer, setTransfer] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
@@ -76,17 +77,17 @@ export default function Students() {
 
     const [payTarget, setPayTarget] = useState(null); // student being corrected
     const [paySaving, setPaySaving] = useState(false);
-    const setPaymentStatus = async (status) => {
-        if (!payTarget || !termId) return;
+    const setPaymentForStudent = async (target, status) => {
+        if (!target || !termId) return;
         setPaySaving(true);
         try {
-            const row = await paymentApi.set(payTarget.id, termId, status);
+            const row = await paymentApi.set(target.id, termId, status);
             setPayMap((m) => {
                 const next = { ...m };
-                if (status === 'unpaid') delete next[payTarget.id]; else next[payTarget.id] = row;
+                if (status === 'unpaid') delete next[target.id]; else next[target.id] = row;
                 return next;
             });
-            setToast(status === 'unpaid' ? 'Payment cleared' : `Payment recorded for ${payTarget.name}`);
+            setToast(status === 'unpaid' ? 'Payment cleared' : `Payment recorded for ${target.name}`);
             setPayTarget(null);
         } catch (err) {
             setToast(err.message || 'Could not record the payment');
@@ -94,6 +95,7 @@ export default function Students() {
             setPaySaving(false);
         }
     };
+    const setPaymentStatus = (status) => setPaymentForStudent(payTarget, status);
 
     const uploadPhoto = async (student, event) => {
         const file = event.target.files?.[0];
@@ -196,6 +198,42 @@ export default function Students() {
             students.reload();
         } catch (err) {
             setFormError(err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleCardSave = async (patch) => {
+        if (!selectedCard) return;
+        setSaving(true);
+        try {
+            await studentApi.update(selectedCard.id, patch);
+            const next = { ...selectedCard, ...patch };
+            setSelectedCard(next);
+            await students.reload();
+            setToast('Student record saved');
+        } catch (err) {
+            setToast(err.message || 'Could not save the student record');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleCardTransfer = async (toClassName, reason) => {
+        if (!selectedCard) return;
+        const target = (classes.data || []).find((c) => c.name === toClassName);
+        if (!target) {
+            setToast('Unknown class');
+            return;
+        }
+        setSaving(true);
+        try {
+            await studentApi.transfer(selectedCard.id, target.id, reason || null);
+            setSelectedCard(null);
+            await students.reload();
+            setToast(`${selectedCard.name} transferred to ${toClassName}`);
+        } catch (err) {
+            setToast(err.message || 'Transfer failed');
         } finally {
             setSaving(false);
         }
@@ -399,7 +437,12 @@ export default function Students() {
                             {rows.map((s) => (
                                 <TableRow key={s.id} hover>
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{classIdFor({ className: s.class?.name, rollNum: s.rollNum }) || 'Not assigned'}</TableCell>
-                                    <TableCell sx={{ fontWeight: 500 }}>{s.name}</TableCell>
+                                    <TableCell
+                                        sx={{ fontWeight: 600, color: 'primary.main', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                                        onClick={() => setSelectedCard({ ...s, className: s.class?.name || s.className })}
+                                    >
+                                        {s.name}
+                                    </TableCell>
                                     <TableCell>{s.class?.name || <em>Unassigned</em>}</TableCell>
                                     <TableCell>
                                         {s.guardianName || '—'}
@@ -469,6 +512,24 @@ export default function Students() {
                     </Table>
                 </TableContainer>
             </DataState>
+
+            {selectedCard && (
+                <StudentIdCard
+                    student={selectedCard}
+                    canManage={canEdit}
+                    classes={(classes.data || []).map((c) => c.name)}
+                    saving={saving}
+                    onClose={() => setSelectedCard(null)}
+                    onSave={handleCardSave}
+                    onTransfer={handleCardTransfer}
+                    payment={teacherPaymentsEnabled ? (payMap[selectedCard.id] || null) : null}
+                    termName={teacherPaymentsEnabled && termId ? termName : null}
+                    onMarkPayment={isAdmin
+                        ? (status) => setPaymentForStudent(selectedCard, status)
+                        : undefined}
+                    paymentSaving={paySaving}
+                />
+            )}
 
             {/* Create / edit ---------------------------------------------------- */}
             <Dialog open={Boolean(dialog)} onClose={() => setDialog(null)} maxWidth="sm" fullWidth>
