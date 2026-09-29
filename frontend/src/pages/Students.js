@@ -330,13 +330,19 @@ export default function Students() {
                         {isAdmin && (
                             <Button
                                 variant="outlined" startIcon={<PrintIcon />}
-                                disabled={!rows.length}
-                                onClick={() => openStudentCardPrint(rows.map((s) => ({
-                                    ...s,
-                                    className: s.class?.name || s.className,
-                                })))}
+                                disabled={!rows.length || !classFilter}
+                                onClick={() => {
+                                    const ordered = [...rows].sort((a, b) =>
+                                        (a.rollNum ?? 999) - (b.rollNum ?? 999)
+                                        || (a.name || '').localeCompare(b.name || '')
+                                    );
+                                    openStudentCardPrint(ordered.map((s) => ({
+                                        ...s,
+                                        className: s.class?.name || s.className,
+                                    })));
+                                }}
                             >
-                                Print / Save ID cards
+                                Print this class
                             </Button>
                         )}
                         <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportDialog(true)}>
@@ -397,6 +403,7 @@ export default function Students() {
                         value={classFilter}
                         onChange={(e) => setClassFilter(e.target.value)}
                         size="small"
+                        helperText={!classFilter ? 'Choose a class to print its cards' : undefined}
                         sx={{ minWidth: 200 }}
                     >
                         <MenuItem value="">All classes</MenuItem>
