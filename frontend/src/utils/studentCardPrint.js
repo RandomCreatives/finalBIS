@@ -93,12 +93,39 @@ export const openStudentCardPrint = (students = []) => {
     if (typeof window === 'undefined') return;
     const list = (students || []).filter(Boolean);
     if (!list.length) return;
-    const popup = window.open('', '_blank', 'noopener,noreferrer');
+    // Keep a same-window reference so the generated markup can be written.
+    // `noopener,noreferrer` can open a blank tab without a writable document
+    // in some browsers.
+    const popup = window.open('', '_blank');
     if (!popup) return;
-    popup.document.write(`<!doctype html><html><head><title>BIS NOC Gerji Student ID Cards</title><style>${printCss}</style></head><body>${list.map(cardMarkup).join('')}</body></html>`);
+    const html = `<!doctype html><html><head><title>BIS NOC Gerji Student ID Cards</title><style>${printCss}</style></head><body>${list.map(cardMarkup).join('')}</body></html>`;
+    popup.document.open();
+    popup.document.write(html);
     popup.document.close();
-    popup.focus();
-    setTimeout(() => popup.print(), 500);
+
+    let printed = false;
+    const print = () => {
+        if (printed) return;
+        printed = true;
+        popup.focus();
+        popup.print();
+    };
+    const images = Array.from(popup.document.images);
+    if (images.length === 0) {
+        setTimeout(print, 250);
+    } else {
+        let remaining = images.length;
+        const ready = () => {
+            remaining -= 1;
+            if (remaining <= 0) print();
+        };
+        images.forEach((image) => {
+            image.addEventListener('load', ready, { once: true });
+            image.addEventListener('error', ready, { once: true });
+        });
+        // Do not leave the user waiting if Drive or the QR image is slow.
+        setTimeout(print, 1800);
+    }
 };
 
 export { MAPS_PIN };
