@@ -79,6 +79,15 @@ const uploadFile = asyncHandler(async (req, res) => {
     const description = req.body.description || null;
     const schoolId = req.user.school_id;
 
+    if (category === 'student') {
+        if (!['image/jpeg', 'image/png'].includes(req.file.mimetype)) {
+            throw new BadRequestError('Student photos must be JPG or PNG images');
+        }
+        if (req.file.size > 5 * 1024 * 1024) {
+            throw new BadRequestError('Student photos must be 5 MB or smaller');
+        }
+    }
+
     // Create a school subfolder if needed
     const schoolFolderName = `school-${schoolId}`;
     const schoolFolderId = await getOrCreateSubfolder(drive, folderId, schoolFolderName);

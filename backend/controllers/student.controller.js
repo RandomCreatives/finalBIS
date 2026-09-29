@@ -7,7 +7,7 @@ const XLSX = require('xlsx');
 const SELECT = `
     id, admission_no, name, roll_num, date_of_birth, gender,
     guardian_name, guardian_phone, guardian_email,
-    special_needs, special_needs_note, is_active, class_id,
+    special_needs, special_needs_note, is_active, class_id, photo_file_id,
     class:classes(id, name)
 `;
 
@@ -25,6 +25,7 @@ const shape = (s) => ({
     specialNeedsNote: s.special_needs_note,
     isActive: s.is_active,
     classId: s.class_id,
+    photoFileId: s.photo_file_id || null,
     class: s.class ? { id: s.class.id, name: s.class.name } : null,
 });
 
@@ -193,6 +194,7 @@ const updateStudent = asyncHandler(async (req, res) => {
         specialNeeds: 'special_needs',
         specialNeedsNote: 'special_needs_note',
         isActive: 'is_active',
+        photoFileId: 'photo_file_id',
     };
 
     const patch = {};
@@ -203,6 +205,18 @@ const updateStudent = asyncHandler(async (req, res) => {
     // Only admins move students between classes via patch — everyone else
     // uses the audited transfer endpoint.
     if (req.user.role !== 'admin') delete patch.class_id;
+
+    if (patch.photo_file_id) {
+        const { data: photo, error: photoError } = await supabase
+            .from('file_records')
+            .select('id')
+            .eq('id', patch.photo_file_id)
+            .eq('school_id', req.user.school_id)
+            .eq('category', 'student')
+            .maybeSingle();
+        if (photoError) throw photoError;
+        if (!photo) throw new BadRequestError('Student photo file not found in this school');
+    }
 
     // Teachers may only edit students of their own classes.
     const { data: target, error: targetError } = await supabase
