@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
-    Badge, Box, Button, Chip, Divider, Stack, Typography, useTheme,
+    Badge, Box, Button, Chip, Divider, Stack, Tooltip, Typography, useTheme,
 } from '@mui/material';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
@@ -43,8 +43,8 @@ const NAV_GROUPS = [
     {
         label: 'School Today',
         items: [
-            { label: 'Dashboard', to: '/app', icon: <DashboardIcon fontSize="small" />, end: true },
-            { label: 'Calendar', to: '/app/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
+            { label: 'Dashboard', hint: 'See your school or class overview.', to: '/app', icon: <DashboardIcon fontSize="small" />, end: true },
+            { label: 'Calendar', hint: 'Check term dates and school events.', to: '/app/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
             { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon fontSize="small" /> },
             { label: 'Notices', to: '/app/notices', icon: <NotificationsNoneIcon fontSize="small" /> },
         ],
@@ -55,9 +55,9 @@ const NAV_GROUPS = [
             { label: 'Daily Planner', to: '/app/planner', icon: <TodayIcon fontSize="small" />, roles: ['main_teacher', 'subject_teacher'] },
             { label: 'Tasks', to: '/app/tasks', icon: <TaskAltIcon fontSize="small" /> },
             { label: 'Planning', to: '/app/planning', icon: <MenuBookOutlinedIcon fontSize="small" /> },
-            { label: 'Attendance', to: '/app/attendance', icon: <FactCheckIcon fontSize="small" /> },
+            { label: 'Attendance', hint: 'Mark and submit the daily register.', to: '/app/attendance', icon: <FactCheckIcon fontSize="small" /> },
             {
-                label: 'Marksheets', to: '/app/marksheets', icon: <GradeIcon fontSize="small" />,
+                label: 'Marksheets', hint: 'Enter Math, Science and Global Citizenship marks.', to: '/app/marksheets', icon: <GradeIcon fontSize="small" />,
                 roles: ['admin', 'main_teacher', 'subject_teacher'],
             },
             {
@@ -69,7 +69,7 @@ const NAV_GROUPS = [
     {
         label: 'People & Classes',
         items: [
-            { label: 'Students', to: '/app/students', icon: <GroupsIcon fontSize="small" /> },
+            { label: 'Students', hint: 'Find students, open ID cards and manage records.', to: '/app/students', icon: <GroupsIcon fontSize="small" /> },
             { label: 'Classes', to: '/app/classes', icon: <ClassIcon fontSize="small" /> },
             { label: 'Staff', to: '/app/staff', icon: <BadgeIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
@@ -105,9 +105,10 @@ function NavButton({ item }) {
     const theme = useTheme();
     const dark = theme.palette.mode === 'dark';
     return (
-        <Button
-            component={NavLink}
-            to={item.to}
+        <Tooltip title={item.hint || item.label} placement="right" arrow>
+            <Button
+                component={NavLink}
+                to={item.to}
             end={item.end}
             fullWidth
             startIcon={item.badge ? (
@@ -126,8 +127,9 @@ function NavButton({ item }) {
                 },
             }}
         >
-            {item.label}
-        </Button>
+                {item.label}
+            </Button>
+        </Tooltip>
     );
 }
 
@@ -155,14 +157,14 @@ export default function AppLayout() {
     const groups = isLibrarian
         ? [{
             label: 'Library',
-            items: [{ label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" /> },
+            items: [{ label: 'Library', hint: 'Search students and manage book loans.', to: '/app/library', icon: <MenuBookIcon fontSize="small" /> },
                 { label: 'Borrowed', to: '/app/library?view=borrowed', icon: <MenuBookIcon fontSize="small" /> },
                 { label: 'Returned', to: '/app/library?view=returned', icon: <MenuBookIcon fontSize="small" /> }],
         }]
         : isNurse
             ? [{
                 label: 'Nurse',
-                items: [{ label: 'Nurse', to: '/app/clinic', icon: <MenuBookIcon fontSize="small" /> },
+                items: [{ label: 'Nurse', hint: 'Admit students and record care.', to: '/app/clinic', icon: <MenuBookIcon fontSize="small" /> },
                     { label: 'Admitted', to: '/app/clinic?view=admitted', icon: <MenuBookIcon fontSize="small" /> }],
             }]
             : NAV_GROUPS
