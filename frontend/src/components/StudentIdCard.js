@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
     Box, Button, Checkbox, Chip, Dialog, Divider, FormControlLabel, IconButton,
-    MenuItem, TextField, Typography,
+    MenuItem, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import SchoolIcon from '@mui/icons-material/School';
@@ -96,11 +96,11 @@ const markedLine = (payment) => {
     return `Recorded by ${payment.markedBy || 'staff'}${date ? ` · ${date}` : ''}`;
 };
 
-export default function StudentIdCard({ student, canManage, classes, onClose, onSave, onTransfer, saving,
+export default function StudentIdCard({ student, canManage, canUploadPhoto: canUploadPhotoProp, classes, onClose, onSave, onTransfer, saving,
     payment, termName, onMarkPayment, paymentSaving }) {
     const theme = useTheme();
     const { user } = useAuth();
-    const canUploadPhoto = ['admin', 'main_teacher'].includes(user?.role);
+    const canUploadPhoto = canUploadPhotoProp ?? (canManage && ['admin', 'main_teacher'].includes(user?.role));
     const [photoUrl, setPhotoUrl] = useState('');
     const [photoSaving, setPhotoSaving] = useState(false);
     const [photoError, setPhotoError] = useState('');
@@ -225,10 +225,12 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                                 {canUploadPhoto && (
                                     <>
                                         <input ref={photoInput} hidden type="file" accept="image/jpeg,image/png" onChange={uploadPhoto} />
-                                        <IconButton size="small" aria-label="Upload student photo" onClick={() => photoInput.current?.click()} disabled={photoSaving}
-                                            sx={{ position: 'absolute', right: -8, bottom: -8, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', '&:hover': { bgcolor: 'background.paper' } }}>
-                                            <PhotoCameraIcon sx={{ fontSize: 15 }} />
-                                        </IconButton>
+                                        <Tooltip title="Upload or replace the student photo (JPG/PNG, max 5 MB)." arrow>
+                                            <IconButton size="small" aria-label="Upload student photo" onClick={() => photoInput.current?.click()} disabled={photoSaving}
+                                                sx={{ position: 'absolute', right: -8, bottom: -8, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', '&:hover': { bgcolor: 'background.paper' } }}>
+                                                <PhotoCameraIcon sx={{ fontSize: 15 }} />
+                                            </IconButton>
+                                        </Tooltip>
                                     </>
                                 )}
                             </Box>
@@ -340,11 +342,13 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
 
                         {/* actions */}
                         <Box sx={{ display: 'flex', gap: 1, mt: 2.5, alignItems: 'center' }}>
+                            <Tooltip title="Open the print dialog or save this card as a PDF." arrow>
                             <Button size="small" variant="outlined" startIcon={<PrintIcon sx={{ fontSize: 15 }} />}
                                 onClick={() => openStudentCardPrint([student])}
                                 sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
                                 Print card
                             </Button>
+                            </Tooltip>
                             {canManage && (
                                 <>
                                     <Button size="small" variant="outlined" startIcon={<EditIcon sx={{ fontSize: 15 }} />}

@@ -1138,12 +1138,14 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                     {filtered.length} of {roster.length} student{roster.length === 1 ? '' : 's'} in {klass.name}
                     {teacherPaymentsEnabled && termId && !payments.error && ` · ${paidCount} paid (${termName})`}
                 </Typography>
+                <Tooltip title="Send a new-student request to the office for approval." arrow>
                 <Button
                     variant="contained" size="small" startIcon={<AddIcon />}
                     onClick={() => setAddOpen(true)} data-testid="add-student-btn" disableElevation
                     sx={{ ml: 'auto', fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
                     Add student
                 </Button>
+                </Tooltip>
             </Box>
 
             {pendings.data?.length > 0 && (
@@ -1231,6 +1233,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                 <StudentIdCard
                     student={{ ...selectedStudent, className: klass.name }}
                     canManage
+                    canUploadPhoto
                     classes={classNames}
                     saving={saving}
                     onClose={() => setSelected(null)}
@@ -1576,7 +1579,18 @@ export default function ClassHome() {
         const Icon = s.icon;
         const active = section === s.id;
         return (
-            <Button key={s.id} disabled={s.soon}
+            <Tooltip key={s.id} title={s.soon ? 'This section is coming soon.' : {
+                overview: 'See your class snapshot and today’s priorities.',
+                attendance: 'Mark and submit the daily register.',
+                marks: 'Enter the subjects you teach for the term.',
+                plans: 'Keep your weekly schemes and lesson plans current.',
+                calendar: 'Check school events and term dates.',
+                students: 'Search students, request additions and open ID cards.',
+                timetable: 'View your class week and lessons.',
+                profile: 'Review your profile and account settings.',
+            }[s.id] || s.label} placement="right" arrow>
+            <span>
+            <Button disabled={s.soon}
                 onClick={() => !s.soon && setSection(s.id)}
                 data-testid={s.id === 'profile' ? 'side-nav-profile' : undefined}
                 startIcon={<Icon sx={{ fontSize: 18 }} />}
@@ -1592,6 +1606,8 @@ export default function ClassHome() {
                         fontWeight: 800, bgcolor: 'rgba(100,116,139,.12)', color: 'text.secondary' }} />
                 )}
             </Button>
+            </span>
+            </Tooltip>
         );
     };
 
