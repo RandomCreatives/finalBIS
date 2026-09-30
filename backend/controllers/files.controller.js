@@ -95,24 +95,34 @@ const uploadFile = asyncHandler(async (req, res) => {
     // Create a category subfolder within the school folder
     const categoryFolderId = await getOrCreateSubfolder(drive, schoolFolderId, category);
 
-    // Upload file to Google Drive
+    // Upload file to Google Drive. Service accounts cannot upload to their
+    // own My Drive quota; the configured folder must live in a Shared Drive.
     const fileMetadata = {
         name: req.file.originalname,
         parents: [categoryFolderId],
     };
 
-    const { data: driveFile, error: driveError } = await drive.files.create({
-        resource: fileMetadata,
-        media: {
-            mimeType: req.file.mimetype,
-            body: require('stream').Readable.from(req.file.buffer),
-        },
-        fields: 'id, name, mimeType, size',
-    });
-
-    if (driveError) {
-        console.error('[files] Drive upload error:', driveError);
-        throw new BadRequestError('Failed to upload file to Google Drive');
+    let driveFile;
+    try {
+        const response = await drive.files.create({
+            resource: fileMetadata,
+            media: {
+                mimeType: req.file.mimetype,
+                body: require('stream').Readable.from(req.file.buffer),
+            },
+            fields: 'id, name, mimeType, size',
+            supportsAllDrives: true,
+        });
+        driveFile = response.data;
+    } catch (err) {
+        const message = err?.response?.data?.error?.message || err.message || 'Unknown Google Drive error';
+        console.error('[files] Drive upload error:', message);
+        if (/storage quota|shared drive/i.test(message)) {
+            throw new BadRequestError(
+                'Google Drive needs a Shared Drive. Move the configured folder into a Shared Drive and share it with the service account.'
+            );
+        }
+        throw new BadRequestError(`Google Drive upload failed: ${message}`);
     }
 
     // Store metadata in Supabase
