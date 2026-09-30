@@ -134,6 +134,10 @@ export const studentApi = {
     get: (id) => client.get(`/students/${id}`).then((r) => r.data.student),
     create: (payload) => client.post('/students', payload).then((r) => r.data.student),
     update: (id, payload) => client.patch(`/students/${id}`, payload).then((r) => r.data.student),
+    uploadPhoto: (id, formData) => client.post(`/students/${id}/photo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
+    photo: (id) => client.get(`/students/${id}/photo`).then((r) => r.data),
     transfer: (id, toClassId, reason) =>
         client.post(`/students/${id}/transfer`, { toClassId, reason }).then((r) => r.data),
     transfers: (id) => client.get(`/students/${id}/transfers`).then((r) => r.data.transfers),
