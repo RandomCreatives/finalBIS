@@ -11,7 +11,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import PrintIcon from '@mui/icons-material/Print';
-import { studentApi, studentRequestApi, classApi, termApi, paymentApi, filesApi } from '../api/endpoints';
+import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
@@ -19,6 +19,7 @@ import { useAuth } from '../auth/AuthContext';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import StudentIdCard, { classIdFor } from '../components/StudentIdCard';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
+import { compressStudentPhoto } from '../utils/studentPhotos';
 
 const EMPTY = {
     admissionNo: '', name: '', rollNum: '', classId: '', gender: '',
@@ -101,22 +102,12 @@ export default function Students() {
         const file = event.target.files?.[0];
         event.target.value = '';
         if (!file) return;
-        if (!['image/jpeg', 'image/png'].includes(file.type)) {
-            setToast('Please choose a JPG or PNG image.');
-            return;
-        }
-        if (file.size > 5 * 1024 * 1024) {
-            setToast('Photo must be 5 MB or smaller.');
-            return;
-        }
         setPhotoSavingId(student.id);
         try {
+            const compressed = await compressStudentPhoto(file);
             const formData = new FormData();
-            formData.append('file', file);
-            formData.append('category', 'student');
-            formData.append('description', `Student photo · ${student.name}`);
-            const stored = await filesApi.upload(formData);
-            await studentApi.update(student.id, { photoFileId: stored.id });
+            formData.append('file', compressed);
+            await studentApi.uploadPhoto(student.id, formData);
             await students.reload();
             setToast(`Photo saved for ${student.name}`);
         } catch (err) {

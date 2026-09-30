@@ -13,6 +13,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import PrintIcon from '@mui/icons-material/Print';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import { filesApi, studentApi } from '../api/endpoints';
+import { compressStudentPhoto } from '../utils/studentPhotos';
 import { useAuth } from '../auth/AuthContext';
 import { classIdFor } from '../utils/studentIds';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
@@ -113,15 +114,16 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
 
     useEffect(() => {
         let active = true;
-        if (!student?.photoFileId) {
-            setPhotoUrl('');
-            return () => { active = false; };
-        }
-        filesApi.download(student.photoFileId)
+        const photoRequest = student?.photoStoragePath
+            ? studentApi.photo(student.id)
+            : student?.photoFileId
+                ? filesApi.download(student.photoFileId)
+                : Promise.resolve({ url: null });
+        photoRequest
             .then((result) => { if (active) setPhotoUrl(result.url || ''); })
             .catch(() => { if (active) setPhotoUrl(''); });
         return () => { active = false; };
-    }, [student?.photoFileId]);
+    }, [student?.id, student?.photoFileId, student?.photoStoragePath]);
 
     if (!student) return null;
 
@@ -129,25 +131,14 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
         const file = event.target.files?.[0];
         event.target.value = '';
         if (!file) return;
-        if (!['image/jpeg', 'image/png'].includes(file.type)) {
-            setPhotoError('Please choose a JPG or PNG image.');
-            return;
-        }
-        if (file.size > 5 * 1024 * 1024) {
-            setPhotoError('Photo must be 5 MB or smaller.');
-            return;
-        }
         setPhotoSaving(true);
         setPhotoError('');
         try {
+            const compressed = await compressStudentPhoto(file);
             const formData = new FormData();
-            formData.append('file', file);
-            formData.append('category', 'student');
-            formData.append('description', `Student photo · ${student.name}`);
-            const stored = await filesApi.upload(formData);
-            await studentApi.update(student.id, { photoFileId: stored.id });
-            const downloaded = await filesApi.download(stored.id);
-            setPhotoUrl(downloaded.url || '');
+            formData.append('file', compressed);
+            const stored = await studentApi.uploadPhoto(student.id, formData);
+            setPhotoUrl(stored.url || '');
         } catch (err) {
             setPhotoError(err.message || 'Could not upload the photo.');
         } finally {

@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const multer = require('multer');
 const { body, param, query } = require('express-validator');
 
 const { authenticate, authorize, ROLES, TEACHER_ROLES } = require('../middleware/auth');
@@ -39,6 +40,11 @@ const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} 
 const STAFF = [ROLES.ADMIN, ...TEACHER_ROLES];
 const TEACHING = [ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.SUBJECT_TEACHER];
 const PASTORAL = [ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.ASSISTANT_TEACHER];
+const photoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => cb(null, ['image/jpeg', 'image/png'].includes(file.mimetype)),
+});
 
 // =============================================================================
 // AUTH  (login is the only unauthenticated endpoint)
@@ -367,6 +373,8 @@ router.patch(
 );
 
 router.get('/students/payments', authenticate, payments.listPayments);
+router.get('/students/:id/photo', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, students.getStudentPhoto);
+router.post('/students/:id/photo', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), photoUpload.single('file'), validate, students.uploadStudentPhoto);
 router.get('/students/:id', authenticate, uuid('id'), validate, students.getStudent);
 router.put('/students/:id/payment', authenticate, uuid('id'), validate, payments.setPayment);
 
