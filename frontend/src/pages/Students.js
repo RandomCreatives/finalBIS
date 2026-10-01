@@ -10,6 +10,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PrintIcon from '@mui/icons-material/Print';
 import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
@@ -38,6 +39,7 @@ export default function Students() {
         || teacherPaymentSetting.data?.teacherPaymentsEnabled === true;
     const canEdit = ['admin', 'main_teacher', 'assistant_teacher'].includes(user?.role);
     const canTransfer = ['admin', 'main_teacher'].includes(user?.role);
+    const canDeactivate = ['admin', 'main_teacher'].includes(user?.role);
 
     const [classFilter, setClassFilter] = useState('');
     const [search, setSearch] = useState('');
@@ -517,6 +519,17 @@ export default function Students() {
                                                 </IconButton>
                                             </Tooltip>
                                         )}
+                                        {canDeactivate && (
+                                            <Tooltip title="Deactivate student">
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={() => deactivateStudent(s.id, s.name)}
+                                                >
+                                                    <DeleteOutlineIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -533,7 +546,7 @@ export default function Students() {
                     saving={saving}
                     onClose={() => setSelectedCard(null)}
                     onSave={handleCardSave}
-                    onDeactivate={isAdmin ? () => deactivateStudent(selectedCard.id, selectedCard.name) : undefined}
+                    onDeactivate={canDeactivate ? () => deactivateStudent(selectedCard.id, selectedCard.name) : undefined}
                     onTransfer={handleCardTransfer}
                     payment={teacherPaymentsEnabled ? (payMap[selectedCard.id] || null) : null}
                     termName={teacherPaymentsEnabled && termId ? termName : null}
@@ -613,11 +626,6 @@ export default function Students() {
                     )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    {dialog?.mode === 'edit' && (
-                        <Button color="error" onClick={() => deactivateStudent(dialog.id, dialog.values.name)}>
-                            Deactivate student
-                        </Button>
-                    )}
                     <Button sx={{ ml: 'auto' }} onClick={() => setDialog(null)}>Cancel</Button>
                     <Button
                         variant="contained"
