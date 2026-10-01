@@ -11,6 +11,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import PrintIcon from '@mui/icons-material/Print';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import { filesApi, studentApi } from '../api/endpoints';
 import { compressStudentPhoto } from '../utils/studentPhotos';
@@ -370,6 +371,16 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
                                             Transfer
                                         </Button>
                                     )}
+                                    {onDeactivate && (
+                                        <Tooltip title="Deactivate student" arrow>
+                                            <Button size="small" variant="outlined" color="error"
+                                                startIcon={<DeleteOutlineIcon sx={{ fontSize: 16 }} />}
+                                                onClick={deactivate}
+                                                sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
+                                                Deactivate
+                                            </Button>
+                                        </Tooltip>
+                                    )}
                                 </>
                             )}
                             <Button size="small" onClick={onClose} sx={{ ml: 'auto', fontWeight: 700,
@@ -449,12 +460,6 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
                                 sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
                                 Cancel
                             </Button>
-                            {onDeactivate && (
-                                <Button size="small" color="error" onClick={deactivate}
-                                    disabled={saving} sx={{ ml: 'auto', fontWeight: 700, textTransform: 'none' }}>
-                                    Deactivate student
-                                </Button>
-                            )}
                         </Box>
                     </>
                 )}
