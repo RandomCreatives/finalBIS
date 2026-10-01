@@ -1101,6 +1101,22 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
         }
     };
 
+    const handleDeactivate = async () => {
+        if (!selectedStudent) return;
+        setSaving(true);
+        try {
+            await studentApi.update(selectedStudent.id, { isActive: false });
+            const name = selectedStudent.name;
+            await reload();
+            setSelected(null);
+            setToast(`${name} deactivated`);
+        } catch (err) {
+            setToast(err.message || 'Could not deactivate the student');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleTransfer = async (toClassName, reason) => {
         if (!selectedStudent) return;
         const toClassId = classIdByName[toClassName];
@@ -1238,6 +1254,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                     saving={saving}
                     onClose={() => setSelected(null)}
                     onSave={handleSave}
+                    onDeactivate={handleDeactivate}
                     onTransfer={handleTransfer}
                     payment={teacherPaymentsEnabled ? (payMap[selectedStudent.id] || null) : null}
                     termName={teacherPaymentsEnabled && termId ? termName : null}

@@ -275,6 +275,9 @@ const updateStudent = asyncHandler(async (req, res) => {
     // Only admins move students between classes via patch — everyone else
     // uses the audited transfer endpoint.
     if (req.user.role !== 'admin') delete patch.class_id;
+    if (patch.is_active === false && !['admin', 'main_teacher'].includes(req.user.role)) {
+        throw new ForbiddenError('Only an admin or the class main teacher can deactivate a student');
+    }
 
     if (patch.photo_file_id) {
         const { data: photo, error: photoError } = await supabase

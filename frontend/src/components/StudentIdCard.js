@@ -96,7 +96,7 @@ const markedLine = (payment) => {
     return `Recorded by ${payment.markedBy || 'staff'}${date ? ` · ${date}` : ''}`;
 };
 
-export default function StudentIdCard({ student, canManage, canUploadPhoto: canUploadPhotoProp, classes, onClose, onSave, onTransfer, saving,
+export default function StudentIdCard({ student, canManage, canUploadPhoto: canUploadPhotoProp, classes, onClose, onSave, onTransfer, onDeactivate, saving,
     payment, termName, onMarkPayment, paymentSaving }) {
     const theme = useTheme();
     const { user } = useAuth();
@@ -174,6 +174,13 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
             specialNeeds: draft.specialNeeds,
         });
         setEditing(false);
+    };
+
+    const deactivate = () => {
+        if (!onDeactivate) return;
+        if (window.confirm(`Deactivate ${student.name}? They will leave active student lists, but their history will be preserved.`)) {
+            onDeactivate();
+        }
     };
 
     const confirmTransfer = () => {
@@ -442,6 +449,12 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
                                 sx={{ fontWeight: 700, textTransform: 'none', color: 'text.secondary' }}>
                                 Cancel
                             </Button>
+                            {onDeactivate && (
+                                <Button size="small" color="error" onClick={deactivate}
+                                    disabled={saving} sx={{ ml: 'auto', fontWeight: 700, textTransform: 'none' }}>
+                                    Deactivate student
+                                </Button>
+                            )}
                         </Box>
                     </>
                 )}
