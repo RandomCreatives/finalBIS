@@ -194,6 +194,20 @@ export default function Students() {
         }
     };
 
+    const deactivateStudent = async (id, name) => {
+        if (!id) return;
+        if (!window.confirm(`Deactivate ${name || 'this student'}? Their history will be preserved.`)) return;
+        try {
+            await studentApi.update(id, { isActive: false });
+            setSelectedCard(null);
+            setDialog(null);
+            await students.reload();
+            setToast(`${name || 'Student'} deactivated`);
+        } catch (err) {
+            setToast(err.message || 'Could not deactivate the student');
+        }
+    };
+
     const handleCardSave = async (patch) => {
         if (!selectedCard) return;
         setSaving(true);
@@ -519,6 +533,7 @@ export default function Students() {
                     saving={saving}
                     onClose={() => setSelectedCard(null)}
                     onSave={handleCardSave}
+                    onDeactivate={isAdmin ? () => deactivateStudent(selectedCard.id, selectedCard.name) : undefined}
                     onTransfer={handleCardTransfer}
                     payment={teacherPaymentsEnabled ? (payMap[selectedCard.id] || null) : null}
                     termName={teacherPaymentsEnabled && termId ? termName : null}
@@ -598,7 +613,12 @@ export default function Students() {
                     )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDialog(null)}>Cancel</Button>
+                    {dialog?.mode === 'edit' && (
+                        <Button color="error" onClick={() => deactivateStudent(dialog.id, dialog.values.name)}>
+                            Deactivate student
+                        </Button>
+                    )}
+                    <Button sx={{ ml: 'auto' }} onClick={() => setDialog(null)}>Cancel</Button>
                     <Button
                         variant="contained"
                         onClick={handleSave}
