@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
     Box, Chip, Container, Grid, IconButton, Paper, Tooltip, Typography, useTheme,
@@ -8,7 +8,7 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useColorScheme } from '../theme';
-import { CLASSES } from '../data/classes';
+import { CLASSES, fetchLiveClassCounts } from '../data/classes';
 import { ClassCard, ClassLoginDialog } from '../components/ClassLoginCard';
 
 /*
@@ -43,7 +43,20 @@ export default function SubjectLogin() {
     const dark = theme.palette.mode === 'dark';
     const { toggleColorScheme } = useColorScheme();
 
-    const bands = useMemo(() => yearBands(CLASSES), []);
+    const [liveCounts, setLiveCounts] = useState(null);
+    useEffect(() => {
+        let active = true;
+        fetchLiveClassCounts()
+            .then((counts) => { if (active) setLiveCounts(counts); })
+            .catch(() => {});
+        return () => { active = false; };
+    }, []);
+
+    const classes = useMemo(() => CLASSES.map((klass) => ({
+        ...klass,
+        studentCount: liveCounts ? (liveCounts[klass.name] || 0) : null,
+    })), [liveCounts]);
+    const bands = useMemo(() => yearBands(classes), [classes]);
 
     // Which class card opened the shared password dialog.
     const [loginClass, setLoginClass] = useState(null);

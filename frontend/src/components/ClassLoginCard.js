@@ -82,7 +82,7 @@ export function ClassCard({ klass, onLogin, actionLabel }) {
                                 Students
                             </Typography>
                             <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-                                {klass.studentCount}
+                                {klass.studentCount == null ? '—' : klass.studentCount}
                             </Typography>
                         </Box>
                     </Box>

@@ -394,7 +394,6 @@ export default function Assignments() {
                                                             </TableCell>
                                                             <TableCell align="right">
                                                                 {c.studentCount ?? 0}
-                                                                {c.capacity ? ` / ${c.capacity}` : ''}
                                                             </TableCell>
                                                             <TableCell align="right">
                                                                 {free === null ? (

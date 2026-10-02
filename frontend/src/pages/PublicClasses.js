@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
     Box, Button, Container, Typography, useTheme, Grid, Chip,
@@ -10,7 +10,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SchoolIcon from '@mui/icons-material/School';
 import { useColorScheme } from '../theme';
-import { CLASSES } from '../data/classes';
+import { CLASSES, fetchLiveClassCounts } from '../data/classes';
 import { ClassCard, ClassLoginDialog } from '../components/ClassLoginCard';
 
 /*
@@ -32,11 +32,24 @@ export default function PublicClasses() {
 
     // Per-class sign-in dialog; the shared dialog owns password + submit.
     const [loginClass, setLoginClass] = useState(null);
+    const [liveCounts, setLiveCounts] = useState(null);
     const openLogin = (klass) => setLoginClass(klass);
     const closeLogin = () => setLoginClass(null);
 
-    const year3 = CLASSES.filter((c) => c.yearLevel === 3);
-    const year4 = CLASSES.filter((c) => c.yearLevel === 4);
+    useEffect(() => {
+        let active = true;
+        fetchLiveClassCounts()
+            .then((counts) => { if (active) setLiveCounts(counts); })
+            .catch(() => {});
+        return () => { active = false; };
+    }, []);
+
+    const classes = CLASSES.map((klass) => ({
+        ...klass,
+        studentCount: liveCounts ? (liveCounts[klass.name] || 0) : null,
+    }));
+    const year3 = classes.filter((c) => c.yearLevel === 3);
+    const year4 = classes.filter((c) => c.yearLevel === 4);
 
     const renderGroup = (title, list) => (
         <Box sx={{ mb: { xs: 6, md: 8 } }}>
