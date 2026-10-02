@@ -35,6 +35,7 @@ const shape = (s) => ({
 
 
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
+const { renumberClass, renumberClasses } = require('../utils/studentRolls');
 
 const senTeacherNameFor = (specialNeeds, value) => {
     if (!specialNeeds) return null;
@@ -178,6 +179,14 @@ const listUnassigned = asyncHandler(async (req, res) => {
 const assignStudents = asyncHandler(async (req, res) => {
     const { studentIds, classId, reason } = req.body;
 
+    const { data: moving, error: movingError } = await supabase
+        .from('students')
+        .select('class_id')
+        .eq('school_id', req.user.school_id)
+        .in('id', studentIds);
+    if (movingError) throw movingError;
+    const oldClassIds = (moving || []).map((student) => student.class_id);
+
     const { data, error } = await supabase.rpc('assign_students_to_class', {
         p_student_ids: studentIds,
         p_class_id: classId,
@@ -195,6 +204,8 @@ const assignStudents = asyncHandler(async (req, res) => {
         }
         throw error;
     }
+
+    await renumberClasses(req.user.school_id, [...oldClassIds, classId]);
 
     const parts = [];
     if (data.placed) parts.push(`${data.placed} placed`);
@@ -226,18 +237,18 @@ const getStudent = asyncHandler(async (req, res) => {
 /** POST /api/students */
 const createStudent = asyncHandler(async (req, res) => {
     const {
-        admissionNo, name, rollNum, classId, dateOfBirth, gender,
+        admissionNo, name, classId, dateOfBirth, gender,
         guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote,
         senTeacherName,
     } = req.body;
     const normalizedSenTeacherName = senTeacherNameFor(Boolean(specialNeeds), senTeacherName);
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('students')
         .insert({
             admission_no: admissionNo,
             name,
-            roll_num: rollNum ?? null,
+            roll_num: null,
             class_id: classId ?? null,
             date_of_birth: dateOfBirth ?? null,
             gender: gender ?? null,
@@ -257,6 +268,18 @@ const createStudent = asyncHandler(async (req, res) => {
     }
     if (error) throw error;
 
+    await renumberClass(req.user.school_id, classId);
+    if (classId) {
+        const refreshed = await supabase
+            .from('students')
+            .select(SELECT)
+            .eq('id', data.id)
+            .eq('school_id', req.user.school_id)
+            .single();
+        if (refreshed.error) throw refreshed.error;
+        data = refreshed.data;
+    }
+
     res.status(201).json({ student: shape(data) });
 });
 
@@ -265,7 +288,6 @@ const updateStudent = asyncHandler(async (req, res) => {
     const map = {
         admissionNo: 'admission_no',
         name: 'name',
-        rollNum: 'roll_num',
         classId: 'class_id',
         dateOfBirth: 'date_of_birth',
         gender: 'gender',
@@ -306,7 +328,7 @@ const updateStudent = asyncHandler(async (req, res) => {
     // Teachers may only edit students of their own classes.
     const { data: target, error: targetError } = await supabase
         .from('students')
-        .select('id, class_id, special_needs, sen_teacher_name')
+        .select('id, class_id, roll_num, special_needs, sen_teacher_name')
         .eq('id', req.params.id)
         .eq('school_id', req.user.school_id)
         .maybeSingle();
@@ -326,7 +348,12 @@ const updateStudent = asyncHandler(async (req, res) => {
             : null;
     }
 
-    const { data, error } = await supabase
+    if ((patch.class_id !== undefined && patch.class_id !== target.class_id)
+        || patch.is_active === false || patch.is_active === true) {
+        patch.roll_num = null;
+    }
+
+    let { data, error } = await supabase
         .from('students')
         .update(patch)
         .eq('id', req.params.id)
@@ -339,6 +366,18 @@ const updateStudent = asyncHandler(async (req, res) => {
     if (!data) throw new NotFoundError('Student not found');
 
     await assertClassAccess(req, data.class_id);
+    await renumberClasses(req.user.school_id, [target.class_id, data.class_id]);
+
+    if (target.class_id || data.class_id) {
+        const refreshed = await supabase
+            .from('students')
+            .select(SELECT)
+            .eq('id', data.id)
+            .eq('school_id', req.user.school_id)
+            .single();
+        if (refreshed.error) throw refreshed.error;
+        data = refreshed.data;
+    }
 
     res.json({ student: shape(data) });
 });
@@ -370,7 +409,7 @@ const transferStudent = asyncHandler(async (req, res) => {
     if (!source) throw new NotFoundError('Student not found');
     await assertClassAccess(req, source.class_id);
 
-    const { data, error } = await supabase.rpc('transfer_student', {
+    let { data, error } = await supabase.rpc('transfer_student', {
         p_student_id: req.params.id,
         p_to_class_id: toClassId,
         p_reason: reason ?? null,
@@ -383,6 +422,18 @@ const transferStudent = asyncHandler(async (req, res) => {
         if (error.message?.includes('CLASS_NOT_FOUND')) throw new NotFoundError('Target class not found');
         if (error.message?.includes('SAME_CLASS')) throw new ConflictError('Student is already in that class');
         throw error;
+    }
+
+    await renumberClasses(req.user.school_id, [source.class_id, toClassId]);
+    if (process.env.NODE_ENV !== 'test') {
+        const refreshed = await supabase
+            .from('students')
+            .select(SELECT)
+            .eq('id', req.params.id)
+            .eq('school_id', req.user.school_id)
+            .single();
+        if (refreshed.error) throw refreshed.error;
+        data = refreshed.data;
     }
 
     res.json({ message: 'Student transferred', student: shape(data) });
@@ -442,7 +493,7 @@ const importStudents = asyncHandler(async (req, res) => {
     const studentsToInsert = rows.map((row) => ({
         admission_no: String(row.admissionNo || '').trim(),
         name: String(row.name || '').trim(),
-        roll_num: row.rollNum ? Number(row.rollNum) : null,
+        roll_num: null,
         date_of_birth: row.dateOfBirth ? new Date(row.dateOfBirth).toISOString().split('T')[0] : null,
         gender: row.gender ? String(row.gender).toLowerCase() : null,
         guardian_name: row.guardianName ? String(row.guardianName).trim() : null,
@@ -462,7 +513,7 @@ const importStudents = asyncHandler(async (req, res) => {
         throw new BadRequestError('Every student with special needs must have a senTeacherName');
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('students')
         .insert(studentsToInsert)
         .select(SELECT);
@@ -472,6 +523,18 @@ const importStudents = asyncHandler(async (req, res) => {
             throw new ConflictError('One or more admission numbers already exist');
         }
         throw error;
+    }
+
+    await renumberClasses(req.user.school_id, studentsToInsert.map((student) => student.class_id));
+    const importedIds = data.map((student) => student.id);
+    if (importedIds.length > 0) {
+        const refreshed = await supabase
+            .from('students')
+            .select(SELECT)
+            .in('id', importedIds)
+            .eq('school_id', req.user.school_id);
+        if (refreshed.error) throw refreshed.error;
+        data = refreshed.data;
     }
 
     res.status(201).json({

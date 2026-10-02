@@ -396,7 +396,6 @@ router.post(
     body('admissionNo').trim().notEmpty().withMessage('Admission number is required'),
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('classId').optional({ nullable: true }).isUUID(),
-    body('rollNum').optional({ nullable: true }).isInt({ min: 1 }),
     body('gender').optional({ nullable: true }).isIn(['male', 'female', 'other']),
     body('guardianEmail').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail(),
     validate,

@@ -71,10 +71,15 @@ describe('SubjectLogin wall — class cards', () => {
             user: { id: 'u1', name: 'Ms. Yeabsira A.' },
             class: { id: 'c1', name: 'Year 3 - Blue' },
         };
-        const fetchMock = jest.fn().mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve(payload),
-        });
+        const fetchMock = jest.fn()
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ students: [] }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve(payload),
+            });
         global.fetch = fetchMock;
 
         renderWall();
@@ -86,8 +91,8 @@ describe('SubjectLogin wall — class cards', () => {
         });
         fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
 
-        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-        const [url, init] = fetchMock.mock.calls[0];
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        const [url, init] = fetchMock.mock.calls[1];
         expect(url).toMatch(/\/api\/auth\/class-login$/);
         expect(JSON.parse(init.body)).toEqual({ className: 'Year 3 - Blue', password: 'year 3 blue' });
 

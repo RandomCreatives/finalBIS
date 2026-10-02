@@ -101,7 +101,6 @@ export default function Classes() {
                                                 <GroupsIcon fontSize="small" color="disabled" />
                                                 <Typography variant="body2" color="text.secondary">
                                                     {c.studentCount ?? 0} student{c.studentCount === 1 ? '' : 's'}
-                                                    {c.capacity ? ` / ${c.capacity}` : ''}
                                                 </Typography>
                                             </Stack>
                                         </Box>

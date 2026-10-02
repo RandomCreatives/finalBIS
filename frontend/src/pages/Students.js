@@ -23,7 +23,7 @@ import { openStudentCardPrint } from '../utils/studentCardPrint';
 import { compressStudentPhoto } from '../utils/studentPhotos';
 
 const EMPTY = {
-    admissionNo: '', name: '', rollNum: '', classId: '', gender: '',
+    admissionNo: '', name: '', classId: '', gender: '',
     guardianName: '', guardianPhone: '', guardianEmail: '',
     specialNeeds: false, specialNeedsNote: '', senTeacherName: '',
 };
@@ -128,7 +128,6 @@ export default function Students() {
             values: {
                 admissionNo: s.admissionNo || '',
                 name: s.name || '',
-                rollNum: s.rollNum ?? '',
                 classId: s.classId || '',
                 gender: s.gender || '',
                 guardianName: s.guardianName || '',
@@ -160,7 +159,6 @@ export default function Students() {
         const payload = {
             admissionNo: v.admissionNo.trim(),
             name: v.name.trim(),
-            rollNum: v.rollNum === '' ? null : Number(v.rollNum),
             classId: v.classId || null,
             gender: v.gender || null,
             guardianName: v.guardianName || null,
@@ -274,9 +272,9 @@ export default function Students() {
 
     const downloadTemplate = () => {
         const csv = [
-            'admissionNo,name,rollNum,dateOfBirth,gender,guardianName,guardianPhone,guardianEmail,specialNeeds,senTeacherName,specialNeedsNote',
-            'STU001,"John Doe",1,2010-05-15,male,"Jane Doe","+251 91 123 4567","jane@example.com",yes,"Ms Hana","Needs extra math support"',
-            'STU002,"Mary Smith",2,2010-08-22,female,"Mark Smith","+251 92 234 5678","mark@example.com",no,,',
+            'admissionNo,name,dateOfBirth,gender,guardianName,guardianPhone,guardianEmail,specialNeeds,senTeacherName,specialNeedsNote',
+            'STU001,"John Doe",2010-05-15,male,"Jane Doe","+251 91 123 4567","jane@example.com",yes,"Ms Hana","Needs extra math support"',
+            'STU002,"Mary Smith",2010-08-22,female,"Mark Smith","+251 92 234 5678","mark@example.com",no,,',
         ].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
@@ -598,16 +596,11 @@ export default function Students() {
                     {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
                     {dialog && (
                         <Stack spacing={2} sx={{ mt: 1 }}>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                <TextField
-                                    label="Admission number" required fullWidth
-                                    value={dialog.values.admissionNo} onChange={setField('admissionNo')}
-                                />
-                                <TextField
-                                    label="Roll number" type="number" fullWidth
-                                    value={dialog.values.rollNum} onChange={setField('rollNum')}
-                                />
-                            </Stack>
+                            <TextField
+                                label="Admission number" required fullWidth
+                                value={dialog.values.admissionNo} onChange={setField('admissionNo')}
+                                helperText="Roll number is assigned automatically from the class alphabetical list."
+                            />
                             <TextField
                                 label="Full name" required fullWidth
                                 value={dialog.values.name} onChange={setField('name')}
@@ -800,7 +793,7 @@ export default function Students() {
                                 setFormError('');
                             }}
                             size="small"
-                            helperText="Columns: admissionNo, name, rollNum, dateOfBirth, gender, guardianName, guardianPhone, guardianEmail, specialNeeds, senTeacherName, specialNeedsNote"
+                            helperText="Columns: admissionNo, name, dateOfBirth, gender, guardianName, guardianPhone, guardianEmail, specialNeeds, senTeacherName, specialNeedsNote"
                         />
                         <Box>
                             <Button

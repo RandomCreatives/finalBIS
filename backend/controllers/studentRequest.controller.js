@@ -5,6 +5,7 @@ const {
     AppError, NotFoundError, ConflictError, BadRequestError, ForbiddenError, asyncHandler,
 } = require('../utils/errors');
 const { resolveYearId } = require('./academicYear.controller');
+const { renumberClass } = require('../utils/studentRolls');
 
 /*
  * Main-teacher student intake (Mike, 2026-09-23).
@@ -201,46 +202,8 @@ const nextAdmissionNo = async (req) => {
     return `BIS2026-${String(max + 1).padStart(3, '0')}`;
 };
 
-/**
- * Alphabetical roll placement inside the class. Existing students below the
- * new student's position shift down so rolls remain 1..N by full displayed
- * name; the permanent admission number never changes.
- */
-const nextRollNum = async (req, classId, studentName) => {
-    const { data, error } = await supabase
-        .from('students')
-        .select('id, name, roll_num')
-        .eq('school_id', req.user.school_id)
-        .eq('class_id', classId)
-        .order('roll_num', { ascending: true });
-    if (error) throw error;
-
-    const rows = (data || [])
-        .filter((row) => Number.isInteger(row.roll_num))
-        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' })
-            || (a.id || '').localeCompare(b.id || ''));
-    const position = rows.findIndex((row) =>
-        (studentName || '').localeCompare(row.name || '', 'en', { sensitivity: 'base' }) < 0
-    );
-    return position === -1 ? rows.length + 1 : position + 1;
-};
-
-const shiftRollsAfter = async (req, classId, insertionRoll) => {
-    const { data, error } = await supabase
-        .from('students')
-        .select('id, roll_num')
-        .eq('school_id', req.user.school_id)
-        .eq('class_id', classId)
-        .gte('roll_num', insertionRoll)
-        .order('roll_num', { ascending: false });
-    if (error) throw error;
-    for (const row of data || []) {
-        const { error: updateError } = await supabase
-            .from('students').update({ roll_num: row.roll_num + 1 }).eq('id', row.id);
-        if (updateError) throw updateError;
-    }
-};
-
+// The roll is assigned after approval by renumber_student_class, so every
+// active class roster always ends at N with no gaps or duplicate numbers.
 const markReviewed = async (req, requestId, patch) => {
     const { data, error, count } = await supabase
         .from(TABLE)
@@ -263,7 +226,7 @@ const approveRequest = asyncHandler(async (req, res) => {
             class_id: request.class_id,
             admission_no: await nextAdmissionNo(req),
             name: request.name,
-            roll_num: await nextRollNum(req, request.class_id, request.name),
+            roll_num: null,
             date_of_birth: request.date_of_birth,
             gender: request.gender,
             guardian_name: request.guardian_name,
@@ -277,8 +240,15 @@ const approveRequest = asyncHandler(async (req, res) => {
         const { error } = await supabase.from('students').insert(candidate);
         if (error && error.code === '23505' && /admission/i.test(error.message || '')) continue;
         if (error) throw error;
-        await shiftRollsAfter(req, request.class_id, candidate.roll_num);
-        student = { id: candidate.id, admission_no: candidate.admission_no, roll_num: candidate.roll_num };
+        await renumberClass(req.user.school_id, request.class_id);
+        const refreshed = await supabase
+            .from('students')
+            .select('id, admission_no, roll_num')
+            .eq('id', candidate.id)
+            .eq('school_id', req.user.school_id)
+            .single();
+        if (refreshed.error) throw refreshed.error;
+        student = refreshed.data;
     }
     if (!student) throw new ConflictError('Could not allocate an admission number — try again');
 

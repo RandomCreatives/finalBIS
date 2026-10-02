@@ -1319,7 +1319,7 @@ function OverviewSection({ klass, classId, roster, goTo }) {
             <Grid container spacing={2}>
                 <Grid item xs={6} md={3}>
                     <StatCard icon={GroupsIcon} label="Students" value={roster.length}
-                        hint={`Capacity ${klass.capacity ?? 30} per class`} />
+                        hint="Active students in this class" />
                 </Grid>
                 <Grid item xs={6} md={3}>
                     <StatCard icon={FactCheckIcon} label="Attendance days" value={attendanceDays}

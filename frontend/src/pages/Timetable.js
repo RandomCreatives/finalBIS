@@ -317,8 +317,7 @@ export default function Timetable() {
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                                             <GroupsIcon fontSize="small" color="disabled" />
                                             <Typography variant="h6">
-                                                Students ({roster.data.studentCount}
-                                                {roster.data.class.capacity ? ` / ${roster.data.class.capacity}` : ''})
+                                                Students ({roster.data.studentCount})
                                             </Typography>
                                         </Stack>
 

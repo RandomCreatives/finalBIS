@@ -39,6 +39,18 @@ export const slugFor = (className) =>
 export const passwordFor = (className) =>
     className.toLowerCase().replace(/\s*-\s*/g, ' ').replace(/\s+/g, ' ').trim();
 
+/** Fetch exact active, assigned student counts for public class cards. */
+export const fetchLiveClassCounts = async () => {
+    const baseUrl = process.env.REACT_APP_API_URL || '';
+    const response = await fetch(`${baseUrl}/api/public/students`);
+    if (!response.ok) throw new Error(`Student directory request failed (${response.status})`);
+    const data = await response.json();
+    return (data.students || []).reduce((counts, student) => {
+        counts[student.className] = (counts[student.className] || 0) + 1;
+        return counts;
+    }, {});
+};
+
 export const classBySlug = (slug) =>
     CLASSES.find((c) => slugFor(c.name) === slug) ?? null;
 
