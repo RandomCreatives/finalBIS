@@ -108,6 +108,7 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
     const photoInput = useRef(null);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(null);
+    const [editError, setEditError] = useState('');
     const [transferOpen, setTransferOpen] = useState(false);
     const [targetClass, setTargetClass] = useState('');
     const [reason, setReason] = useState('');
@@ -157,13 +158,19 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
             guardianEmail: student.guardianEmail || '',
             specialNeedsNote: student.specialNeedsNote || student.medicalNotes || '',
             specialNeeds: Boolean(student.specialNeeds),
+            senTeacherName: student.senTeacherName || '',
         });
+        setEditError('');
         setTransferOpen(false);
         setEditing(true);
     };
 
     const saveEdit = () => {
         if (!draft.name.trim()) return;
+        if (draft.specialNeeds && !draft.senTeacherName.trim()) {
+            setEditError('Assigned SEN Teacher is required when special needs is on.');
+            return;
+        }
         onSave({
             name: draft.name.trim(),
             gender: draft.gender || null,
@@ -173,6 +180,7 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
             guardianEmail: draft.guardianEmail.trim() || null,
             specialNeedsNote: draft.specialNeedsNote.trim() || null,
             specialNeeds: draft.specialNeeds,
+            senTeacherName: draft.specialNeeds ? draft.senTeacherName.trim() : null,
         });
         setEditing(false);
     };
@@ -448,8 +456,25 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
                         </Box>
                         <FormControlLabel sx={{ mt: 1, '& .MuiFormControlLabel-label': { fontSize: 13 } }}
                             control={<Checkbox size="small" checked={draft.specialNeeds}
-                                onChange={(e) => setDraft((d) => ({ ...d, specialNeeds: e.target.checked }))} />}
+                                onChange={(e) => setDraft((d) => ({
+                                    ...d,
+                                    specialNeeds: e.target.checked,
+                                    senTeacherName: e.target.checked ? d.senTeacherName : '',
+                                }))} />}
                             label="Special needs support" />
+                        {draft.specialNeeds && (
+                            <TextField
+                                label="Assigned SEN Teacher" required size="small" fullWidth
+                                value={draft.senTeacherName}
+                                onChange={(e) => { setDraft((d) => ({ ...d, senTeacherName: e.target.value })); setEditError(''); }}
+                                helperText={editError || 'Enter the SEN teacher assigned to this student.'}
+                                error={Boolean(editError)}
+                                sx={{ mt: 1.25, '& .MuiInputBase-input': { fontSize: 13 }, '& .MuiInputLabel-root': { fontSize: 12 } }}
+                            />
+                        )}
+                        {editError && !draft.specialNeeds && (
+                            <Typography sx={{ fontSize: 12, color: 'error.main', mt: 1 }}>{editError}</Typography>
+                        )}
                         <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
                             <Button size="small" variant="contained" disableElevation onClick={saveEdit}
                                 disabled={!draft.name.trim() || saving}

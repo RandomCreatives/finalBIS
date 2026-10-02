@@ -41,6 +41,7 @@ const shape = (row, extras = {}) => ({
     guardianEmail: row.guardian_email,
     specialNeeds: row.special_needs,
     specialNeedsNote: row.special_needs_note,
+    senTeacherName: row.sen_teacher_name || null,
     status: row.status,
     reviewNote: row.review_note,
     studentId: row.student_id,
@@ -74,6 +75,11 @@ const submitRequest = asyncHandler(async (req, res) => {
     const klass = await mainClassOf(req);
     const name = String(req.body.name || '').trim().replace(/\s+/g, ' ');
     if (name.length < 2) throw new BadRequestError('The student\'s full name is required');
+    const specialNeeds = Boolean(req.body.specialNeeds);
+    const senTeacherName = String(req.body.senTeacherName || '').trim();
+    if (specialNeeds && !senTeacherName) {
+        throw new BadRequestError('Assigned SEN Teacher is required when special needs is on');
+    }
 
     // code-level duplicate guard (the partial unique index backs it up)
     const { data: dup, error: dupError } = await supabase
@@ -95,8 +101,9 @@ const submitRequest = asyncHandler(async (req, res) => {
         guardian_name: req.body.guardianName || null,
         guardian_phone: req.body.guardianPhone || null,
         guardian_email: req.body.guardianEmail || null,
-        special_needs: Boolean(req.body.specialNeeds),
+        special_needs: specialNeeds,
         special_needs_note: req.body.specialNeedsNote || null,
+        sen_teacher_name: specialNeeds ? senTeacherName : null,
         status: 'pending',
     };
 
@@ -136,7 +143,7 @@ const listRequests = asyncHandler(async (req, res) => {
 
     let query = supabase
         .from(TABLE)
-        .select('id, class_id, requested_by, name, gender, date_of_birth, guardian_name, guardian_phone, guardian_email, special_needs, special_needs_note, status, review_note, student_id, created_at')
+        .select('id, class_id, requested_by, name, gender, date_of_birth, guardian_name, guardian_phone, guardian_email, special_needs, special_needs_note, sen_teacher_name, status, review_note, student_id, created_at')
         .eq('school_id', req.user.school_id)
         .eq('status', status)
         .order('created_at', { ascending: false });
@@ -264,6 +271,7 @@ const approveRequest = asyncHandler(async (req, res) => {
             guardian_email: request.guardian_email,
             special_needs: request.special_needs,
             special_needs_note: request.special_needs_note,
+            sen_teacher_name: request.sen_teacher_name || null,
             is_active: true,
         };
         const { error } = await supabase.from('students').insert(candidate);

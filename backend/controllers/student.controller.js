@@ -9,7 +9,7 @@ const PHOTO_BUCKET = 'student-photos';
 const SELECT = `
     id, admission_no, name, roll_num, date_of_birth, gender,
     guardian_name, guardian_phone, guardian_email,
-    special_needs, special_needs_note, is_active, class_id, photo_file_id,
+    special_needs, special_needs_note, sen_teacher_name, is_active, class_id, photo_file_id,
     photo_storage_path, class:classes(id, name)
 `;
 
@@ -25,6 +25,7 @@ const shape = (s) => ({
     guardianEmail: s.guardian_email,
     specialNeeds: s.special_needs,
     specialNeedsNote: s.special_needs_note,
+    senTeacherName: s.sen_teacher_name || null,
     isActive: s.is_active,
     classId: s.class_id,
     photoFileId: s.photo_file_id || null,
@@ -34,6 +35,13 @@ const shape = (s) => ({
 
 
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
+
+const senTeacherNameFor = (specialNeeds, value) => {
+    if (!specialNeeds) return null;
+    const name = String(value || '').trim();
+    if (!name) throw new BadRequestError('Assigned SEN Teacher is required when special needs is on');
+    return name;
+};
 
 /** POST /api/students/:id/photo — compressed JPG to private Supabase Storage. */
 const uploadStudentPhoto = asyncHandler(async (req, res) => {
@@ -220,7 +228,9 @@ const createStudent = asyncHandler(async (req, res) => {
     const {
         admissionNo, name, rollNum, classId, dateOfBirth, gender,
         guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote,
+        senTeacherName,
     } = req.body;
+    const normalizedSenTeacherName = senTeacherNameFor(Boolean(specialNeeds), senTeacherName);
 
     const { data, error } = await supabase
         .from('students')
@@ -234,8 +244,9 @@ const createStudent = asyncHandler(async (req, res) => {
             guardian_name: guardianName ?? null,
             guardian_phone: guardianPhone ?? null,
             guardian_email: guardianEmail ?? null,
-            special_needs: specialNeeds ?? false,
+            special_needs: Boolean(specialNeeds),
             special_needs_note: specialNeedsNote ?? null,
+            sen_teacher_name: normalizedSenTeacherName,
             school_id: req.user.school_id,
         })
         .select(SELECT)
@@ -263,6 +274,7 @@ const updateStudent = asyncHandler(async (req, res) => {
         guardianEmail: 'guardian_email',
         specialNeeds: 'special_needs',
         specialNeedsNote: 'special_needs_note',
+        senTeacherName: 'sen_teacher_name',
         isActive: 'is_active',
         photoFileId: 'photo_file_id',
     };
@@ -294,7 +306,7 @@ const updateStudent = asyncHandler(async (req, res) => {
     // Teachers may only edit students of their own classes.
     const { data: target, error: targetError } = await supabase
         .from('students')
-        .select('id, class_id')
+        .select('id, class_id, special_needs, sen_teacher_name')
         .eq('id', req.params.id)
         .eq('school_id', req.user.school_id)
         .maybeSingle();
@@ -302,6 +314,17 @@ const updateStudent = asyncHandler(async (req, res) => {
     if (targetError) throw targetError;
     if (!target) throw new NotFoundError('Student not found');
     await assertClassAccess(req, target.class_id);
+
+    const specialNeedsChanged = patch.special_needs !== undefined || patch.sen_teacher_name !== undefined;
+    if (specialNeedsChanged) {
+        const effectiveSpecialNeeds = patch.special_needs !== undefined
+            ? Boolean(patch.special_needs)
+            : Boolean(target.special_needs);
+        if (patch.special_needs !== undefined) patch.special_needs = effectiveSpecialNeeds;
+        patch.sen_teacher_name = effectiveSpecialNeeds
+            ? senTeacherNameFor(true, patch.sen_teacher_name ?? target.sen_teacher_name)
+            : null;
+    }
 
     const { data, error } = await supabase
         .from('students')
@@ -391,8 +414,8 @@ const getTransferHistory = asyncHandler(async (req, res) => {
  * POST /api/students/import
  *
  * Accepts an Excel file with columns: admissionNo, name, rollNum, dateOfBirth,
- * gender, guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote
- * Optional: classId (UUID) — students without a class go to unassigned pool.
+ * gender, guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote,
+ * senTeacherName. Optional: classId (UUID) — students without a class go to unassigned pool.
  */
 const importStudents = asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -427,12 +450,16 @@ const importStudents = asyncHandler(async (req, res) => {
         guardian_email: row.guardianEmail ? String(row.guardianEmail).trim() : null,
         special_needs: row.specialNeeds === true || String(row.specialNeeds).toLowerCase() === 'yes' || row.specialNeeds === 'TRUE',
         special_needs_note: row.specialNeedsNote ? String(row.specialNeedsNote).trim() : null,
+        sen_teacher_name: row.senTeacherName ? String(row.senTeacherName).trim() : null,
         class_id: row.classId ? (typeof row.classId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.classId) ? row.classId : null) : null,
         school_id: req.user.school_id,
     })).filter((s) => s.admission_no && s.name);
 
     if (studentsToInsert.length === 0) {
         throw new BadRequestError('No valid student rows found');
+    }
+    if (studentsToInsert.some((student) => student.special_needs && !student.sen_teacher_name)) {
+        throw new BadRequestError('Every student with special needs must have a senTeacherName');
     }
 
     const { data, error } = await supabase

@@ -921,7 +921,7 @@ function MarksSection({ klass, classId, roster, teacherId }) {
 
 const EMPTY_REQUEST = {
     name: '', gender: '', dateOfBirth: '', guardianName: '',
-    guardianPhone: '', guardianEmail: '', specialNeeds: false, specialNeedsNote: '',
+    guardianPhone: '', guardianEmail: '', specialNeeds: false, senTeacherName: '', specialNeedsNote: '',
 };
 
 /*
@@ -947,6 +947,11 @@ export function AddStudentDialog({ open, onClose, className, onSubmitted }) {
         if (saving) return;
         setSaving(true);
         setError('');
+        if (form.specialNeeds && !form.senTeacherName.trim()) {
+            setError('Assigned SEN Teacher is required when special needs is on.');
+            setSaving(false);
+            return;
+        }
         try {
             const requestState = await studentRequestApi.create({
                 name: form.name.trim(),
@@ -956,6 +961,7 @@ export function AddStudentDialog({ open, onClose, className, onSubmitted }) {
                 guardianPhone: form.guardianPhone.trim() || null,
                 guardianEmail: form.guardianEmail.trim() || null,
                 specialNeeds: form.specialNeeds,
+                senTeacherName: form.specialNeeds ? form.senTeacherName.trim() : null,
                 specialNeedsNote: form.specialNeedsNote.trim() || null,
             });
             reset();
@@ -996,13 +1002,24 @@ export function AddStudentDialog({ open, onClose, className, onSubmitted }) {
                         control={(
                             <Switch
                                 checked={form.specialNeeds}
-                                onChange={(e) => setForm((f) => ({ ...f, specialNeeds: e.target.checked }))}
+                                onChange={(e) => setForm((f) => ({
+                                    ...f,
+                                    specialNeeds: e.target.checked,
+                                    senTeacherName: e.target.checked ? f.senTeacherName : '',
+                                }))}
                             />
                         )}
                         label="Special educational needs"
                     />
                     {form.specialNeeds && (
-                        <TextField label="Support note" multiline minRows={2} {...field('specialNeedsNote')} />
+                        <>
+                            <TextField
+                                label="Assigned SEN Teacher" required
+                                {...field('senTeacherName')}
+                                helperText="Enter the SEN teacher assigned to this student."
+                            />
+                            <TextField label="Support note" multiline minRows={2} {...field('specialNeedsNote')} />
+                        </>
                     )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
@@ -1207,6 +1224,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                 <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
                                 <TableCell sx={{ width: 130, fontWeight: 700 }}>Admission</TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>Student name</TableCell>
+                                <TableCell sx={{ width: 170, fontWeight: 700 }}>SEN Teacher</TableCell>
                                 <TableCell sx={{ width: 150, fontWeight: 700 }}>Guardian phone</TableCell>
                                 {teacherPaymentsEnabled && (
                                     <TableCell sx={{ width: 130, fontWeight: 700 }}>Payment</TableCell>
@@ -1220,6 +1238,9 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                     <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNo || '—'}</TableCell>
                                     <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
+                                    <TableCell sx={{ fontSize: 12.5 }}>
+                                        {s.specialNeeds ? (s.senTeacherName || 'Not assigned') : '—'}
+                                    </TableCell>
                                     <TableCell sx={{ fontSize: 12.5 }}>{s.guardianPhone || '—'}</TableCell>
                                     {teacherPaymentsEnabled && (
                                         <TableCell>

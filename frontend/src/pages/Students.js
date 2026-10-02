@@ -25,7 +25,7 @@ import { compressStudentPhoto } from '../utils/studentPhotos';
 const EMPTY = {
     admissionNo: '', name: '', rollNum: '', classId: '', gender: '',
     guardianName: '', guardianPhone: '', guardianEmail: '',
-    specialNeeds: false, specialNeedsNote: '',
+    specialNeeds: false, specialNeedsNote: '', senTeacherName: '',
 };
 
 export default function Students() {
@@ -136,6 +136,7 @@ export default function Students() {
                 guardianEmail: s.guardianEmail || '',
                 specialNeeds: Boolean(s.specialNeeds),
                 specialNeedsNote: s.specialNeedsNote || '',
+                senTeacherName: s.senTeacherName || '',
             },
         });
     };
@@ -149,6 +150,11 @@ export default function Students() {
         setSaving(true);
         setFormError('');
         const v = dialog.values;
+        if (v.specialNeeds && !v.senTeacherName.trim()) {
+            setFormError('Assigned SEN Teacher is required when special needs is on.');
+            setSaving(false);
+            return;
+        }
 
         // Strip empty optionals so the API's `optional()` validators apply.
         const payload = {
@@ -162,6 +168,7 @@ export default function Students() {
             guardianEmail: v.guardianEmail || null,
             specialNeeds: v.specialNeeds,
             specialNeedsNote: v.specialNeedsNote || null,
+            senTeacherName: v.specialNeeds ? v.senTeacherName.trim() : null,
         };
 
         try {
@@ -267,9 +274,9 @@ export default function Students() {
 
     const downloadTemplate = () => {
         const csv = [
-            'admissionNo,name,rollNum,dateOfBirth,gender,guardianName,guardianPhone,guardianEmail,specialNeeds,specialNeedsNote',
-            'STU001,"John Doe",1,2010-05-15,male,"Jane Doe","+251 91 123 4567","jane@example.com",yes,"Needs extra math support"',
-            'STU002,"Mary Smith",2,2010-08-22,female,"Mark Smith","+251 92 234 5678","mark@example.com",no,',
+            'admissionNo,name,rollNum,dateOfBirth,gender,guardianName,guardianPhone,guardianEmail,specialNeeds,senTeacherName,specialNeedsNote',
+            'STU001,"John Doe",1,2010-05-15,male,"Jane Doe","+251 91 123 4567","jane@example.com",yes,"Ms Hana","Needs extra math support"',
+            'STU002,"Mary Smith",2,2010-08-22,female,"Mark Smith","+251 92 234 5678","mark@example.com",no,,',
         ].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
@@ -323,6 +330,12 @@ export default function Students() {
     };
 
     const rows = students.data || [];
+    const senTeacherSummary = Object.entries(rows.reduce((counts, student) => {
+        if (student.specialNeeds && student.senTeacherName) {
+            counts[student.senTeacherName] = (counts[student.senTeacherName] || 0) + 1;
+        }
+        return counts;
+    }, {})).sort((a, b) => a[0].localeCompare(b[0]));
 
     return (
         <>
@@ -375,6 +388,11 @@ export default function Students() {
                                     </Typography>
                                 </Box>
                                 <Chip size="small" label={r.className} sx={{ fontWeight: 600 }} />
+                                {r.specialNeeds && (
+                                    <Chip size="small" color="secondary"
+                                        label={`SEN Teacher: ${r.senTeacherName || 'Not assigned'}`}
+                                        sx={{ fontWeight: 600 }} />
+                                )}
                                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
                                     <Button size="small" variant="contained" color="success" disableElevation
                                         data-testid={`approve-${r.id}`} disabled={reqSaving}
@@ -421,6 +439,20 @@ export default function Students() {
                 </Stack>
             </Card>
 
+            {senTeacherSummary.length > 0 && (
+                <Card variant="outlined" sx={{ p: 1.5, mb: 2.5, bgcolor: 'action.hover' }}>
+                    <Typography sx={{ fontWeight: 800, fontSize: 13, mb: 1 }}>
+                        Special-needs teacher list
+                    </Typography>
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        {senTeacherSummary.map(([name, count]) => (
+                            <Chip key={name} size="small" color="secondary"
+                                label={`${name} · ${count} student${count === 1 ? '' : 's'}`} />
+                        ))}
+                    </Stack>
+                </Card>
+            )}
+
             {teacherPaymentsEnabled && termId && !payments.error && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
                     {rows.filter((s) => payMap[s.id]?.status).length} of {rows.length} shown are paid for {termName}
@@ -443,6 +475,7 @@ export default function Students() {
                                 <TableCell>Class</TableCell>
                                 <TableCell>Guardian</TableCell>
                                 <TableCell>Flags</TableCell>
+                                <TableCell>SEN Teacher</TableCell>
                                 {teacherPaymentsEnabled && <TableCell>Payment</TableCell>}
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
@@ -473,6 +506,7 @@ export default function Students() {
                                             </Tooltip>
                                         )}
                                     </TableCell>
+                                    <TableCell>{s.specialNeeds ? (s.senTeacherName || 'Not assigned') : '—'}</TableCell>
                                     {teacherPaymentsEnabled && (
                                         <TableCell>
                                             {payments.error || !termId ? <span>—</span> : (
@@ -613,14 +647,34 @@ export default function Students() {
                                 />
                             </Stack>
                             <FormControlLabel
-                                control={<Switch checked={dialog.values.specialNeeds} onChange={setField('specialNeeds')} />}
+                                control={(
+                                    <Switch
+                                        checked={dialog.values.specialNeeds}
+                                        onChange={(e) => setDialog((d) => ({
+                                            ...d,
+                                            values: {
+                                                ...d.values,
+                                                specialNeeds: e.target.checked,
+                                                senTeacherName: e.target.checked ? d.values.senTeacherName : '',
+                                            },
+                                        }))}
+                                    />
+                                )}
                                 label="Has special educational needs"
                             />
                             {dialog.values.specialNeeds && (
-                                <TextField
-                                    label="Support notes" multiline rows={2} fullWidth
-                                    value={dialog.values.specialNeedsNote} onChange={setField('specialNeedsNote')}
-                                />
+                                <>
+                                    <TextField
+                                        label="Assigned SEN Teacher" required fullWidth
+                                        value={dialog.values.senTeacherName}
+                                        onChange={setField('senTeacherName')}
+                                        helperText="Enter the SEN teacher assigned to this student."
+                                    />
+                                    <TextField
+                                        label="Support notes" multiline rows={2} fullWidth
+                                        value={dialog.values.specialNeedsNote} onChange={setField('specialNeedsNote')}
+                                    />
+                                </>
                             )}
                         </Stack>
                     )}
@@ -746,7 +800,7 @@ export default function Students() {
                                 setFormError('');
                             }}
                             size="small"
-                            helperText="Columns: admissionNo, name, rollNum, dateOfBirth, gender, guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote"
+                            helperText="Columns: admissionNo, name, rollNum, dateOfBirth, gender, guardianName, guardianPhone, guardianEmail, specialNeeds, senTeacherName, specialNeedsNote"
                         />
                         <Box>
                             <Button
