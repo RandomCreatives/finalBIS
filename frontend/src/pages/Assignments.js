@@ -202,51 +202,48 @@ export default function Assignments({ embedded = false, activeTab = 'all' } = {}
                     empty={(classes.data || []).length === 0}
                     emptyMessage="Create classes first."
                 >
-                    <Grid container spacing={2.5}>
-                        {(classes.data || []).map((c) => (
-                            <Grid item xs={12} sm={6} md={4} key={c.id}>
-                                <Card sx={{ height: '100%' }}>
-                                    <CardContent>
-                                        <Typography variant="h6" gutterBottom>{c.name}</Typography>
-
-                                        <Stack spacing={1.5} sx={{ mt: 2 }}>
-                                            {['main', 'assistant'].map((position) => {
-                                                const holder = position === 'main' ? c.mainTeacher : c.assistantTeacher;
-                                                return (
-                                                    <Box key={position}>
-                                                        <Typography variant="caption" color="text.secondary" display="block">
-                                                            {position === 'main' ? 'Main teacher' : 'Assistant teacher'}
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Class</TableCell>
+                                    <TableCell>Main teacher</TableCell>
+                                    <TableCell>Assistant teacher</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {(classes.data || []).map((c) => (
+                                    <TableRow key={c.id} hover>
+                                        <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
+                                        {['main', 'assistant'].map((position) => {
+                                            const holder = position === 'main' ? c.mainTeacher : c.assistantTeacher;
+                                            return (
+                                                <TableCell key={position}>
+                                                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                                        <Typography variant="body2" sx={{ fontWeight: holder ? 500 : 400 }}>
+                                                            {holder?.name || <em style={{ color: '#9ca3af' }}>unassigned</em>}
                                                         </Typography>
-                                                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                                            <Typography variant="body2" sx={{ fontWeight: holder ? 500 : 400 }}>
-                                                                {holder?.name || <em style={{ color: '#9ca3af' }}>unassigned</em>}
-                                                            </Typography>
-                                                            <Button
-                                                                size="small"
-                                                                onClick={() => {
-                                                                    setFormError('');
-                                                                    setStaffDialog({
-                                                                        classId: c.id, className: c.name,
-                                                                        position, userId: holder?.id || '',
-                                                                    });
-                                                                }}
-                                                            >
-                                                                {holder ? 'Change' : 'Assign'}
-                                                            </Button>
-                                                        </Stack>
-                                                    </Box>
-                                                );
-                                            })}
-                                        </Stack>
-
-                                        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-                                            {c.studentCount ?? 0} students
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                        ))}
-                    </Grid>
+                                                        <Button
+                                                            size="small"
+                                                            onClick={() => {
+                                                                setFormError('');
+                                                                setStaffDialog({
+                                                                    classId: c.id, className: c.name,
+                                                                    position, userId: holder?.id || '',
+                                                                });
+                                                            }}
+                                                        >
+                                                            {holder ? 'Change' : 'Assign'}
+                                                        </Button>
+                                                    </Stack>
+                                                </TableCell>
+                                            );
+                                        })}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
                 </DataState>
             </Section>
             )}
