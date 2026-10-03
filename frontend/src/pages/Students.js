@@ -470,6 +470,7 @@ export default function Students() {
                             <TableRow>
                                 <TableCell>Student ID</TableCell>
                                 <TableCell>Name</TableCell>
+                                <TableCell>Gender</TableCell>
                                 <TableCell>Class</TableCell>
                                 <TableCell>Guardian</TableCell>
                                 <TableCell>Flags</TableCell>
@@ -488,6 +489,7 @@ export default function Students() {
                                     >
                                         {s.name}
                                     </TableCell>
+                                    <TableCell>{s.gender ? `${s.gender.charAt(0).toUpperCase()}${s.gender.slice(1)}` : '—'}</TableCell>
                                     <TableCell>{s.class?.name || <em>Unassigned</em>}</TableCell>
                                     <TableCell>
                                         {s.guardianName || '—'}
