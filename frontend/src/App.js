@@ -23,6 +23,7 @@ import NurseLogin from './pages/NurseLogin';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
 import Staff from './pages/Staff';
+import StaffAssignment from './pages/StaffAssignment';
 import Timetable from './pages/Timetable';
 import Attendance from './pages/Attendance';
 import Planning from './pages/Planning';
@@ -66,6 +67,14 @@ export default function App() {
                         >
                             <Route index element={<Dashboard />} />
                             <Route path="students" element={<Students />} />
+                            <Route
+                                path="staff-assignment"
+                                element={
+                                    <RequireAuth roles={['admin']}>
+                                        <StaffAssignment />
+                                    </RequireAuth>
+                                }
+                            />
                             <Route path="staff" element={<Staff />} />
                             <Route path="timetable" element={<Timetable />} />
                             <Route path="attendance" element={<Attendance />} />

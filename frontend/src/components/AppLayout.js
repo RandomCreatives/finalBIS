@@ -14,7 +14,6 @@ import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import TodayIcon from '@mui/icons-material/Today';
 import GradeIcon from '@mui/icons-material/Grade';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import BadgeIcon from '@mui/icons-material/Badge';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
@@ -71,8 +70,7 @@ const NAV_GROUPS = [
         items: [
             { label: 'Students', hint: 'Find students, open ID cards and manage records.', to: '/app/students', icon: <GroupsIcon fontSize="small" /> },
             { label: 'Classes', to: '/app/classes', icon: <ClassIcon fontSize="small" /> },
-            { label: 'Staff', to: '/app/staff', icon: <BadgeIcon fontSize="small" />, roles: ['admin'] },
-            { label: 'Assignments', to: '/app/assignments', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
+            { label: 'Staff Assignment', to: '/app/staff-assignment', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Files', to: '/app/files', icon: <FolderIcon fontSize="small" /> },
             { label: 'Library', to: '/app/library', icon: <MenuBookIcon fontSize="small" />, roles: ['admin', 'librarian'] },

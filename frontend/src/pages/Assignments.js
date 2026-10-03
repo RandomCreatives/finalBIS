@@ -23,7 +23,8 @@ import { Section } from '../components/DashboardSections';
 
 const roleLabel = (r) => (r || '').replace(/_/g, ' ');
 
-export default function Assignments() {
+export default function Assignments({ embedded = false, activeTab = 'all' } = {}) {
+    const show = (tab) => activeTab === 'all' || activeTab === tab;
     const [staffDialog, setStaffDialog] = useState(null);
     const [bulkDialog, setBulkDialog] = useState(null);
     const [rotateDialog, setRotateDialog] = useState(null);
@@ -140,12 +141,14 @@ export default function Assignments() {
 
     return (
         <>
-            <PageHeader
-                title="Assignments"
-                subtitle="Who runs each class, and who teaches each subject."
-            />
+            {!embedded && (
+                <PageHeader
+                    title="Assignments"
+                    subtitle="Who runs each class, and who teaches each subject."
+                />
+            )}
 
-            {(unassigned.data || []).length > 0 && (
+            {show('student-placement') && (unassigned.data || []).length > 0 && (
                 <Alert
                     severity="info"
                     sx={{ mb: 2 }}
@@ -168,7 +171,7 @@ export default function Assignments() {
                 </Alert>
             )}
 
-            {gaps.length > 0 && (
+            {show('class-staffing') && gaps.length > 0 && (
                 <Alert severity="warning" sx={{ mb: 2.5 }}>
                     {gaps.length} class{gaps.length === 1 ? '' : 'es'} still need staffing:{' '}
                     {gaps.slice(0, 4).map((g) => g.className).join(', ')}
@@ -176,8 +179,9 @@ export default function Assignments() {
                 </Alert>
             )}
 
-            <Section
-                title="Class staffing"
+            {show('class-staffing') && (
+                <Section
+                    title="Class staffing"
                 icon={<ClassIcon />}
                 defaultExpanded
                 action={
@@ -245,10 +249,12 @@ export default function Assignments() {
                     </Grid>
                 </DataState>
             </Section>
+            )}
 
             {/* --- Subject teaching ------------------------------------------ */}
-            <Section
-                title="Subject teaching"
+            {show('subject-teaching') && (
+                <Section
+                    title="Subject teaching"
                 icon={<MenuBookIcon />}
                 action={
                     <Stack direction="row" spacing={1.5}>
@@ -308,9 +314,11 @@ export default function Assignments() {
                     </TableContainer>
                 </DataState>
             </Section>
+            )}
 
             {/* --- Students ---------------------------------------------------- */}
-            <Section title="Students" icon={<GroupsIcon />}>
+            {show('student-placement') && (
+                <Section title="Students" icon={<GroupsIcon />}>
                 <DataState
                     loading={unassigned.loading}
                     error={unassigned.error}
@@ -421,9 +429,11 @@ export default function Assignments() {
                     </Grid>
                 </DataState>
             </Section>
+            )}
 
             {/* --- Workload --------------------------------------------------- */}
-            <Section title="Workload" icon={<AssignmentIndIcon />}>
+            {show('workload') && (
+                <Section title="Workload" icon={<AssignmentIndIcon />}>
                 <DataState
                     loading={workload.loading}
                     error={workload.error}
@@ -474,6 +484,7 @@ export default function Assignments() {
                     </TableContainer>
                 </DataState>
             </Section>
+            )}
 
             {/* Assign class staff ---------------------------------------------- */}
             <Dialog open={Boolean(staffDialog)} onClose={() => setStaffDialog(null)} maxWidth="xs" fullWidth>
