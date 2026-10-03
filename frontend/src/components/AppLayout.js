@@ -44,7 +44,7 @@ const NAV_GROUPS = [
         items: [
             { label: 'Dashboard', hint: 'See your school or class overview.', to: '/app', icon: <DashboardIcon fontSize="small" />, end: true },
             { label: 'Calendar', hint: 'Check term dates and school events.', to: '/app/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
-            { label: 'Timetable', to: '/app/timetable', icon: <CalendarMonthIcon fontSize="small" /> },
+            { label: 'Timetable', tag: 'Updated', to: '/app/timetable', icon: <CalendarMonthIcon fontSize="small" /> },
             { label: 'Notices', to: '/app/notices', icon: <NotificationsNoneIcon fontSize="small" /> },
         ],
     },
@@ -125,7 +125,22 @@ function NavButton({ item }) {
                 },
             }}
         >
-                {item.label}
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%' }}>
+                    <Box component="span">{item.label}</Box>
+                    {item.tag && (
+                        <Chip
+                            label={item.tag}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                                ml: 'auto', height: 18, borderRadius: 1,
+                                fontSize: 10, fontWeight: 800, lineHeight: 1,
+                                color: 'inherit', borderColor: 'currentColor',
+                                '& .MuiChip-label': { px: 0.75 },
+                            }}
+                        />
+                    )}
+                </Box>
             </Button>
         </Tooltip>
     );
