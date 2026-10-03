@@ -30,7 +30,7 @@ const ROLES = [
 
 const EMPTY = { name: '', email: '', password: '', role: 'main_teacher' };
 
-export default function Staff() {
+export default function Staff({ embedded = false } = {}) {
     const { user } = useAuth();
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -170,21 +170,26 @@ export default function Staff() {
     };
 
     const rows = staff.data || [];
+    const openCreate = () => { setFormError(''); setDialog({ ...EMPTY }); };
+    const addStaffButton = (
+        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={openCreate}>
+            Add staff
+        </Button>
+    );
 
     return (
         <>
-            <PageHeader
-                title="Staff"
-                subtitle="Accounts, roles and access."
-                action={
-                    <Button
-                        variant="contained" startIcon={<PersonAddIcon />}
-                        onClick={() => { setFormError(''); setDialog({ ...EMPTY }); }}
-                    >
-                        Add staff
-                    </Button>
-                }
-            />
+            {embedded ? (
+                <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+                    {addStaffButton}
+                </Stack>
+            ) : (
+                <PageHeader
+                    title="Staff"
+                    subtitle="Accounts, roles and access."
+                    action={addStaffButton}
+                />
+            )}
 
             <DataState
                 loading={staff.loading}
