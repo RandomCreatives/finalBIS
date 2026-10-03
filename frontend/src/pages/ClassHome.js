@@ -1224,6 +1224,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                 <TableCell sx={{ width: 56, fontWeight: 700 }}>Roll</TableCell>
                                 <TableCell sx={{ width: 130, fontWeight: 700 }}>Admission</TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>Student name</TableCell>
+                                <TableCell sx={{ width: 90, fontWeight: 700 }}>Gender</TableCell>
                                 <TableCell sx={{ width: 170, fontWeight: 700 }}>SEN Teacher</TableCell>
                                 <TableCell sx={{ width: 150, fontWeight: 700 }}>Guardian phone</TableCell>
                                 {teacherPaymentsEnabled && (
@@ -1238,6 +1239,9 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                     <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNo || '—'}</TableCell>
                                     <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
+                                    <TableCell sx={{ fontSize: 12.5 }}>
+                                        {s.gender ? `${s.gender.charAt(0).toUpperCase()}${s.gender.slice(1)}` : '—'}
+                                    </TableCell>
                                     <TableCell sx={{ fontSize: 12.5 }}>
                                         {s.specialNeeds ? (s.senTeacherName || 'Not assigned') : '—'}
                                     </TableCell>
