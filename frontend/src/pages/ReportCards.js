@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Alert, Box, Button, Card, Chip, Divider, MenuItem, Stack, Table, TableBody,
     TableCell, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup,
@@ -132,10 +132,133 @@ function ReportSheet({ card, className, termName, yearName }) {
     );
 }
 
+const BIS_SUBJECT_GROUPS = [
+    ['English'],
+    ['Mathematics', 'Science'],
+    ['History', 'Geography'],
+    ['Amharic', 'Music', 'French'],
+    ['Physical Education', 'Art', 'IT', 'ICT'],
+];
+
+const PREVIEW_OBJECTIVES = [
+    'Principal-defined learning objective will appear here.',
+    'Teacher progress rating will appear here.',
+    'Target and next step will appear here.',
+];
+
+function PreviewSubject({ name, row }) {
+    return (
+        <Box sx={{ border: '1px solid #94a3b8', mb: 1.5, p: 1.5, ...{ fontFamily: '"Times New Roman", Georgia, serif' } }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.75 }}>
+                <Typography sx={{ fontWeight: 900, fontFamily: 'inherit', fontSize: 15 }}>{name}</Typography>
+                <Typography sx={{ fontSize: 11, color: '#475569', fontFamily: 'inherit' }}>
+                    Teacher: To be assigned
+                </Typography>
+            </Stack>
+            <Table size="small" sx={{ '& th, & td': { border: '1px solid #cbd5e1', py: 0.5, fontFamily: 'inherit' } }}>
+                <TableHead>
+                    <TableRow sx={{ bgcolor: '#eef2ff' }}>
+                        <TableCell>Learning objective</TableCell>
+                        <TableCell align="center" sx={{ width: 48 }}>WT</TableCell>
+                        <TableCell align="center" sx={{ width: 48 }}>WW</TableCell>
+                        <TableCell align="center" sx={{ width: 48 }}>WA</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {PREVIEW_OBJECTIVES.map((objective) => (
+                        <TableRow key={objective}>
+                            <TableCell sx={{ fontSize: 11 }}>{objective}</TableCell>
+                            <TableCell align="center" sx={{ color: '#94a3b8' }}>□</TableCell>
+                            <TableCell align="center" sx={{ color: '#94a3b8' }}>□</TableCell>
+                            <TableCell align="center" sx={{ color: '#94a3b8' }}>□</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+            <Stack direction="row" spacing={2} sx={{ mt: 1, fontSize: 11, color: '#475569' }}>
+                <span>Effort: —</span>
+                <span>Exam: {row?.percentage == null ? 'N/A' : `${row.percentage}%`}</span>
+                <span>Targets: To be defined</span>
+            </Stack>
+        </Box>
+    );
+}
+
+function BISPreviewPage({ pageNumber, title, children, student, className, termName, yearName }) {
+    const font = { fontFamily: '"Times New Roman", Georgia, serif' };
+    return (
+        <Box sx={{
+            bgcolor: '#fff', color: '#0f172a', border: '2px solid #1e3a8a',
+            p: { xs: 2, sm: 3 }, mb: 3, maxWidth: 900, mx: 'auto',
+            minHeight: { sm: 680 }, pageBreakAfter: 'always', ...font,
+        }}>
+            <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+                <Box sx={{ width: 40, height: 40, bgcolor: '#1e3a8a', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 18 }}>
+                    B
+                </Box>
+                <Box sx={{ flexGrow: 1 }}>
+                    <Typography sx={{ fontWeight: 900, fontSize: 18, lineHeight: 1.1, ...font }}>British International School</Typography>
+                    <Typography sx={{ fontSize: 11, color: '#475569', ...font }}>Gerji Primary 2</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                    <Typography sx={{ fontWeight: 900, fontSize: 13, ...font }}>{termName?.toUpperCase()} REPORT CARD</Typography>
+                    <Typography sx={{ fontSize: 11, color: '#475569', ...font }}>Page {pageNumber} of 5 · {yearName}</Typography>
+                </Box>
+            </Stack>
+            <Divider sx={{ borderColor: '#1e3a8a', mb: 1.5 }} />
+            <Stack direction="row" spacing={2.5} flexWrap="wrap" sx={{ mb: 1.5, ...font }}>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 12 }}><b>Student:</b> {student.name}</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 12 }}><b>Class:</b> {className}</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 12 }}><b>Roll:</b> {student.rollNum || '—'}</Typography>
+            </Stack>
+            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 1, ...font }}>{title}</Typography>
+            {children}
+        </Box>
+    );
+}
+
+function BISReportPreview({ card, className, termName, yearName }) {
+    const rowBySubject = Object.fromEntries(card.rows.map((row) => [row.subject.name, row]));
+    const pageGroups = BIS_SUBJECT_GROUPS.map((group) => group.filter((name) =>
+        name in rowBySubject || ['History', 'Geography', 'IT'].includes(name)
+    ));
+    return (
+        <Box data-testid="bis-report-preview">
+            <Alert severity="info" sx={{ mb: 2, maxWidth: 900, mx: 'auto' }}>
+                Preview only. No report-card data is saved. Objectives, ratings, targets and teacher names will come from the Principal-approved report-card setup.
+            </Alert>
+            <BISPreviewPage pageNumber={1} title="English and Work Habits & Social Skills" student={card.student} className={className} termName={termName} yearName={yearName}>
+                <PreviewSubject name="English" row={rowBySubject.English} />
+                <Box sx={{ border: '1px solid #94a3b8', p: 1.5, mt: 2, ...{ fontFamily: '"Times New Roman", Georgia, serif' } }}>
+                    <Typography sx={{ fontWeight: 900, mb: 1, fontFamily: 'inherit' }}>Work Habits and Social Skills</Typography>
+                    <Typography sx={{ fontSize: 11, color: '#475569', mb: 1, fontFamily: 'inherit' }}>Rating scale: Pleasing (P) · Good (G) · Satisfactory (S) · Needs improvement (N)</Typography>
+                    <Table size="small" sx={{ '& th, & td': { border: '1px solid #cbd5e1', py: 0.45, fontFamily: 'inherit', fontSize: 11 } }}>
+                        <TableBody>
+                            <TableRow><TableCell>Days absent</TableCell><TableCell align="center">—</TableCell><TableCell>Days late</TableCell><TableCell align="center">—</TableCell></TableRow>
+                            {['Comes prepared and ready to learn', 'Uses class time effectively', 'Listens attentively', 'Participates in activities', 'Works cooperatively', 'Follows directions', 'Shows respect and kindness'].map((item) => (
+                                <TableRow key={item}><TableCell colSpan={2}>{item}</TableCell><TableCell colSpan={2} align="center">—</TableCell></TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    <Typography sx={{ mt: 1, fontSize: 11, fontFamily: 'inherit' }}>Main teacher: __________________________</Typography>
+                </Box>
+            </BISPreviewPage>
+            {pageGroups.slice(1).map((group, index) => (
+                <BISPreviewPage key={group.join('-')} pageNumber={index + 2} title={group.join(' and ')} student={card.student} className={className} termName={termName} yearName={yearName}>
+                    {group.length === 0
+                        ? <Typography sx={{ color: '#64748b', fontFamily: 'inherit' }}>Subject sections will appear here when configured.</Typography>
+                        : group.map((name) => <PreviewSubject key={name} name={name} row={rowBySubject[name]} />)}
+                </BISPreviewPage>
+            ))}
+        </Box>
+    );
+}
+
 export default function ReportCards() {
     const [classId, setClassId] = useState('');
     const [termId, setTermId] = useState('');
     const [view, setView] = useState('grid');
+    const [previewStudentId, setPreviewStudentId] = useState('');
 
     const classes = useApi(() => classApi.list(), []);
     const subjects = useApi(() => subjectApi.list(), []);
@@ -166,6 +289,14 @@ export default function ReportCards() {
     );
 
     const cols = (subjects.data || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+
+    useEffect(() => {
+        if (!cards.some((card) => card.student.id === previewStudentId)) {
+            setPreviewStudentId(cards[0]?.student.id || '');
+        }
+    }, [cards, previewStudentId]);
+
+    const previewCard = cards.find((card) => card.student.id === previewStudentId) || cards[0] || null;
 
     return (
         <>
@@ -225,7 +356,21 @@ export default function ReportCards() {
                         <ToggleButton value="print" sx={{ textTransform: 'none', fontWeight: 700 }}>
                             <PrintIcon sx={{ mr: 0.5, fontSize: 18 }} /> Print cards
                         </ToggleButton>
+                        <ToggleButton value="bis-preview" sx={{ textTransform: 'none', fontWeight: 700 }}>
+                            BIS preview
+                        </ToggleButton>
                     </ToggleButtonGroup>
+                    {view === 'bis-preview' && cards.length > 0 && (
+                        <TextField
+                            select label="Preview student" size="small" sx={{ minWidth: 220 }}
+                            value={previewStudentId || cards[0].student.id}
+                            onChange={(e) => setPreviewStudentId(e.target.value)}
+                        >
+                            {cards.map((card) => (
+                                <MenuItem key={card.student.id} value={card.student.id}>{card.student.name}</MenuItem>
+                            ))}
+                        </TextField>
+                    )}
                 </Stack>
             </Card>
 
@@ -280,7 +425,7 @@ export default function ReportCards() {
                                 </TableBody>
                             </Table>
                         </Card>
-                    ) : (
+                    ) : view === 'print' ? (
                         <div id="report-print-area" data-testid="report-print-area">
                             <Typography variant="caption" color="text.secondary"
                                 sx={{ display: 'block', mb: 2 }}
@@ -298,6 +443,15 @@ export default function ReportCards() {
                                 />
                             ))}
                         </div>
+                    ) : previewCard ? (
+                        <BISReportPreview
+                            card={previewCard}
+                            className={className}
+                            termName={termName}
+                            yearName={yearName}
+                        />
+                    ) : (
+                        <Alert severity="info">Choose a student for the detailed preview.</Alert>
                     )}
                 </DataState>
             )}
