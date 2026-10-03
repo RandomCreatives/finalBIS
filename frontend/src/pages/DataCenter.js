@@ -1,7 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 import {
     AppBar, Avatar, Box, Button, Card, CardContent, Chip, Container, Divider, Grid,
-    LinearProgress, Stack, Switch, FormControlLabel, Toolbar, Typography, useTheme,
+    LinearProgress, Stack, Switch, FormControlLabel, Table, TableBody, TableCell, TableHead, TableRow, Toolbar, Typography, useTheme,
 } from '@mui/material';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -219,6 +219,38 @@ export default function DataCenter() {
                                     )}
                                     {s.totalStudents === 0 && (
                                         <Typography variant="body2" color="text.secondary">No students on roll yet.</Typography>
+                                    )}
+                                    {(s.genderByClass || []).length > 0 && (
+                                        <>
+                                            <Divider sx={{ my: 2 }} />
+                                            <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 800 }}>
+                                                Gender split by class
+                                            </Typography>
+                                            <Box sx={{ overflowX: 'auto' }}>
+                                                <Table size="small">
+                                                    <TableHead>
+                                                        <TableRow>
+                                                            <TableCell sx={{ fontWeight: 800, px: 0.75 }}>Class</TableCell>
+                                                            <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Male</TableCell>
+                                                            <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Female</TableCell>
+                                                            <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Other</TableCell>
+                                                            <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Not set</TableCell>
+                                                        </TableRow>
+                                                    </TableHead>
+                                                    <TableBody>
+                                                        {s.genderByClass.map((row) => (
+                                                            <TableRow key={row.className}>
+                                                                <TableCell sx={{ px: 0.75, whiteSpace: 'nowrap' }}>{row.className}</TableCell>
+                                                                <TableCell align="right" sx={{ px: 0.75 }}>{row.male}</TableCell>
+                                                                <TableCell align="right" sx={{ px: 0.75 }}>{row.female}</TableCell>
+                                                                <TableCell align="right" sx={{ px: 0.75 }}>{row.other}</TableCell>
+                                                                <TableCell align="right" sx={{ px: 0.75 }}>{row.notSet}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </Box>
+                                        </>
                                     )}
                                 </LeaderboardCard>
                             </Grid>

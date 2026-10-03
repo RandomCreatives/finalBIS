@@ -40,6 +40,7 @@ const getStats = asyncHandler(async (req, res) => {
             teachersByRole: {},
             totalSubjects: 0,
             studentsByClass: [],
+            genderByClass: [],
             attendanceRate: null,
         });
     }
@@ -94,7 +95,7 @@ const getStats = asyncHandler(async (req, res) => {
             .eq('school_id', schoolId),
         supabase
             .from('students')
-            .select('class_id, class:classes(name)')
+            .select('class_id, gender, class:classes(name)')
             .eq('school_id', schoolId)
             .eq('is_active', true)
             .not('class_id', 'is', null),
@@ -115,14 +116,28 @@ const getStats = asyncHandler(async (req, res) => {
         roleCounts[s.role] = (roleCounts[s.role] || 0) + 1;
     });
 
-    // Students per class (only classes that have students on roll)
+    // Students per class, including the gender split for each active class roll.
     const classMap = new Map();
+    const genderMap = new Map();
     (classRollsRes.data || []).forEach((row) => {
         const name = row.class?.name || 'Unassigned';
         classMap.set(name, (classMap.get(name) || 0) + 1);
+        if (!genderMap.has(name)) genderMap.set(name, { male: 0, female: 0, other: 0, notSet: 0 });
+        const split = genderMap.get(name);
+        if (row.gender === 'male') split.male += 1;
+        else if (row.gender === 'female') split.female += 1;
+        else if (row.gender === 'other') split.other += 1;
+        else split.notSet += 1;
     });
     const studentsByClass = [...classMap.entries()]
         .map(([name, count]) => ({ className: name, count }))
+        .sort((a, b) => a.className.localeCompare(b.className));
+    const genderByClass = [...genderMap.entries()]
+        .map(([className, split]) => ({
+            className,
+            ...split,
+            total: split.male + split.female + split.other + split.notSet,
+        }))
         .sort((a, b) => a.className.localeCompare(b.className));
 
     // Attendance rate: present and late count as attended.
@@ -142,6 +157,7 @@ const getStats = asyncHandler(async (req, res) => {
         teachersByRole: roleCounts,
         totalSubjects: subjectsRes.count ?? 0,
         studentsByClass,
+        genderByClass,
         attendanceRate,
     };
 
@@ -167,6 +183,17 @@ const getStats = asyncHandler(async (req, res) => {
         Object.entries(roleCounts).forEach(([role, count]) => {
             sheet.addRow({ metric: `Teachers (${role})`, value: count });
         });
+
+        const genderSheet = workbook.addWorksheet('Gender by Class');
+        genderSheet.columns = [
+            { header: 'Class', key: 'className', width: 24 },
+            { header: 'Male', key: 'male', width: 12 },
+            { header: 'Female', key: 'female', width: 12 },
+            { header: 'Other', key: 'other', width: 12 },
+            { header: 'Not set', key: 'notSet', width: 12 },
+            { header: 'Total', key: 'total', width: 12 },
+        ];
+        stats.genderByClass.forEach((row) => genderSheet.addRow(row));
 
         res.setHeader(
             'Content-Type',
