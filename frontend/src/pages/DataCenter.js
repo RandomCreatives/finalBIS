@@ -132,7 +132,7 @@ export default function DataCenter() {
     const s = stats.data;
     const a = academic.data;
 
-    const genderMax = Math.max(s?.maleStudents || 0, s?.femaleStudents || 0, s?.otherGenderStudents || 0, 1);
+    const genderMax = Math.max(s?.maleStudents || 0, s?.femaleStudents || 0, 1);
     const classMax = Math.max(...(s?.studentsByClass || []).map((c) => c.count), 1);
 
     return (
@@ -214,9 +214,6 @@ export default function DataCenter() {
                                 <LeaderboardCard title="Gender Split" icon={<GroupsIcon />}>
                                     <GenderBar label="Male" value={s.maleStudents} max={genderMax} color="#3b82f6" />
                                     <GenderBar label="Female" value={s.femaleStudents} max={genderMax} color="#ec4899" />
-                                    {s.otherGenderStudents > 0 && (
-                                        <GenderBar label="Other" value={s.otherGenderStudents} max={genderMax} color="#8b5cf6" />
-                                    )}
                                     {s.totalStudents === 0 && (
                                         <Typography variant="body2" color="text.secondary">No students on roll yet.</Typography>
                                     )}
@@ -233,7 +230,6 @@ export default function DataCenter() {
                                                             <TableCell sx={{ fontWeight: 800, px: 0.75 }}>Class</TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Male</TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Female</TableCell>
-                                                            <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Other</TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 800, px: 0.75 }}>Not set</TableCell>
                                                         </TableRow>
                                                     </TableHead>
@@ -243,7 +239,6 @@ export default function DataCenter() {
                                                                 <TableCell sx={{ px: 0.75, whiteSpace: 'nowrap' }}>{row.className}</TableCell>
                                                                 <TableCell align="right" sx={{ px: 0.75 }}>{row.male}</TableCell>
                                                                 <TableCell align="right" sx={{ px: 0.75 }}>{row.female}</TableCell>
-                                                                <TableCell align="right" sx={{ px: 0.75 }}>{row.other}</TableCell>
                                                                 <TableCell align="right" sx={{ px: 0.75 }}>{row.notSet}</TableCell>
                                                             </TableRow>
                                                         ))}

@@ -189,7 +189,6 @@ const getStats = asyncHandler(async (req, res) => {
             { header: 'Class', key: 'className', width: 24 },
             { header: 'Male', key: 'male', width: 12 },
             { header: 'Female', key: 'female', width: 12 },
-            { header: 'Other', key: 'other', width: 12 },
             { header: 'Not set', key: 'notSet', width: 12 },
             { header: 'Total', key: 'total', width: 12 },
         ];
