@@ -1042,6 +1042,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [genderSavingId, setGenderSavingId] = useState(null);
     const [toast, setToast] = useState('');
 
     // Payment is an office responsibility. Admins can switch this school-wide
@@ -1115,6 +1116,19 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
             setToast(err.message || 'Could not save changes');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleGenderChange = async (studentId, gender) => {
+        setGenderSavingId(studentId);
+        try {
+            await studentApi.update(studentId, { gender: gender || null });
+            await reload();
+            setToast('Gender updated');
+        } catch (err) {
+            setToast(err.message || 'Could not update gender');
+        } finally {
+            setGenderSavingId(null);
         }
     };
 
@@ -1239,8 +1253,22 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                                     <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? '—'}</TableCell>
                                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{s.admissionNo || '—'}</TableCell>
                                     <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
-                                    <TableCell sx={{ fontSize: 12.5 }}>
-                                        {s.gender ? `${s.gender.charAt(0).toUpperCase()}${s.gender.slice(1)}` : '—'}
+                                    <TableCell onClick={(event) => event.stopPropagation()}>
+                                        <TextField
+                                            select size="small" value={s.gender || ''}
+                                            disabled={genderSavingId === s.id}
+                                            onChange={(event) => handleGenderChange(s.id, event.target.value)}
+                                            SelectProps={{ displayEmpty: true }}
+                                            inputProps={{ 'aria-label': `Gender for ${s.name}` }}
+                                            sx={{
+                                                minWidth: 92,
+                                                '& .MuiInputBase-input': { fontSize: 12.5, py: 0.65 },
+                                            }}
+                                        >
+                                            <MenuItem value=""><em>Not set</em></MenuItem>
+                                            <MenuItem value="male">Male</MenuItem>
+                                            <MenuItem value="female">Female</MenuItem>
+                                        </TextField>
                                     </TableCell>
                                     <TableCell sx={{ fontSize: 12.5 }}>
                                         {s.specialNeeds ? (s.senTeacherName || 'Not assigned') : '—'}
