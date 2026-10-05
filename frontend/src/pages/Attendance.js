@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Alert, Button, Card, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
     MenuItem, Paper, Snackbar, Stack, Tab, Table, TableBody, TableCell, TableContainer,
@@ -193,11 +194,12 @@ function MonthlySubmissions() {
 export default function Attendance() {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
+    const [searchParams] = useSearchParams();
 
     const [tab, setTab] = useState(0);
-    const [classId, setClassId] = useState('');
+    const [classId, setClassId] = useState(searchParams.get('classId') || '');
     const [subjectId, setSubjectId] = useState('');
-    const [date, setDate] = useState(today());
+    const [date, setDate] = useState(searchParams.get('date') || today());
     const [marks, setMarks] = useState({});
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');

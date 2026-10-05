@@ -12,14 +12,30 @@ const today = () => new Date().toISOString().slice(0, 10);
  */
 const getAdminSummary = asyncHandler(async (req, res) => {
     const schoolId = req.user.school_id;
+    const todayIso = today();
+    const todayDate = new Date(`${todayIso}T00:00:00Z`);
+    const dayOfWeek = todayDate.getUTCDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(todayDate);
+    monday.setUTCDate(monday.getUTCDate() + mondayOffset);
+    const weekDates = Array.from({ length: 5 }, (_, index) => {
+        const date = new Date(monday);
+        date.setUTCDate(monday.getUTCDate() + index);
+        return date.toISOString().slice(0, 10);
+    });
 
     const countOf = (table, apply = (q) => q) =>
         apply(supabase.from(table).select('id', { count: 'exact', head: true }).eq('school_id', schoolId));
 
-    const [students, classes, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceToday] =
+    const [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceToday, attendanceWeekRows] =
         await Promise.all([
             countOf('students', (q) => q.eq('is_active', true)),
             countOf('classes'),
+            supabase
+                .from('classes')
+                .select('id, name')
+                .eq('school_id', schoolId)
+                .order('name'),
             countOf('users', (q) => q.eq('is_active', true)),
             countOf('library_loans', (q) => q.eq('status', 'borrowed')),
             countOf('library_loans', (q) => q.eq('status', 'borrowed').lt('due_on', today())),
@@ -30,16 +46,33 @@ const getAdminSummary = asyncHandler(async (req, res) => {
                 .from('attendance')
                 .select('status')
                 .eq('school_id', schoolId)
-                .eq('date', today())
+                .eq('date', todayIso)
+                .is('subject_id', null),
+            supabase
+                .from('attendance')
+                .select('class_id, date')
+                .eq('school_id', schoolId)
+                .in('date', weekDates)
                 .is('subject_id', null),
         ]);
 
-    for (const r of [students, classes, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceToday]) {
+    for (const r of [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceToday, attendanceWeekRows]) {
         if (r.error) throw r.error;
     }
 
     const records = attendanceToday.data || [];
     const present = records.filter((r) => r.status === 'present' || r.status === 'late').length;
+    const markedCells = new Set((attendanceWeekRows.data || []).map((row) => `${row.class_id}|${row.date}`));
+    const dayLabels = ['M', 'Tu', 'W', 'Th', 'F'];
+    const attendanceWeek = {
+        today: todayIso,
+        days: weekDates.map((date, index) => ({ date, label: dayLabels[index] })),
+        classes: (classRows.data || []).map((klass) => ({
+            id: klass.id,
+            name: klass.name,
+            days: weekDates.map((date) => ({ date, marked: markedCells.has(`${klass.id}|${date}`) })),
+        })),
+    };
 
     res.json({
         students: students.count ?? 0,
@@ -55,6 +88,7 @@ const getAdminSummary = asyncHandler(async (req, res) => {
             present,
             rate: records.length ? Number(((present / records.length) * 100).toFixed(1)) : null,
         },
+        attendanceWeek,
     });
 });
 

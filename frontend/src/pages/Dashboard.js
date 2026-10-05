@@ -1,7 +1,7 @@
 import { Link as RouterLink, Navigate } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem,
-    ListItemText, Stack, Typography,
+    ListItemText, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ClassIcon from '@mui/icons-material/Class';
@@ -11,6 +11,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import SyncAltIcon from '@mui/icons-material/SyncAlt';
@@ -220,6 +221,71 @@ function DataFlowCommandCenter() {
     );
 }
 
+function AttendanceWeekGrid({ data }) {
+    const days = data?.days || [];
+    const classes = data?.classes || [];
+    return (
+        <Card>
+            <CardContent sx={{ p: 2.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                    <Box>
+                        <Typography variant="h6">Attendance this week</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            Green tick means attendance has been saved for that class and day.
+                        </Typography>
+                    </Box>
+                    <Button size="small" component={RouterLink} to="/app/attendance" sx={{ fontWeight: 800 }}>
+                        Open attendance
+                    </Button>
+                </Stack>
+                {classes.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">No classes found.</Typography>
+                ) : (
+                    <Box sx={{ overflowX: 'auto' }}>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Class</TableCell>
+                                    {days.map((day) => (
+                                        <TableCell key={day.date} align="center" sx={{ fontWeight: 800, minWidth: 48 }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 800 }}>{day.label}</Typography>
+                                            <Typography variant="caption" color="text.secondary">{day.date.slice(8)}</Typography>
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {classes.map((klass) => (
+                                    <TableRow key={klass.id} hover>
+                                        <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{klass.name}</TableCell>
+                                        {klass.days.map((day) => (
+                                            <TableCell key={day.date} align="center">
+                                                <Button
+                                            component={RouterLink}
+                                            to={`/app/attendance?classId=${klass.id}&date=${day.date}`}
+                                            size="small"
+                                            aria-label={`${klass.name} ${day.date} attendance`}
+                                            sx={{ minWidth: 32, p: 0.25, borderRadius: 1 }}
+                                        >
+                                            {day.marked ? (
+                                                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 21, verticalAlign: 'middle' }} aria-label="Attendance taken" />
+                                            ) : (
+                                                <Box component="span" aria-label="Attendance not taken" sx={{ color: 'divider', fontSize: 22, lineHeight: 1 }}>□</Box>
+                                            )}
+                                        </Button>
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Box>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 /** School-wide view for administrators. */
 function AdminDashboard() {
     const { data, loading, error } = useApi(() => dashboardApi.summary(), []);
@@ -245,6 +311,10 @@ function AdminDashboard() {
                             hint={`${data.openTasks} open task(s)`}
                             color={data.openThreads > 0 ? 'warning.main' : 'success.main'}
                         />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <AttendanceWeekGrid data={data.attendanceWeek} />
                     </Grid>
 
                     <Grid item xs={12} md={6}>
