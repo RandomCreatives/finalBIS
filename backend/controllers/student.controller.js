@@ -400,7 +400,7 @@ const transferStudent = asyncHandler(async (req, res) => {
     // Teachers may only transfer students out of their own classes.
     const { data: source, error: sourceError } = await supabase
         .from('students')
-        .select('id, class_id')
+        .select('id, name, class_id')
         .eq('id', req.params.id)
         .eq('school_id', req.user.school_id)
         .maybeSingle();
@@ -408,6 +408,37 @@ const transferStudent = asyncHandler(async (req, res) => {
     if (sourceError) throw sourceError;
     if (!source) throw new NotFoundError('Student not found');
     await assertClassAccess(req, source.class_id);
+
+    // An idempotent retry should not create another transfer row or duplicate
+    // the student in the destination class.
+    if (source.class_id === toClassId) {
+        const current = await supabase
+            .from('students')
+            .select(SELECT)
+            .eq('id', source.id)
+            .eq('school_id', req.user.school_id)
+            .single();
+        if (current.error) throw current.error;
+        return res.json({ message: 'Student is already in that class', student: shape(current.data) });
+    }
+
+    // A same-name student may be a different child. Do not merge or create a
+    // second-looking roster entry automatically; warn the user instead.
+    const { data: sameName, error: sameNameError } = await supabase
+        .from('students')
+        .select('id, name, admission_no')
+        .eq('school_id', req.user.school_id)
+        .eq('class_id', toClassId)
+        .eq('is_active', true)
+        .ilike('name', source.name)
+        .limit(1)
+        .maybeSingle();
+    if (sameNameError) throw sameNameError;
+    if (sameName && sameName.id !== source.id) {
+        throw new ConflictError(
+            `${sameName.name} is already in the destination class (${sameName.admission_no}). Check the Student ID before transferring.`
+        );
+    }
 
     let { data, error } = await supabase.rpc('transfer_student', {
         p_student_id: req.params.id,
