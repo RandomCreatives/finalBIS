@@ -140,6 +140,83 @@ const BIS_SUBJECT_GROUPS = [
     ['Physical Education', 'Art', 'IT', 'ICT'],
 ];
 
+const formatReportDate = (value) => {
+    if (!value) return '—';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+const monthYearFromTerm = (term) => {
+    if (!term?.endsOn) return '—';
+    const date = new Date(`${term.endsOn}T00:00:00`);
+    return Number.isNaN(date.getTime())
+        ? '—'
+        : date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+};
+
+function BISSummaryPage({ student, className, termName, term, homeroomTeacher, yearName }) {
+    const font = { fontFamily: '"Times New Roman", Georgia, serif' };
+    return (
+        <Box sx={{
+            bgcolor: '#fff', color: '#0f172a', border: '2px solid #1e3a8a',
+            p: { xs: 2, sm: 3 }, mb: 3, maxWidth: 900, mx: 'auto',
+            minHeight: { sm: 680 }, pageBreakAfter: 'always', ...font,
+        }}>
+            <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa logo"
+                sx={{ display: 'block', width: { xs: '75%', sm: 360 }, height: 'auto', mx: 'auto', mb: 1.5 }} />
+            <Typography align="center" sx={{ fontWeight: 800, fontSize: 14, ...font }}>Gerji Campus</Typography>
+            <Typography align="center" sx={{ fontSize: 13, mt: 0.25, ...font }}>{monthYearFromTerm(term)}</Typography>
+            <Typography align="center" sx={{ fontWeight: 900, fontSize: 20, mt: 0.25, mb: 2, ...font }}>
+                {termName} Report
+            </Typography>
+
+            <Table size="small" sx={{ mb: 2, '& td': { border: '1px solid #94a3b8', py: 0.75, fontFamily: 'inherit' } }}>
+                <TableBody>
+                    <TableRow>
+                        <TableCell><b>Student's Name:</b> {student.name}</TableCell>
+                        <TableCell><b>Gender:</b> {student.gender ? `${student.gender.charAt(0).toUpperCase()}${student.gender.slice(1)}` : '—'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell><b>Grade:</b> {className || '—'}</TableCell>
+                        <TableCell><b>Date of Birth:</b> {formatReportDate(student.dateOfBirth)}</TableCell>
+                    </TableRow>
+                </TableBody>
+            </Table>
+
+            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.75, ...font }}>Letter Grade Work Habits</Typography>
+            <Table size="small" sx={{ mb: 2, '& th, & td': { border: '1px solid #cbd5e1', py: 0.6, fontFamily: 'inherit', fontSize: 11 } }}>
+                <TableHead><TableRow><TableCell sx={{ fontWeight: 800 }}>Grade</TableCell><TableCell sx={{ fontWeight: 800 }}>Meaning</TableCell></TableRow></TableHead>
+                <TableBody>
+                    <TableRow><TableCell><b>E — Excellent</b></TableCell><TableCell>The student has demonstrated the required knowledge and skills with a high degree of effectiveness. Achievement surpasses the standard.</TableCell></TableRow>
+                    <TableRow><TableCell><b>G — Good</b></TableCell><TableCell>The student has demonstrated the required knowledge and skills with considerable effectiveness. Achievement meets the standard.</TableCell></TableRow>
+                    <TableRow><TableCell><b>S — Satisfactory</b></TableCell><TableCell>The student has demonstrated the required knowledge and skills with some effectiveness. Achievement approaches the standard.</TableCell></TableRow>
+                    <TableRow><TableCell><b>N — Needs Improvement</b></TableCell><TableCell>The student has demonstrated the required knowledge and skills with limited effectiveness. Achievement falls below the standard.</TableCell></TableRow>
+                </TableBody>
+            </Table>
+
+            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.75, ...font }}>Curriculum Attainment</Typography>
+            <Table size="small" sx={{ mb: 2.5, '& th, & td': { border: '1px solid #cbd5e1', py: 0.6, fontFamily: 'inherit', fontSize: 11 } }}>
+                <TableBody>
+                    <TableRow><TableCell sx={{ width: 70, fontWeight: 900 }}>WT</TableCell><TableCell>Working Towards — the expected level for the grade.</TableCell></TableRow>
+                    <TableRow><TableCell sx={{ fontWeight: 900 }}>WW</TableCell><TableCell>Working Within — the expected level for the grade.</TableCell></TableRow>
+                    <TableRow><TableCell sx={{ fontWeight: 900 }}>WA</TableCell><TableCell>Working Above — the expected level for the grade.</TableCell></TableRow>
+                </TableBody>
+            </Table>
+
+            <Stack spacing={1.25} sx={{ fontSize: 12, ...font }}>
+                <Typography sx={{ fontFamily: 'inherit' }}>Homeroom Teacher: <b>{homeroomTeacher || '—'}</b> &nbsp;&nbsp; Signature: __________________________</Typography>
+                <Typography sx={{ fontFamily: 'inherit' }}>Principal: <b>Leulseged W/Tensay</b> &nbsp;&nbsp; Signature: __________________________</Typography>
+            </Stack>
+            <Divider sx={{ borderColor: '#1e3a8a', mt: 2, mb: 1 }} />
+            <Typography align="center" sx={{ fontSize: 10, lineHeight: 1.35, ...font }}>
+                British International School P.L.C · Sherif Building · Bole Ring Road · P.O. Box 5583 · Addis Ababa, Ethiopia<br />
+                Telephone: 0116-630707 Bole Campus · 0116-298601 Gerji Campus · Fax: 0116-614098
+            </Typography>
+        </Box>
+    );
+}
+
 const PREVIEW_OBJECTIVES = [
     'Principal-defined learning objective will appear here.',
     'Teacher progress rating will appear here.',
@@ -217,7 +294,7 @@ function BISPreviewPage({ pageNumber, title, children, student, className, termN
     );
 }
 
-function BISReportPreview({ card, className, termName, yearName }) {
+function BISReportPreview({ card, className, termName, term, yearName, homeroomTeacher }) {
     const rowBySubject = Object.fromEntries(card.rows.map((row) => [row.subject.name, row]));
     const pageGroups = BIS_SUBJECT_GROUPS.map((group) => group.filter((name) =>
         name in rowBySubject || ['History', 'Geography', 'IT'].includes(name)
@@ -227,23 +304,15 @@ function BISReportPreview({ card, className, termName, yearName }) {
             <Alert severity="info" sx={{ mb: 2, maxWidth: 900, mx: 'auto' }}>
                 Preview only. No report-card data is saved. Objectives, ratings, targets and teacher names will come from the Principal-approved report-card setup.
             </Alert>
-            <BISPreviewPage pageNumber={1} title="English and Work Habits & Social Skills" student={card.student} className={className} termName={termName} yearName={yearName}>
-                <PreviewSubject name="English" row={rowBySubject.English} />
-                <Box sx={{ border: '1px solid #94a3b8', p: 1.5, mt: 2, ...{ fontFamily: '"Times New Roman", Georgia, serif' } }}>
-                    <Typography sx={{ fontWeight: 900, mb: 1, fontFamily: 'inherit' }}>Work Habits and Social Skills</Typography>
-                    <Typography sx={{ fontSize: 11, color: '#475569', mb: 1, fontFamily: 'inherit' }}>Rating scale: Pleasing (P) · Good (G) · Satisfactory (S) · Needs improvement (N)</Typography>
-                    <Table size="small" sx={{ '& th, & td': { border: '1px solid #cbd5e1', py: 0.45, fontFamily: 'inherit', fontSize: 11 } }}>
-                        <TableBody>
-                            <TableRow><TableCell>Days absent</TableCell><TableCell align="center">—</TableCell><TableCell>Days late</TableCell><TableCell align="center">—</TableCell></TableRow>
-                            {['Comes prepared and ready to learn', 'Uses class time effectively', 'Listens attentively', 'Participates in activities', 'Works cooperatively', 'Follows directions', 'Shows respect and kindness'].map((item) => (
-                                <TableRow key={item}><TableCell colSpan={2}>{item}</TableCell><TableCell colSpan={2} align="center">—</TableCell></TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    <Typography sx={{ mt: 1, fontSize: 11, fontFamily: 'inherit' }}>Main teacher: __________________________</Typography>
-                </Box>
-            </BISPreviewPage>
-            {pageGroups.slice(1).map((group, index) => (
+            <BISSummaryPage
+                student={card.student}
+                className={className}
+                termName={termName}
+                term={term}
+                yearName={yearName}
+                homeroomTeacher={homeroomTeacher}
+            />
+            {pageGroups.map((group, index) => (
                 <BISPreviewPage key={group.join('-')} pageNumber={index + 2} title={group.join(' and ')} student={card.student} className={className} termName={termName} yearName={yearName}>
                     {group.length === 0
                         ? <Typography sx={{ color: '#64748b', fontFamily: 'inherit' }}>Subject sections will appear here when configured.</Typography>
@@ -278,10 +347,13 @@ export default function ReportCards() {
         [classId, resolvedTermId],
     );
 
-    const className = (classes.data || []).find((c) => c.id === classId)?.name || '';
-    const termName = (terms.data || []).find((t) => t.id === resolvedTermId)?.name
-        || current.data?.term?.name || '';
+    const classRecord = (classes.data || []).find((c) => c.id === classId);
+    const className = classRecord?.name || '';
+    const termRecord = (terms.data || []).find((t) => t.id === resolvedTermId)
+        || current.data?.term || null;
+    const termName = termRecord?.name || '';
     const yearName = (years.data || []).find((y) => y.isCurrent)?.name || '';
+    const homeroomTeacher = classRecord?.mainTeacher?.name || '';
 
     const cards = useMemo(
         () => buildReportCards(students.data || [], subjects.data || [], marksheets.data || []),
@@ -448,7 +520,9 @@ export default function ReportCards() {
                             card={previewCard}
                             className={className}
                             termName={termName}
+                            term={termRecord}
                             yearName={yearName}
+                            homeroomTeacher={homeroomTeacher}
                         />
                     ) : (
                         <Alert severity="info">Choose a student for the detailed preview.</Alert>
