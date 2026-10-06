@@ -1,4 +1,5 @@
 import { Link as RouterLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import {
     Box,
     Button,
@@ -65,6 +66,15 @@ const comingSoonModules = [
 export default function Landing() {
     const { toggleColorScheme } = useColorScheme();
     const theme = useTheme();
+    const [isStandalone, setIsStandalone] = useState(false);
+
+    useEffect(() => {
+        const media = window.matchMedia?.('(display-mode: standalone)');
+        const update = () => setIsStandalone(Boolean(media?.matches || window.navigator.standalone === true));
+        update();
+        media?.addEventListener?.('change', update);
+        return () => media?.removeEventListener?.('change', update);
+    }, []);
     const dark = theme.palette.mode === 'dark';
 
     const surface = dark ? theme.palette.background.paper : '#ffffff';
@@ -106,11 +116,13 @@ export default function Landing() {
                             </Box>
                         </Box>
 
-                        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3 }}>
+                        {!isStandalone && (
+                            <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3 }}>
                             <NavLink component={RouterLink} to="/students">Students</NavLink>
                             <NavLink component={RouterLink} to="/calendar">Calendar</NavLink>
                             <NavLink component={RouterLink} to="/data-center">Data Center</NavLink>
-                        </Box>
+                            </Box>
+                        )}
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box onClick={toggleColorScheme} sx={{
@@ -147,7 +159,7 @@ export default function Landing() {
                 <Container maxWidth="lg">
                     <Box sx={{
                         display: 'grid', gap: { xs: 4, md: 6 },
-                        gridTemplateColumns: { xs: '1fr', md: '1.05fr 0.95fr' },
+                        gridTemplateColumns: isStandalone ? '1fr' : { xs: '1fr', md: '1.05fr 0.95fr' },
                         alignItems: 'center', mb: { xs: 4, md: 6 },
                     }}>
                         {/* left — identity */}
@@ -186,12 +198,14 @@ export default function Landing() {
                                     Gerji Primary 2
                                 </Box>
                             </Typography>
-                            <Typography sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, lineHeight: 1.7,
-                                color: 'text.secondary', maxWidth: 520, mb: 3 }}>
-                                The official staff workspace of British International School, NOC Gerji
-                                Campus — attendance, timetables, marksheets, lesson plans and calendars
-                                in one secure portal.
-                            </Typography>
+                            {!isStandalone && (
+                                <Typography sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, lineHeight: 1.7,
+                                    color: 'text.secondary', maxWidth: 520, mb: 3 }}>
+                                    The official staff workspace of British International School, NOC Gerji
+                                    Campus — attendance, timetables, marksheets, lesson plans and calendars
+                                    in one secure portal.
+                                </Typography>
+                            )}
                             <Box sx={{
                                 display: 'inline-flex', alignItems: 'center', gap: 1,
                                 px: 1.75, py: 1, borderRadius: 999,
@@ -206,6 +220,7 @@ export default function Landing() {
                         </Box>
 
                         {/* right — sign-in card */}
+                        {!isStandalone && (
                         <Box sx={{
                             p: { xs: 2.5, md: 3 }, borderRadius: 3,
                             border: `1px solid ${border}`,
@@ -280,9 +295,11 @@ export default function Landing() {
                                 Accounts are issued by the school — there is no self-registration.
                             </Typography>
                         </Box>
+                        )}
                     </Box>
 
                     {/* dormant campus services — ready to switch on later */}
+                    {!isStandalone && (
                     <Box
                         data-testid="coming-soon-modules"
                         sx={{
@@ -327,10 +344,12 @@ export default function Landing() {
                             );
                         })}
                     </Box>
+                    )}
                 </Container>
             </Box>
 
             {/* ── MODULES STRIP ───────────────────────────── */}
+            {!isStandalone && (
             <Box sx={{ py: { xs: 5, md: 7 }, bgcolor: surface,
                 borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
                 <Container maxWidth="lg">
@@ -363,6 +382,7 @@ export default function Landing() {
                     </Box>
                 </Container>
             </Box>
+            )}
 
             {/* ── FOOTER ──────────────────────────────────── */}
             <Box sx={{ py: 4, bgcolor: surface, mt: 'auto' }}>
