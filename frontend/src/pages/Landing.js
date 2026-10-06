@@ -149,17 +149,19 @@ export default function Landing() {
             {/* ── HERO ────────────────────────────────────── */}
             <Box sx={{
                 position: 'relative', overflow: 'hidden',
-                background: dark
-                    ? [
-                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.22)}, transparent 55%)`,
-                        `radial-gradient(760px 360px at 110% 0%, ${alpha('#f9a8d4', 0.08)}, transparent 55%)`,
-                        `radial-gradient(700px 340px at 50% 110%, ${alpha('#fbbf24', 0.07)}, transparent 55%)`,
-                      ].join(',')
-                    : [
-                        `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.08)}, transparent 55%)`,
-                        `radial-gradient(760px 360px at 110% 0%, ${alpha('#f9a8d4', 0.12)}, transparent 55%)`,
-                        `radial-gradient(700px 340px at 50% 110%, ${alpha('#fbbf24', 0.10)}, transparent 55%)`,
-                      ].join(','),
+                background: isStandalone
+                    ? theme.palette.background.default
+                    : dark
+                        ? [
+                            `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.22)}, transparent 55%)`,
+                            `radial-gradient(760px 360px at 110% 0%, ${alpha('#f9a8d4', 0.08)}, transparent 55%)`,
+                            `radial-gradient(700px 340px at 50% 110%, ${alpha('#fbbf24', 0.07)}, transparent 55%)`,
+                          ].join(',')
+                        : [
+                            `radial-gradient(900px 420px at -10% -10%, ${alpha(theme.palette.primary.main, 0.08)}, transparent 55%)`,
+                            `radial-gradient(760px 360px at 110% 0%, ${alpha('#f9a8d4', 0.12)}, transparent 55%)`,
+                            `radial-gradient(700px 340px at 50% 110%, ${alpha('#fbbf24', 0.10)}, transparent 55%)`,
+                          ].join(','),
                 pt: { xs: 6, md: 9 }, pb: { xs: 5, md: 7 },
             }}>
                 <Container maxWidth="lg">
@@ -183,13 +185,16 @@ export default function Landing() {
                             </Typography>
                             <Typography component="h1" sx={{
                                 fontWeight: 800,
-                                fontSize: { xs: '2.2rem', sm: '3.2rem', md: '3.7rem' },
-                                lineHeight: 1.05, letterSpacing: '-.03em', mb: 2.5,
+                                fontSize: isStandalone
+                                    ? { xs: '1.75rem', sm: '2.2rem' }
+                                    : { xs: '2.2rem', sm: '3.2rem', md: '3.7rem' },
+                                lineHeight: 1.08, letterSpacing: '-.03em', mb: 2,
                                 color: dark ? '#f8fafc' : '#0f172a',
                             }}>
                                 <Box component="span" sx={{
-                                    display: 'block', fontSize: { xs: '1.1rem', sm: '1.35rem', md: '1.55rem' },
-                                    letterSpacing: '-.01em', mb: 1,
+                                    display: 'block',
+                                    fontSize: isStandalone ? { xs: '0.9rem', sm: '1rem' } : { xs: '1.1rem', sm: '1.35rem', md: '1.55rem' },
+                                    letterSpacing: '-.01em', mb: 0.75,
                                     color: 'text.secondary',
                                 }}>
                                     Welcome to
@@ -198,8 +203,9 @@ export default function Landing() {
                                     British International School
                                 </Box>
                                 <Box component="span" sx={{
-                                    display: 'block', fontSize: { xs: '1.75rem', sm: '2.35rem', md: '2.7rem' },
-                                    mt: 1, color: dark ? '#f8fafc' : '#0f172a',
+                                    display: 'block',
+                                    fontSize: isStandalone ? { xs: '1.35rem', sm: '1.7rem' } : { xs: '1.75rem', sm: '2.35rem', md: '2.7rem' },
+                                    mt: 0.75, color: dark ? '#f8fafc' : '#0f172a',
                                 }}>
                                     Gerji Primary 2
                                 </Box>
