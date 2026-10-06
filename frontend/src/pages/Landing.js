@@ -1,4 +1,4 @@
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
     Box,
@@ -22,6 +22,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LoginIcon from '@mui/icons-material/Login';
 import { useColorScheme } from '../theme';
+import { useAuth } from '../auth/AuthContext';
 
 /* ── styled primitives ───────────────────────────────────── */
 const NavLink = styled(Typography)(({ theme }) => ({
@@ -66,6 +67,7 @@ const comingSoonModules = [
 /* ── component ───────────────────────────────────────────── */
 export default function Landing() {
     const { toggleColorScheme } = useColorScheme();
+    const { user, loading } = useAuth();
     const theme = useTheme();
     const [isStandalone, setIsStandalone] = useState(false);
 
@@ -76,6 +78,9 @@ export default function Landing() {
         media?.addEventListener?.('change', update);
         return () => media?.removeEventListener?.('change', update);
     }, []);
+
+    if (!loading && isStandalone && user) return <Navigate to="/app" replace />;
+
     const dark = theme.palette.mode === 'dark';
 
     const surface = dark ? theme.palette.background.paper : '#ffffff';
