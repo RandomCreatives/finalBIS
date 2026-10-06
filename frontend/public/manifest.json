@@ -1,0 +1,23 @@
+{
+  "short_name": "BIS Gerji",
+  "name": "BIS NOC Gerji School Management",
+  "id": "/",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#1e40af",
+  "background_color": "#f8fafc",
+  "description": "Staff portal for British International School, NOC Gerji Campus."
+}
