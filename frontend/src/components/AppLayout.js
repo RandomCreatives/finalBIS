@@ -26,6 +26,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
 import NotificationBell from './NotificationBell';
 import PwaInstallButton from './PwaInstallButton';
+import PwaBottomNav from './PwaBottomNav';
 import { useColorScheme } from '../theme';
 import useApi from '../hooks/useApi';
 import { communicationsApi } from '../api/endpoints';
@@ -297,6 +298,7 @@ export default function AppLayout() {
 
             <Box sx={{
                 maxWidth: 1600, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 },
+                pb: { '@media (display-mode: standalone)': 'calc(88px + env(safe-area-inset-bottom))' },
                 display: 'flex', gap: 3, alignItems: 'flex-start',
             }}>
                 {/* desktop side-nav card — the scroll lives one layer inside,
@@ -348,6 +350,7 @@ export default function AppLayout() {
                     <Outlet />
                 </Box>
             </Box>
+            <PwaBottomNav />
         </Box>
     );
 }
