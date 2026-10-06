@@ -4,6 +4,7 @@ import {
     Box,
     Button,
     Container,
+    Stack,
     Typography,
     useTheme,
 } from '@mui/material';
@@ -20,7 +21,6 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import LoginIcon from '@mui/icons-material/Login';
 import { useColorScheme } from '../theme';
 import { useAuth } from '../auth/AuthContext';
 
@@ -224,15 +224,27 @@ export default function Landing() {
                                 Term 1 begins Monday, 21 September 2026
                             </Box>
                             {isStandalone && (
-                                <Button
-                                    component={RouterLink}
-                                    to="/pwa-sign-in"
-                                    variant="contained"
-                                    startIcon={<LoginIcon />}
-                                    sx={{ mt: 2, px: 3, borderRadius: 2, textTransform: 'none', fontWeight: 800 }}
-                                >
-                                    Sign in
-                                </Button>
+                                <Stack spacing={1.25} sx={{ mt: 2.5, maxWidth: 420 }}>
+                                    {roles.map((role) => {
+                                        const Icon = role.icon;
+                                        const to = role.label === 'Main Teacher'
+                                            ? '/pwa-main-teacher-login'
+                                            : role.to;
+                                        return (
+                                            <Button
+                                                key={role.label}
+                                                component={RouterLink}
+                                                to={to}
+                                                fullWidth
+                                                variant={role.label === 'Administrator' ? 'contained' : 'outlined'}
+                                                startIcon={<Icon />}
+                                                sx={{ justifyContent: 'flex-start', px: 2, py: 1.25, borderRadius: 2, textTransform: 'none', fontWeight: 800 }}
+                                            >
+                                                {role.label}
+                                            </Button>
+                                        );
+                                    })}
+                                </Stack>
                             )}
                         </Box>
 
