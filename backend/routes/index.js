@@ -147,6 +147,13 @@ router.post(
     validate,
     auth.classLogin
 );
+router.post(
+    '/auth/class-password-login',
+    authLimiter,
+    body('password').isString().notEmpty().withMessage('Password is required'),
+    validate,
+    auth.classPasswordLogin
+);
 
 // Subject-teacher card sign-in: the directory lists the cards (safe fields
 // only); the login verifies the teacher's own account password with bcrypt.

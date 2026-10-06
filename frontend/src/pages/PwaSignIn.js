@@ -8,7 +8,7 @@ import { useColorScheme } from '../theme';
 
 const OPTIONS = [
     { label: 'Admin', description: 'Coordinator and administrator sign-in', to: '/login', icon: <AdminPanelSettingsIcon /> },
-    { label: 'Main Teacher', description: 'Class dashboard and class register', to: '/classes', icon: <SchoolIcon /> },
+    { label: 'Main Teacher', description: 'Enter your class password', to: '/pwa-main-teacher-login', icon: <SchoolIcon /> },
     { label: 'Subject Teacher', description: 'Subject teacher account sign-in', to: '/subject-login', icon: <MenuBookIcon /> },
 ];
 
