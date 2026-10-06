@@ -25,6 +25,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
 import NotificationBell from './NotificationBell';
+import PwaInstallButton from './PwaInstallButton';
 import { useColorScheme } from '../theme';
 import useApi from '../hooks/useApi';
 import { communicationsApi } from '../api/endpoints';
@@ -222,6 +223,7 @@ export default function AppLayout() {
                         <Typography variant="caption" color="text.secondary" noWrap>{caption}</Typography>
                     </Box>
                     <NotificationBell />
+                    <PwaInstallButton />
                     {user?.name && (
                         <Chip size="small" label={user.name}
                             sx={{ fontWeight: 700, borderRadius: 1, display: { xs: 'none', sm: 'inline-flex' } }} />
