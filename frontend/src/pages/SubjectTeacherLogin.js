@@ -158,8 +158,8 @@ export default function SubjectTeacherLogin() {
                 </Container>
             </Box>
 
-            <Container maxWidth="lg" sx={{ mt: 4 }}>
-                <Typography sx={{ fontWeight: 800, fontSize: 26, letterSpacing: '-0.01em', mb: 0.5 }}>
+            <Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 }, px: { xs: 1.5, sm: 3 } }}>
+                <Typography sx={{ fontWeight: 800, fontSize: { xs: 22, sm: 26 }, letterSpacing: '-0.01em', mb: 0.5 }}>
                     Who's teaching today?
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
@@ -192,7 +192,7 @@ export default function SubjectTeacherLogin() {
                         <AccordionSummary
                             expandIcon={<ExpandMoreIcon />}
                             sx={{
-                                px: 2, minHeight: 58,
+                                px: { xs: 1.5, sm: 2 }, minHeight: { xs: 54, sm: 58 },
                                 '& .MuiAccordionSummary-content': { my: 1.25, alignItems: 'baseline', gap: 1.5 },
                             }}
                         >
@@ -201,7 +201,7 @@ export default function SubjectTeacherLogin() {
                                 {g.teachers.length === 1 ? '1 teacher' : `${g.teachers.length} teachers`}
                             </Typography>
                         </AccordionSummary>
-                        <AccordionDetails sx={{ px: 2, pt: 0, pb: 2 }}>
+                        <AccordionDetails sx={{ px: { xs: 1.25, sm: 2 }, pt: 0, pb: 1.5 }}>
                             <Grid container spacing={1.5}>
                                 {g.teachers.map((t, ti) => {
                                     const label = teacherLabel(t);
@@ -212,7 +212,8 @@ export default function SubjectTeacherLogin() {
                                                 data-testid="subject-seat-card"
                                                 onClick={() => openCard(t, label, g.subject)}
                                                 sx={{
-                                                    p: 2, borderRadius: 1.5, cursor: 'pointer',
+                                                    p: { xs: 1.5, sm: 2 }, minHeight: 68,
+                                                    borderRadius: 1.5, cursor: 'pointer',
                                                     display: 'flex', alignItems: 'center', gap: 1.5,
                                                     transition: 'all .15s ease',
                                                     '&:hover': {
@@ -231,7 +232,7 @@ export default function SubjectTeacherLogin() {
                                                     {label.split(' ').map((w) => w[0]).slice(0, 2).join('')}
                                                 </Box>
                                                 <Box sx={{ minWidth: 0 }}>
-                                                    <Typography sx={{ fontWeight: 800, fontSize: 15 }} noWrap>
+                                                    <Typography sx={{ fontWeight: 800, fontSize: { xs: 14, sm: 15 } }} noWrap>
                                                         {label}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
