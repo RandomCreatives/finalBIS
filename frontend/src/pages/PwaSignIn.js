@@ -52,8 +52,8 @@ export default function PwaSignIn() {
                     ))}
                 </Stack>
             </Container>
-            <Box component="footer" sx={{ px: 2, py: 3, textAlign: 'center', bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary">BIS NOC Gerji · Staff portal</Typography>
+            <Box component="footer" sx={{ px: 2, py: 1.5, textAlign: 'center', bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}>
+                <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>BIS NOC Gerji · Staff portal</Typography>
             </Box>
         </Box>
     );

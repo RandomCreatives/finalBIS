@@ -420,19 +420,19 @@ export default function Landing() {
             )}
 
             {/* ── FOOTER ──────────────────────────────────── */}
-            <Box sx={{ py: 4, bgcolor: surface, mt: 'auto' }}>
+            <Box sx={{ py: isStandalone ? 2 : 4, bgcolor: surface, mt: 'auto' }}>
                 <Container maxWidth="lg">
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-                        justifyContent: 'space-between', gap: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Box sx={{ width: 30, height: 30, borderRadius: 1.5,
+                        justifyContent: 'space-between', gap: isStandalone ? 1 : 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: isStandalone ? 0.75 : 1.5 }}>
+                            <Box sx={{ width: isStandalone ? 24 : 30, height: isStandalone ? 24 : 30, borderRadius: 1.5,
                                 bgcolor: 'primary.main', color: '#fff',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <SchoolIcon sx={{ fontSize: 18 }} />
+                                <SchoolIcon sx={{ fontSize: isStandalone ? 14 : 18 }} />
                             </Box>
-                            <Typography sx={{ fontWeight: 800, fontSize: 13 }}>BIS NOC Gerji</Typography>
+                            <Typography sx={{ fontWeight: 800, fontSize: isStandalone ? 11 : 13 }}>BIS NOC Gerji</Typography>
                         </Box>
-                        <Typography sx={{ fontSize: 12, color: 'text.secondary', textAlign: 'center' }}>
+                        <Typography sx={{ fontSize: isStandalone ? 9 : 12, color: 'text.secondary', textAlign: 'center' }}>
                             &copy; {new Date().getFullYear()} British International School, NOC Gerji Campus
                             &nbsp;·&nbsp; Internal Staff Use Only
                         </Typography>
