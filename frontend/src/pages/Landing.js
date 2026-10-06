@@ -20,6 +20,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import LoginIcon from '@mui/icons-material/Login';
 import { useColorScheme } from '../theme';
 
 /* ── styled primitives ───────────────────────────────────── */
@@ -217,6 +218,17 @@ export default function Landing() {
                                 <EventAvailableIcon sx={{ fontSize: 17 }} />
                                 Term 1 begins Monday, 21 September 2026
                             </Box>
+                            {isStandalone && (
+                                <Button
+                                    component={RouterLink}
+                                    to="/login"
+                                    variant="contained"
+                                    startIcon={<LoginIcon />}
+                                    sx={{ mt: 2, px: 3, borderRadius: 2, textTransform: 'none', fontWeight: 800 }}
+                                >
+                                    Sign in
+                                </Button>
+                            )}
                         </Box>
 
                         {/* right — sign-in card */}
