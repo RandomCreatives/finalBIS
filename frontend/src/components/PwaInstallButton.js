@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import DownloadIcon from '@mui/icons-material/Download';
 import { Button } from '@mui/material';
 
-export default function PwaInstallButton() {
+export default function PwaInstallButton({ visible = false }) {
     const [installEvent, setInstallEvent] = useState(null);
     const [installed, setInstalled] = useState(false);
 
@@ -28,7 +28,7 @@ export default function PwaInstallButton() {
         };
     }, []);
 
-    if (installed || !installEvent) return null;
+    if (!visible || installed || !installEvent) return null;
 
     const install = async () => {
         await installEvent.prompt();
