@@ -9,6 +9,7 @@ import AppLayout from './components/AppLayout';
 import Landing from './pages/Landing';
 import DataCenter from './pages/DataCenter';
 import Login from './pages/Login';
+import PwaSignIn from './pages/PwaSignIn';
 import PublicClasses from './pages/PublicClasses';
 import PublicTeachers from './pages/PublicTeachers';
 import PublicStudents from './pages/PublicStudents';
@@ -52,6 +53,7 @@ export default function App() {
                 <AuthProvider>
                     <Routes>
                         <Route path="/login" element={<Login />} />
+                        <Route path="/pwa-sign-in" element={<PwaSignIn />} />
                         <Route path="/teacher-login" element={<SubjectLogin />} />
                         <Route path="/subject-login" element={<SubjectTeacherLogin />} />
                         <Route path="/librarian-login" element={<LibrarianLogin />} />

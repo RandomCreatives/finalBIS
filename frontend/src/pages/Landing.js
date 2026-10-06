@@ -221,7 +221,7 @@ export default function Landing() {
                             {isStandalone && (
                                 <Button
                                     component={RouterLink}
-                                    to="/login"
+                                    to="/pwa-sign-in"
                                     variant="contained"
                                     startIcon={<LoginIcon />}
                                     sx={{ mt: 2, px: 3, borderRadius: 2, textTransform: 'none', fontWeight: 800 }}
