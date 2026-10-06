@@ -7,6 +7,8 @@ export const authApi = {
     subjectTeachers: () => client.get('/auth/subject-teachers').then((r) => r.data.teachers),
     subjectTeacherLogin: (teacherId, password) =>
         client.post('/auth/subject-teacher-login', { teacherId, password }).then((r) => r.data),
+    classPasswordLogin: (password) =>
+        client.post('/auth/class-password-login', { password }).then((r) => r.data),
     me: () => client.get('/auth/me').then((r) => r.data.user),
     changePassword: (currentPassword, newPassword) =>
         client.patch('/auth/password', { currentPassword, newPassword }).then((r) => r.data),

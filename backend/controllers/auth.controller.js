@@ -776,9 +776,39 @@ const classLogin = asyncHandler(async (req, res) => {
     });
 });
 
+/**
+ * POST /api/auth/class-password-login — password-only Main Teacher login.
+ *
+ * The class password is the normalized class name, so the server can identify
+ * the class without showing a class list on a phone-sized PWA screen.
+ */
+const classPasswordLogin = asyncHandler(async (req, res) => {
+    const { password } = req.body;
+    const { data: school, error: schoolError } = await supabase
+        .from('schools')
+        .select('id')
+        .maybeSingle();
+    if (schoolError) throw schoolError;
+    if (!school) throw new NotFoundError('School not found');
+
+    const { data: classes, error: classesError } = await supabase
+        .from('classes')
+        .select('id, name')
+        .eq('school_id', school.id);
+    if (classesError) throw classesError;
+
+    const normalized = normalizeClassPassword(password);
+    const matched = (classes || []).find((klass) => normalizeClassPassword(klass.name) === normalized);
+    if (!matched) throw new UnauthorizedError('Incorrect class password');
+
+    req.body.className = matched.name;
+    return classLogin(req, res);
+});
+
 module.exports = {
     login,
     classLogin,
+    classPasswordLogin,
     listSubjectTeachers,
     subjectTeacherLogin,
     me,
