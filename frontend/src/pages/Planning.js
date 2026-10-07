@@ -117,9 +117,9 @@ export default function Planning() {
         }
     };
 
-    const saveWeek = async (weekNumber, topic, objectives) => {
+    const saveWeek = async (weekNumber, fields) => {
         try {
-            await planningApi.saveSchemeWeek(openScheme.id, weekNumber, { topic, objectives });
+            await planningApi.saveSchemeWeek(openScheme.id, weekNumber, fields);
             setOpenScheme(await planningApi.scheme(openScheme.id));
             setToast(`Week ${weekNumber} saved`);
         } catch (err) {
@@ -189,6 +189,12 @@ export default function Planning() {
                 weekNumber: Number(planDialog.weekNumber),
                 topic: planDialog.topic.trim(),
                 objectives: planDialog.objectives || null,
+                successCriteria: planDialog.successCriteria || null,
+                starter: planDialog.starter || null,
+                introduction: planDialog.introduction || null,
+                development: planDialog.development || null,
+                plenary: planDialog.plenary || null,
+                senPlanning: planDialog.senPlanning || null,
                 activities: planDialog.activities || null,
                 resources: planDialog.resources || null,
                 homework: planDialog.homework || null,
@@ -436,7 +442,9 @@ export default function Planning() {
                                     setFormError('');
                                     setPlanDialog({
                                         classSubjectId: '', weekNumber: currentWeek || 1, topic: '',
-                                        objectives: '', activities: '', resources: '', homework: '', reflection: '',
+                                        objectives: '', successCriteria: '', starter: '', introduction: '',
+                                        development: '', plenary: '', senPlanning: '',
+                                        activities: '', resources: '', homework: '', reflection: '',
                                     });
                                 }}
                             >
@@ -571,38 +579,51 @@ export default function Planning() {
                             Approved — this scheme is now read-only.
                         </Alert>
                     )}
-                    <Stack spacing={1.5} sx={{ mt: 1 }}>
-                        {(openScheme?.weeks || []).map((w) => {
-                            const canEdit = openScheme?.authorId === user?.id && openScheme?.status !== 'approved';
-                            return (
-                                <Paper key={w.weekNumber} variant="outlined" sx={{ p: 1.5 }}>
-                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="flex-start">
-                                        <Chip label={`Week ${w.weekNumber}`} size="small" sx={{ minWidth: 74 }} />
-                                        <TextField
-                                            label="Topic" size="small" fullWidth
-                                            defaultValue={w.topic}
-                                            disabled={!canEdit}
-                                            onBlur={(e) => {
-                                                if (e.target.value !== w.topic) {
-                                                    saveWeek(w.weekNumber, e.target.value, w.objectives);
-                                                }
-                                            }}
-                                        />
-                                        <TextField
-                                            label="Objectives" size="small" fullWidth
-                                            defaultValue={w.objectives || ''}
-                                            disabled={!canEdit}
-                                            onBlur={(e) => {
-                                                if (e.target.value !== (w.objectives || '')) {
-                                                    saveWeek(w.weekNumber, w.topic, e.target.value);
-                                                }
-                                            }}
-                                        />
-                                    </Stack>
-                                </Paper>
-                            );
-                        })}
-                    </Stack>
+                    <TableContainer component={Paper} variant="outlined" sx={{ mt: 1, overflowX: 'auto' }}>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 800, minWidth: 76 }}>Week</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, minWidth: 180 }}>Unit / Topic</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, minWidth: 260 }}>Lesson Objectives</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, minWidth: 180 }}>Resources</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, minWidth: 160 }}>Assessment</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, minWidth: 160 }}>Remark / Evaluation</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {(openScheme?.weeks || []).map((w) => {
+                                    const canEdit = openScheme?.authorId === user?.id && openScheme?.status !== 'approved';
+                                    const editField = (field, value) => {
+                                        if (value === (w[field] || '')) return;
+                                        saveWeek(w.weekNumber, {
+                                            topic: field === 'topic' ? value : w.topic,
+                                            objectives: field === 'objectives' ? value : w.objectives,
+                                            resources: field === 'resources' ? value : w.resources,
+                                            assessment: field === 'assessment' ? value : w.assessment,
+                                            evaluation: field === 'evaluation' ? value : w.evaluation,
+                                        });
+                                    };
+                                    return (
+                                        <TableRow key={w.weekNumber} hover>
+                                            <TableCell><Chip label={`Week ${w.weekNumber}`} size="small" /></TableCell>
+                                            {['topic', 'objectives', 'resources', 'assessment', 'evaluation'].map((field) => (
+                                                <TableCell key={field} sx={{ verticalAlign: 'top' }}>
+                                                    <TextField
+                                                        hiddenLabel size="small" fullWidth multiline minRows={field === 'topic' ? 1 : 2}
+                                                        placeholder={field === 'topic' ? 'Topic' : field === 'objectives' ? 'Objectives' : field === 'resources' ? 'Resources' : field === 'assessment' ? 'Assessment' : 'Evaluation'}
+                                                        defaultValue={w[field] || ''}
+                                                        disabled={!canEdit}
+                                                        onBlur={(event) => editField(field, event.target.value)}
+                                                    />
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
@@ -635,8 +656,11 @@ export default function Planning() {
                                         <Box sx={{ flex: 1 }}>
                                             <Typography variant="body2" fontWeight={600}>{w.topic || '—'}</Typography>
                                             {w.objectives && (
-                                                <Typography variant="caption" color="text.secondary">{w.objectives}</Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block">Objectives: {w.objectives}</Typography>
                                             )}
+                                            {w.resources && <Typography variant="caption" color="text.secondary" display="block">Resources: {w.resources}</Typography>}
+                                            {w.assessment && <Typography variant="caption" color="text.secondary" display="block">Assessment: {w.assessment}</Typography>}
+                                            {w.evaluation && <Typography variant="caption" color="text.secondary" display="block">Evaluation: {w.evaluation}</Typography>}
                                         </Box>
                                     </Stack>
                                 </Paper>
@@ -647,7 +671,13 @@ export default function Planning() {
                             {[
                                 ['Topic', readDoc?.topic],
                                 ['Learning objectives', readDoc?.objectives],
-                                ['Activities', readDoc?.activities],
+                                ['Success criteria', readDoc?.successCriteria],
+                                ['Starter', readDoc?.starter],
+                                ['Introduction', readDoc?.introduction],
+                                ['Development', readDoc?.development],
+                                ['Plenary', readDoc?.plenary],
+                                ['Planning for SEN', readDoc?.senPlanning],
+                                ['Activities / practical assessment', readDoc?.activities],
                                 ['Resources', readDoc?.resources],
                                 ['Homework', readDoc?.homework],
                                 ['Reflection', readDoc?.reflection],
@@ -716,10 +746,31 @@ export default function Planning() {
                             <TextField label="Topic" required fullWidth
                                 value={planDialog.topic}
                                 onChange={(e) => setPlanDialog((d) => ({ ...d, topic: e.target.value }))} />
+                            <Alert severity="info" sx={{ py: 0.5 }}>
+                                Use the selected week from the Scheme of Work as your guide. The fields below follow the school lesson-plan template.
+                            </Alert>
                             <TextField label="Learning objectives" fullWidth multiline rows={2}
                                 value={planDialog.objectives}
                                 onChange={(e) => setPlanDialog((d) => ({ ...d, objectives: e.target.value }))} />
-                            <TextField label="Activities" fullWidth multiline rows={3}
+                            <TextField label="Success criteria" fullWidth multiline rows={2}
+                                value={planDialog.successCriteria}
+                                onChange={(e) => setPlanDialog((d) => ({ ...d, successCriteria: e.target.value }))} />
+                            <TextField label="Starter" fullWidth multiline rows={2}
+                                value={planDialog.starter}
+                                onChange={(e) => setPlanDialog((d) => ({ ...d, starter: e.target.value }))} />
+                            <TextField label="Introduction" fullWidth multiline rows={2}
+                                value={planDialog.introduction}
+                                onChange={(e) => setPlanDialog((d) => ({ ...d, introduction: e.target.value }))} />
+                            <TextField label="Development" fullWidth multiline rows={3}
+                                value={planDialog.development}
+                                onChange={(e) => setPlanDialog((d) => ({ ...d, development: e.target.value }))} />
+                            <TextField label="Plenary" fullWidth multiline rows={2}
+                                value={planDialog.plenary}
+                                onChange={(e) => setPlanDialog((d) => ({ ...d, plenary: e.target.value }))} />
+                            <TextField label="Planning for SEN" fullWidth multiline rows={2}
+                                value={planDialog.senPlanning}
+                                onChange={(e) => setPlanDialog((d) => ({ ...d, senPlanning: e.target.value }))} />
+                            <TextField label="Activities / practical assessment" fullWidth multiline rows={2}
                                 value={planDialog.activities}
                                 onChange={(e) => setPlanDialog((d) => ({ ...d, activities: e.target.value }))} />
                             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -730,7 +781,7 @@ export default function Planning() {
                                     value={planDialog.homework}
                                     onChange={(e) => setPlanDialog((d) => ({ ...d, homework: e.target.value }))} />
                             </Stack>
-                            <TextField label="Reflection (after teaching)" fullWidth multiline rows={2}
+                            <TextField label="Reflection / evaluation (after teaching)" fullWidth multiline rows={2}
                                 value={planDialog.reflection}
                                 onChange={(e) => setPlanDialog((d) => ({ ...d, reflection: e.target.value }))} />
                         </Stack>
