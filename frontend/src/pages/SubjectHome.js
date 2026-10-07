@@ -27,7 +27,7 @@ import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from 
 import NotificationBell from '../components/NotificationBell';
 import useApi from '../hooks/useApi';
 import { lessonLabel } from '../utils/periods';
-import PlanningSection from '../components/planning/PlanningDocs';
+import Planning from './Planning';
 import TentativeChip from '../components/TentativeChip';
 import { CalendarBoard } from './PublicCalendar';
 import { useAuth } from '../auth/AuthContext';
@@ -695,7 +695,7 @@ export default function SubjectHome() {
                                     : <WeekGrid slots={week.data} />
                         )}
 
-                        {section === 'planning' && <PlanningSection klass={{ name: user.name }} onToast={() => {}} />}
+                        {section === 'planning' && <Planning />}
                         {section === 'calendar' && <CalendarBoard />}
                         {section === 'classes' && (
                             myAssignments.loading
