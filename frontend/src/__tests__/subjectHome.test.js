@@ -1,8 +1,11 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '../theme';
 import SubjectHome from '../pages/SubjectHome';
+import {
+    assignmentApi, assessmentApi, authApi, planningApi, studentApi, termApi, timetableApi,
+} from '../api/endpoints';
 
 jest.mock('../auth/AuthContext', () => ({
     useAuth: () => ({
@@ -12,23 +15,17 @@ jest.mock('../auth/AuthContext', () => ({
 }));
 
 jest.mock('../api/endpoints', () => ({
-    assignmentApi: {
-        subjects: jest.fn().mockResolvedValue({ assignments: [] }),
+    assignmentApi: { subjects: jest.fn() },
+    assessmentApi: { list: jest.fn() },
+    studentApi: { list: jest.fn() },
+    termApi: { current: jest.fn() },
+    timetableApi: { myWeek: jest.fn(), forClass: jest.fn() },
+    planningApi: {
+        schemes: jest.fn(),
+        lessonPlans: jest.fn(),
+        overview: jest.fn(),
     },
-    assessmentApi: {
-        list: jest.fn().mockResolvedValue({ assessments: [] }),
-    },
-    studentApi: {
-        list: jest.fn().mockResolvedValue({ students: [] }),
-    },
-    termApi: {
-        current: jest.fn().mockResolvedValue({ term: { id: 'term-1', name: 'Term 1' } }),
-    },
-    timetableApi: {
-        myWeek: jest.fn().mockResolvedValue([]),
-        forClass: jest.fn().mockResolvedValue({ slots: [] }),
-    },
-    authApi: { me: jest.fn().mockRejectedValue(new Error('no session')) },
+    authApi: { me: jest.fn() },
 }));
 
 const renderHome = () =>
@@ -39,6 +36,20 @@ const renderHome = () =>
             </MemoryRouter>
         </ThemeProvider>,
     );
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    assignmentApi.subjects.mockResolvedValue({ assignments: [] });
+    assessmentApi.list.mockResolvedValue({ assessments: [] });
+    studentApi.list.mockResolvedValue({ students: [] });
+    termApi.current.mockResolvedValue({ term: { id: 'term-1', name: 'Term 1' } });
+    timetableApi.myWeek.mockResolvedValue([]);
+    timetableApi.forClass.mockResolvedValue({ slots: [] });
+    planningApi.schemes.mockResolvedValue([]);
+    planningApi.lessonPlans.mockResolvedValue([]);
+    planningApi.overview.mockResolvedValue(null);
+    authApi.me.mockRejectedValue(new Error('no session'));
+});
 
 describe('SubjectHome — Planning & Calendar sections', () => {
     test('sidebar offers Planning and Calendar beside the existing sections', () => {
@@ -52,11 +63,15 @@ describe('SubjectHome — Planning & Calendar sections', () => {
         expect(buttons[buttons.length - 1]).toBe(within(nav).getByTestId('side-nav-profile'));
     });
 
-    test('Planning opens the shared planning-documents workspace (teacher bucket)', () => {
+    test('Planning opens the server-backed scheme and weekly lesson plan workflow', async () => {
         renderHome();
         fireEvent.click(within(screen.getByTestId('side-nav')).getByRole('button', { name: 'Planning' }));
-        expect(screen.getByRole('button', { name: /New Scheme of Work/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /New Lesson Plan/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Scheme of Work/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Weekly Lesson Plans/i })).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: /New scheme of work/i })).toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole('tab', { name: /Weekly Lesson Plans/i }));
+        expect(screen.getByRole('button', { name: /New lesson plan/i })).toBeInTheDocument();
     });
 
     test('Calendar opens the shared school calendar board', () => {
