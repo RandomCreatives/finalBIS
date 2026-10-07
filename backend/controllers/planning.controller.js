@@ -23,8 +23,10 @@ const SCHEME_SELECT = `
 `;
 
 const PLAN_SELECT = `
-    id, week_number, topic, objectives, activities, resources, homework,
-    reflection, status, submitted_at, reviewed_at, review_note,
+    id, week_number, topic, objectives, success_criteria, starter,
+    introduction, development, plenary, sen_planning,
+    activities, resources, homework, reflection, status, submitted_at,
+    reviewed_at, review_note,
     term_id, class_subject_id, scheme_id, author_id,
     author:users!author_id(id, name),
     reviewer:users!reviewed_by(id, name),
@@ -49,7 +51,15 @@ const shapeScheme = (s) => ({
     class: s.assignment?.class ?? null,
     subject: s.assignment?.subject ?? null,
     weeks: (s.weeks || [])
-        .map((w) => ({ id: w.id, weekNumber: w.week_number, topic: w.topic, objectives: w.objectives }))
+        .map((w) => ({
+            id: w.id,
+            weekNumber: w.week_number,
+            topic: w.topic,
+            objectives: w.objectives,
+            resources: w.resources,
+            assessment: w.assessment,
+            evaluation: w.evaluation,
+        }))
         .sort((a, b) => a.weekNumber - b.weekNumber),
 });
 
@@ -58,6 +68,12 @@ const shapePlan = (p) => ({
     weekNumber: p.week_number,
     topic: p.topic,
     objectives: p.objectives,
+    successCriteria: p.success_criteria,
+    starter: p.starter,
+    introduction: p.introduction,
+    development: p.development,
+    plenary: p.plenary,
+    senPlanning: p.sen_planning,
     activities: p.activities,
     resources: p.resources,
     homework: p.homework,
@@ -134,7 +150,7 @@ const getScheme = asyncHandler(async (req, res) => {
 
     const { data: weeks, error: weekError } = await supabase
         .from('scheme_weeks')
-        .select('id, week_number, topic, objectives')
+        .select('id, week_number, topic, objectives, resources, assessment, evaluation')
         .eq('scheme_id', req.params.id)
         .order('week_number');
 
@@ -209,7 +225,7 @@ const updateScheme = asyncHandler(async (req, res) => {
 
 /** PUT /api/planning/schemes/:id/weeks/:weekNumber */
 const updateSchemeWeek = asyncHandler(async (req, res) => {
-    const { topic, objectives } = req.body;
+    const { topic, objectives, resources, assessment, evaluation } = req.body;
 
     const { data: scheme, error: lookupError } = await supabase
         .from('schemes_of_work')
@@ -230,10 +246,13 @@ const updateSchemeWeek = asyncHandler(async (req, res) => {
                 week_number: Number(req.params.weekNumber),
                 topic: topic ?? '',
                 objectives: objectives ?? null,
+                resources: resources ?? null,
+                assessment: assessment ?? null,
+                evaluation: evaluation ?? null,
             },
             { onConflict: 'scheme_id,week_number' }
         )
-        .select('id, week_number, topic, objectives')
+        .select('id, week_number, topic, objectives, resources, assessment, evaluation')
         .single();
 
     if (error) throw error;
@@ -282,6 +301,7 @@ const listLessonPlans = asyncHandler(async (req, res) => {
 const upsertLessonPlan = asyncHandler(async (req, res) => {
     const {
         classSubjectId, weekNumber, topic, objectives,
+        successCriteria, starter, introduction, development, plenary, senPlanning,
         activities, resources, homework, reflection, schemeId,
     } = req.body;
 
@@ -314,6 +334,12 @@ const upsertLessonPlan = asyncHandler(async (req, res) => {
         week_number: weekNumber,
         topic,
         objectives: objectives ?? null,
+        success_criteria: successCriteria ?? null,
+        starter: starter ?? null,
+        introduction: introduction ?? null,
+        development: development ?? null,
+        plenary: plenary ?? null,
+        sen_planning: senPlanning ?? null,
         activities: activities ?? null,
         resources: resources ?? null,
         homework: homework ?? null,
