@@ -152,18 +152,46 @@ describe('Planning — admin approval hub', () => {
         useAuth.mockReturnValue({ user: { id: 'u-sub', role: 'subject_teacher', name: 'Dawit' } });
         renderPage();
 
-        expect(await screen.findByText('My schemes of work')).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /New scheme of work/i })).toBeInTheDocument();
         expect(screen.queryByText('My lesson plans')).not.toBeInTheDocument();
         expect(screen.getAllByRole('tab')).toHaveLength(2);
         fireEvent.click(screen.getByRole('tab', { name: /weekly lesson plans/i }));
-        expect(await screen.findByText('My lesson plans')).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /New lesson plan/i })).toBeInTheDocument();
+    });
+
+    test('a teacher edits schemes and weekly plans in inline tables, not dialogs', async () => {
+        useAuth.mockReturnValue({ user: { id: 'u-sub', role: 'subject_teacher', name: 'Dawit' } });
+        assignmentApi.subjects.mockResolvedValue({
+            academicYearId: 'y1',
+            assignments: [{ id: 'cs2', subject: { id: 's-mat', name: 'Mathematics' }, class: { id: 'c1', name: 'Year 3 - Green' } }],
+        });
+        planningApi.schemes.mockResolvedValue([{
+            id: 'sch2', title: 'Mathematics — Term 1', status: 'draft', authorId: 'u-sub', classSubjectId: 'cs2',
+            subject: { id: 's-mat', name: 'Mathematics' }, class: { id: 'c1', name: 'Year 3 - Green' }, weeks: [],
+        }]);
+        planningApi.scheme.mockResolvedValue({
+            id: 'sch2', title: 'Mathematics — Term 1', status: 'draft', authorId: 'u-sub', classSubjectId: 'cs2',
+            subject: { id: 's-mat', name: 'Mathematics' }, class: { id: 'c1', name: 'Year 3 - Green' },
+            weeks: [{ weekNumber: 1, topic: '', objectives: '', resources: '', assessment: '', evaluation: '' }],
+        });
+
+        renderPage();
+
+        expect(await screen.findByText('Mathematics — Term 1')).toBeInTheDocument();
+        expect(await screen.findByPlaceholderText('Unit / Topic')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('tab', { name: /weekly lesson plans/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /New lesson plan/i }));
+        expect(await screen.findByText('New weekly lesson plan')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     test('a main teacher authors too — the staff tracker is gone', async () => {
         useAuth.mockReturnValue({ user: { id: 'u-main', role: 'main_teacher', name: 'Meron' } });
         renderPage();
 
-        expect(await screen.findByText('My schemes of work')).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /New scheme of work/i })).toBeInTheDocument();
         expect(screen.getAllByRole('tab')).toHaveLength(2);
         expect(screen.queryByText('Staff overview')).not.toBeInTheDocument();
         expect(screen.queryByText('Teacher progress')).not.toBeInTheDocument();

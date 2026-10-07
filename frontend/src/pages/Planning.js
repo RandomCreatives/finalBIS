@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent,
-    DialogTitle, Grid, LinearProgress, MenuItem, Paper, Snackbar, Stack, Tab, Table,
-    TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Typography,
+    Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    LinearProgress, Paper, Snackbar, Stack, Tab, Table, TableBody, TableCell,
+    TableContainer, TableHead, TableRow, Tabs, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import SendIcon from '@mui/icons-material/Send';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import InboxIcon from '@mui/icons-material/MoveToInbox';
@@ -14,7 +13,10 @@ import { planningApi, termApi, assignmentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
-import { Section, StatGrid, StatCard } from '../components/DashboardSections';
+import { StatGrid, StatCard } from '../components/DashboardSections';
+import {
+    InlineLessonPlanTable, InlineSchemeCreator, InlineSchemeTable,
+} from '../components/planning/InlinePlanningTables';
 import { useAuth } from '../auth/AuthContext';
 
 const STATUS_META = {
@@ -55,9 +57,8 @@ export default function Planning() {
     const isAdmin = user?.role === 'admin';
 
     const [tab, setTab] = useState(0);
-    const [schemeDialog, setSchemeDialog] = useState(null);
-    const [openScheme, setOpenScheme] = useState(null);
-    const [planDialog, setPlanDialog] = useState(null);
+    const [newScheme, setNewScheme] = useState(false);
+    const [newPlan, setNewPlan] = useState(false);
     const [readDoc, setReadDoc] = useState(null); // admin reading one submission
     const [reviewDialog, setReviewDialog] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -90,17 +91,17 @@ export default function Planning() {
 
     const refresh = () => { schemes.reload(); plans.reload(); overview.reload(); };
 
-    const handleCreateScheme = async () => {
+    const handleCreateScheme = async (form) => {
         setSaving(true);
         setFormError('');
         try {
             await planningApi.createScheme({
-                classSubjectId: schemeDialog.classSubjectId,
-                title: schemeDialog.title.trim(),
-                aims: schemeDialog.aims || null,
+                classSubjectId: form.classSubjectId,
+                title: form.title.trim(),
+                aims: form.aims || null,
             });
             setToast('Scheme created — fill in each week');
-            setSchemeDialog(null);
+            setNewScheme(false);
             refresh();
         } catch (err) {
             setFormError(err.message);
@@ -109,21 +110,13 @@ export default function Planning() {
         }
     };
 
-    const openSchemeDetail = async (scheme) => {
+    const saveWeek = async (schemeId, weekNumber, fields) => {
         try {
-            setOpenScheme(await planningApi.scheme(scheme.id ?? scheme.schemeId));
-        } catch (err) {
-            setToast(err.message);
-        }
-    };
-
-    const saveWeek = async (weekNumber, fields) => {
-        try {
-            await planningApi.saveSchemeWeek(openScheme.id, weekNumber, fields);
-            setOpenScheme(await planningApi.scheme(openScheme.id));
+            await planningApi.saveSchemeWeek(schemeId, weekNumber, fields);
             setToast(`Week ${weekNumber} saved`);
         } catch (err) {
             setToast(err.message);
+            throw err;
         }
     };
 
@@ -132,7 +125,6 @@ export default function Planning() {
             await planningApi.submit(kind, id);
             setToast('Submitted for review');
             refresh();
-            if (openScheme?.id === id) setOpenScheme(await planningApi.scheme(id));
         } catch (err) {
             setToast(err.message);
         }
@@ -180,28 +172,30 @@ export default function Planning() {
         }
     };
 
-    const handleSavePlan = async () => {
+    const handleSavePlan = async (draft, isNew) => {
         setSaving(true);
         setFormError('');
         try {
+            const matchingScheme = (schemes.data || []).find((scheme) => scheme.classSubjectId === draft.classSubjectId);
             await planningApi.saveLessonPlan({
-                classSubjectId: planDialog.classSubjectId,
-                weekNumber: Number(planDialog.weekNumber),
-                topic: planDialog.topic.trim(),
-                objectives: planDialog.objectives || null,
-                successCriteria: planDialog.successCriteria || null,
-                starter: planDialog.starter || null,
-                introduction: planDialog.introduction || null,
-                development: planDialog.development || null,
-                plenary: planDialog.plenary || null,
-                senPlanning: planDialog.senPlanning || null,
-                activities: planDialog.activities || null,
-                resources: planDialog.resources || null,
-                homework: planDialog.homework || null,
-                reflection: planDialog.reflection || null,
+                classSubjectId: draft.classSubjectId,
+                weekNumber: Number(draft.weekNumber),
+                topic: String(draft.topic || '').trim(),
+                objectives: draft.objectives || null,
+                successCriteria: draft.successCriteria || null,
+                starter: draft.starter || null,
+                introduction: draft.introduction || null,
+                development: draft.development || null,
+                plenary: draft.plenary || null,
+                senPlanning: draft.senPlanning || null,
+                activities: draft.activities || null,
+                resources: draft.resources || null,
+                homework: draft.homework || null,
+                reflection: draft.reflection || null,
+                schemeId: draft.schemeId || matchingScheme?.id || null,
             });
             setToast('Lesson plan saved');
-            setPlanDialog(null);
+            if (isNew) setNewPlan(false);
             refresh();
         } catch (err) {
             setFormError(err.message);
@@ -382,268 +376,99 @@ export default function Planning() {
                     </Tabs>
 
                     {tab === 0 && (
-                    <Section title="My schemes of work" icon={<MenuBookIcon />} defaultExpanded
-                        action={
-                            <Button
-                                variant="contained" size="small" startIcon={<AddIcon />}
-                                onClick={() => {
-                                    setFormError('');
-                                    setSchemeDialog({ classSubjectId: '', title: '', aims: '' });
-                                }}
+                        <Stack spacing={2}>
+                            {newScheme ? (
+                                <InlineSchemeCreator
+                                    assignments={myAssignments.data?.assignments || []}
+                                    term={term}
+                                    weekCount={weekCount}
+                                    saving={saving}
+                                    error={formError}
+                                    onCreate={handleCreateScheme}
+                                    onCancel={() => { setNewScheme(false); setFormError(''); }}
+                                />
+                            ) : (
+                                <Button
+                                    variant="contained" size="small" startIcon={<AddIcon />}
+                                    onClick={() => { setFormError(''); setNewScheme(true); }}
+                                    sx={{ alignSelf: 'flex-start' }}
+                                >
+                                    New scheme of work
+                                </Button>
+                            )}
+
+                            <DataState
+                                loading={schemes.loading}
+                                error={schemes.error}
+                                empty={(schemes.data || []).length === 0 && !newScheme}
+                                emptyMessage="No schemes yet. Create one for each subject you teach this term."
                             >
-                                New scheme of work
-                            </Button>
-                        }
-                    >
-                        <DataState
-                            loading={schemes.loading}
-                            error={schemes.error}
-                            empty={(schemes.data || []).length === 0}
-                            emptyMessage="No schemes yet. Create one for each subject you teach this term."
-                        >
-                            <Grid container spacing={2.5}>
-                                {(schemes.data || []).map((s) => (
-                                    <Grid item xs={12} md={6} key={s.id}>
-                                        <Card>
-                                            <CardContent>
-                                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                                                    <Box>
-                                                        <Typography variant="h6">{s.title}</Typography>
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {s.subject?.name} · {s.class?.name}
-                                                        </Typography>
-                                                    </Box>
-                                                    <StatusChip status={s.status} />
-                                                </Stack>
-
-                                                {s.reviewNote && s.status === 'changes_requested' && (
-                                                    <Alert severity="warning" sx={{ mt: 1.5, py: 0.5 }}>
-                                                        {s.reviewNote}
-                                                    </Alert>
-                                                )}
-
-                                                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                                                    <Button size="small" onClick={() => openSchemeDetail(s)}>
-                                                        Open weeks
-                                                    </Button>
-                                                    {['draft', 'changes_requested'].includes(s.status) && (
-                                                        <Button
-                                                            size="small" startIcon={<SendIcon />}
-                                                            onClick={() => submit('schemes', s.id)}
-                                                        >
-                                                            Submit
-                                                        </Button>
-                                                    )}
-                                                </Stack>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                ))}
-                            </Grid>
-                        </DataState>
-                    </Section>
+                                <Stack spacing={2}>
+                                    {(schemes.data || []).map((scheme) => (
+                                        <InlineSchemeTable
+                                            key={scheme.id}
+                                            scheme={scheme}
+                                            userId={user?.id}
+                                            onSaveWeek={saveWeek}
+                                            onSubmit={submit}
+                                            submitting={saving}
+                                        />
+                                    ))}
+                                </Stack>
+                            </DataState>
+                        </Stack>
                     )}
 
                     {tab === 1 && (
-                    <Section title="My lesson plans" icon={<AutoStoriesIcon />}
-                        action={
-                            <Button
-                                variant="contained" size="small" startIcon={<AddIcon />}
-                                onClick={() => {
-                                    setFormError('');
-                                    setPlanDialog({
-                                        classSubjectId: '', weekNumber: currentWeek || 1, topic: '',
-                                        objectives: '', successCriteria: '', starter: '', introduction: '',
-                                        development: '', plenary: '', senPlanning: '',
-                                        activities: '', resources: '', homework: '', reflection: '',
-                                    });
-                                }}
+                        <Stack spacing={2}>
+                            {newPlan && (
+                                <InlineLessonPlanTable
+                                    plan={null}
+                                    assignments={myAssignments.data?.assignments || []}
+                                    currentWeek={currentWeek}
+                                    weekCount={weekCount}
+                                    saving={saving}
+                                    onSave={handleSavePlan}
+                                    onSubmit={submit}
+                                    onCancel={() => { setNewPlan(false); setFormError(''); }}
+                                />
+                            )}
+                            {!newPlan && (
+                                <Button
+                                    variant="contained" size="small" startIcon={<AddIcon />}
+                                    onClick={() => { setFormError(''); setNewPlan(true); }}
+                                    sx={{ alignSelf: 'flex-start' }}
+                                >
+                                    New lesson plan
+                                </Button>
+                            )}
+                            {formError && <Alert severity="error">{formError}</Alert>}
+                            <DataState
+                                loading={plans.loading}
+                                error={plans.error}
+                                empty={(plans.data || []).length === 0 && !newPlan}
+                                emptyMessage="No lesson plans yet for this term."
                             >
-                                New lesson plan
-                            </Button>
-                        }
-                    >
-                        <DataState
-                            loading={plans.loading}
-                            error={plans.error}
-                            empty={(plans.data || []).length === 0}
-                            emptyMessage="No lesson plans yet for this term."
-                        >
-                            <TableContainer component={Paper} variant="outlined">
-                                <Table size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell align="center">Week</TableCell>
-                                            <TableCell>Subject</TableCell>
-                                            <TableCell>Class</TableCell>
-                                            <TableCell>Topic</TableCell>
-                                            <TableCell>Status</TableCell>
-                                            <TableCell align="right">Actions</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {(plans.data || []).map((p) => (
-                                            <TableRow
-                                                key={p.id}
-                                                hover
-                                                sx={p.weekNumber === currentWeek ? { bgcolor: '#eff6ff' } : undefined}
-                                            >
-                                                <TableCell align="center" sx={{ fontWeight: 600 }}>{p.weekNumber}</TableCell>
-                                                <TableCell>{p.subject?.name}</TableCell>
-                                                <TableCell>{p.class?.name}</TableCell>
-                                                <TableCell>{p.topic}</TableCell>
-                                                <TableCell><StatusChip status={p.status} /></TableCell>
-                                                <TableCell align="right">
-                                                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                                        <Button
-                                                            size="small"
-                                                            disabled={p.status === 'approved'}
-                                                            onClick={() => {
-                                                                setFormError('');
-                                                                setPlanDialog({
-                                                                    classSubjectId: p.classSubjectId,
-                                                                    weekNumber: p.weekNumber,
-                                                                    topic: p.topic || '',
-                                                                    objectives: p.objectives || '',
-                                                                    activities: p.activities || '',
-                                                                    resources: p.resources || '',
-                                                                    homework: p.homework || '',
-                                                                    reflection: p.reflection || '',
-                                                                });
-                                                            }}
-                                                        >
-                                                            Edit
-                                                        </Button>
-                                                        {['draft', 'changes_requested'].includes(p.status) && (
-                                                            <Button size="small" onClick={() => submit('lesson-plans', p.id)}>
-                                                                Submit
-                                                            </Button>
-                                                        )}
-                                                    </Stack>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        </DataState>
-                    </Section>
+                                <Stack spacing={2}>
+                                    {(plans.data || []).map((plan) => (
+                                        <InlineLessonPlanTable
+                                            key={plan.id}
+                                            plan={plan}
+                                            assignments={myAssignments.data?.assignments || []}
+                                            currentWeek={currentWeek}
+                                            weekCount={weekCount}
+                                            saving={saving}
+                                            onSave={handleSavePlan}
+                                            onSubmit={submit}
+                                            onCancel={() => {}}
+                                        />
+                                    ))}
+                                </Stack>
+                            </DataState>
+                        </Stack>
                     )}
                 </>
             )}
-
-            {/* New scheme -------------------------------------------------------- */}
-            <Dialog open={Boolean(schemeDialog)} onClose={() => setSchemeDialog(null)} maxWidth="sm" fullWidth>
-                <DialogTitle>New scheme of work</DialogTitle>
-                <DialogContent>
-                    {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
-                    {schemeDialog && (
-                        <Stack spacing={2} sx={{ mt: 1 }}>
-                            <TextField
-                                select label="Subject and class" required fullWidth
-                                value={schemeDialog.classSubjectId}
-                                onChange={(e) => setSchemeDialog((d) => ({ ...d, classSubjectId: e.target.value }))}
-                                helperText={
-                                    (myAssignments.data?.assignments || []).length === 0
-                                        ? 'You have no subjects assigned this year.'
-                                        : undefined
-                                }
-                            >
-                                {(myAssignments.data?.assignments || []).map((a) => (
-                                    <MenuItem key={a.id} value={a.id}>
-                                        {a.subject?.name} — {a.class?.name}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                            <TextField label="Title" required fullWidth
-                                placeholder={term ? `English — ${term.name}` : 'Scheme title'}
-                                value={schemeDialog.title}
-                                onChange={(e) => setSchemeDialog((d) => ({ ...d, title: e.target.value }))} />
-                            <TextField label="Aims for the term" fullWidth multiline rows={3}
-                                value={schemeDialog.aims}
-                                onChange={(e) => setSchemeDialog((d) => ({ ...d, aims: e.target.value }))} />
-                            <Typography variant="caption" color="text.secondary">
-                                {weekCount} weekly rows will be created for you to fill in.
-                            </Typography>
-                        </Stack>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setSchemeDialog(null)}>Cancel</Button>
-                    <Button variant="contained" onClick={handleCreateScheme}
-                        disabled={saving || !schemeDialog?.classSubjectId || !schemeDialog?.title?.trim()}>
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Scheme weeks ------------------------------------------------------ */}
-            <Dialog open={Boolean(openScheme)} onClose={() => setOpenScheme(null)} maxWidth="md" fullWidth>
-                <DialogTitle>
-                    {openScheme?.title}
-                    <Typography variant="caption" color="text.secondary" display="block">
-                        {openScheme?.subject?.name} · {openScheme?.class?.name}
-                    </Typography>
-                </DialogTitle>
-                <DialogContent>
-                    {openScheme?.status === 'approved' && (
-                        <Alert severity="success" sx={{ mb: 2 }}>
-                            Approved — this scheme is now read-only.
-                        </Alert>
-                    )}
-                    <TableContainer component={Paper} variant="outlined" sx={{ mt: 1, overflowX: 'auto' }}>
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 800, minWidth: 76 }}>Week</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, minWidth: 180 }}>Unit / Topic</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, minWidth: 260 }}>Lesson Objectives</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, minWidth: 180 }}>Resources</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, minWidth: 160 }}>Assessment</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, minWidth: 160 }}>Remark / Evaluation</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {(openScheme?.weeks || []).map((w) => {
-                                    const canEdit = openScheme?.authorId === user?.id && openScheme?.status !== 'approved';
-                                    const editField = (field, value) => {
-                                        if (value === (w[field] || '')) return;
-                                        saveWeek(w.weekNumber, {
-                                            topic: field === 'topic' ? value : w.topic,
-                                            objectives: field === 'objectives' ? value : w.objectives,
-                                            resources: field === 'resources' ? value : w.resources,
-                                            assessment: field === 'assessment' ? value : w.assessment,
-                                            evaluation: field === 'evaluation' ? value : w.evaluation,
-                                        });
-                                    };
-                                    return (
-                                        <TableRow key={w.weekNumber} hover>
-                                            <TableCell><Chip label={`Week ${w.weekNumber}`} size="small" /></TableCell>
-                                            {['topic', 'objectives', 'resources', 'assessment', 'evaluation'].map((field) => (
-                                                <TableCell key={field} sx={{ verticalAlign: 'top' }}>
-                                                    <TextField
-                                                        hiddenLabel size="small" fullWidth multiline minRows={field === 'topic' ? 1 : 2}
-                                                        placeholder={field === 'topic' ? 'Topic' : field === 'objectives' ? 'Objectives' : field === 'resources' ? 'Resources' : field === 'assessment' ? 'Assessment' : 'Evaluation'}
-                                                        defaultValue={w[field] || ''}
-                                                        disabled={!canEdit}
-                                                        onBlur={(event) => editField(field, event.target.value)}
-                                                    />
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
-                        {openScheme?.authorId === user?.id ? 'Changes save when you leave a field.' : 'Read-only — only the author can edit.'}
-                    </Typography>
-                    <Button onClick={() => setOpenScheme(null)}>Close</Button>
-                </DialogActions>
-            </Dialog>
 
             {/* Reading one submission (admin) ------------------------------------- */}
             <Dialog open={Boolean(readDoc)} onClose={() => setReadDoc(null)} maxWidth="md" fullWidth>
@@ -720,91 +545,6 @@ export default function Planning() {
                             </Button>
                         </>
                     )}
-                </DialogActions>
-            </Dialog>
-
-            {/* Lesson plan (teacher editing) -------------------------------------- */}
-            <Dialog open={Boolean(planDialog)} onClose={() => setPlanDialog(null)} maxWidth="sm" fullWidth>
-                <DialogTitle>Lesson plan</DialogTitle>
-                <DialogContent>
-                    {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
-                    {planDialog && (
-                        <Stack spacing={2} sx={{ mt: 1 }}>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                <TextField
-                                    select label="Subject and class" required fullWidth
-                                    value={planDialog.classSubjectId}
-                                    onChange={(e) => setPlanDialog((d) => ({ ...d, classSubjectId: e.target.value }))}
-                                >
-                                    {(myAssignments.data?.assignments || []).map((a) => (
-                                        <MenuItem key={a.id} value={a.id}>
-                                            {a.subject?.name} — {a.class?.name}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                                <TextField
-                                    select label="Week" required sx={{ minWidth: 120 }}
-                                    value={planDialog.weekNumber}
-                                    onChange={(e) => setPlanDialog((d) => ({ ...d, weekNumber: e.target.value }))}
-                                >
-                                    {Array.from({ length: weekCount }, (_, i) => i + 1).map((n) => (
-                                        <MenuItem key={n} value={n}>
-                                            Week {n}{n === currentWeek ? ' (now)' : ''}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                            </Stack>
-
-                            <TextField label="Topic" required fullWidth
-                                value={planDialog.topic}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, topic: e.target.value }))} />
-                            <Alert severity="info" sx={{ py: 0.5 }}>
-                                Use the selected week from the Scheme of Work as your guide. The fields below follow the school lesson-plan template.
-                            </Alert>
-                            <TextField label="Learning objectives" fullWidth multiline rows={2}
-                                value={planDialog.objectives}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, objectives: e.target.value }))} />
-                            <TextField label="Success criteria" fullWidth multiline rows={2}
-                                value={planDialog.successCriteria}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, successCriteria: e.target.value }))} />
-                            <TextField label="Starter" fullWidth multiline rows={2}
-                                value={planDialog.starter}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, starter: e.target.value }))} />
-                            <TextField label="Introduction" fullWidth multiline rows={2}
-                                value={planDialog.introduction}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, introduction: e.target.value }))} />
-                            <TextField label="Development" fullWidth multiline rows={3}
-                                value={planDialog.development}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, development: e.target.value }))} />
-                            <TextField label="Plenary" fullWidth multiline rows={2}
-                                value={planDialog.plenary}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, plenary: e.target.value }))} />
-                            <TextField label="Planning for SEN" fullWidth multiline rows={2}
-                                value={planDialog.senPlanning}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, senPlanning: e.target.value }))} />
-                            <TextField label="Activities / practical assessment" fullWidth multiline rows={2}
-                                value={planDialog.activities}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, activities: e.target.value }))} />
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                <TextField label="Resources" fullWidth
-                                    value={planDialog.resources}
-                                    onChange={(e) => setPlanDialog((d) => ({ ...d, resources: e.target.value }))} />
-                                <TextField label="Homework" fullWidth
-                                    value={planDialog.homework}
-                                    onChange={(e) => setPlanDialog((d) => ({ ...d, homework: e.target.value }))} />
-                            </Stack>
-                            <TextField label="Reflection / evaluation (after teaching)" fullWidth multiline rows={2}
-                                value={planDialog.reflection}
-                                onChange={(e) => setPlanDialog((d) => ({ ...d, reflection: e.target.value }))} />
-                        </Stack>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setPlanDialog(null)}>Cancel</Button>
-                    <Button variant="contained" onClick={handleSavePlan}
-                        disabled={saving || !planDialog?.classSubjectId || !planDialog?.topic?.trim()}>
-                        Save
-                    </Button>
                 </DialogActions>
             </Dialog>
 
