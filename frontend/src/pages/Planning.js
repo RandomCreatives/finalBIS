@@ -373,6 +373,15 @@ export default function Planning() {
                 </>
             ) : (
                 <>
+                    <Tabs value={tab} onChange={(_, value) => setTab(value)} aria-label="Planning sections"
+                        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', minHeight: 44 }}>
+                        <Tab icon={<MenuBookIcon fontSize="small" />} iconPosition="start"
+                            label="Scheme of Work" value={0} sx={TAB_SX} />
+                        <Tab icon={<AutoStoriesIcon fontSize="small" />} iconPosition="start"
+                            label="Weekly Lesson Plans" value={1} sx={TAB_SX} />
+                    </Tabs>
+
+                    {tab === 0 && (
                     <Section title="My schemes of work" icon={<MenuBookIcon />} defaultExpanded
                         action={
                             <Button
@@ -433,7 +442,9 @@ export default function Planning() {
                             </Grid>
                         </DataState>
                     </Section>
+                    )}
 
+                    {tab === 1 && (
                     <Section title="My lesson plans" icon={<AutoStoriesIcon />}
                         action={
                             <Button
@@ -517,6 +528,7 @@ export default function Planning() {
                             </TableContainer>
                         </DataState>
                     </Section>
+                    )}
                 </>
             )}
 

@@ -148,13 +148,15 @@ describe('Planning — admin approval hub', () => {
         expect(rows[2].textContent).toContain('Dawit Haile');
     });
 
-    test('a teacher keeps the authoring workspace with no tabs', async () => {
+    test('a teacher gets tabbed authoring workspace', async () => {
         useAuth.mockReturnValue({ user: { id: 'u-sub', role: 'subject_teacher', name: 'Dawit' } });
         renderPage();
 
         expect(await screen.findByText('My schemes of work')).toBeInTheDocument();
-        expect(screen.getByText('My lesson plans')).toBeInTheDocument();
-        expect(screen.queryAllByRole('tab')).toHaveLength(0);
+        expect(screen.queryByText('My lesson plans')).not.toBeInTheDocument();
+        expect(screen.getAllByRole('tab')).toHaveLength(2);
+        fireEvent.click(screen.getByRole('tab', { name: /weekly lesson plans/i }));
+        expect(await screen.findByText('My lesson plans')).toBeInTheDocument();
     });
 
     test('a main teacher authors too — the staff tracker is gone', async () => {
@@ -162,7 +164,7 @@ describe('Planning — admin approval hub', () => {
         renderPage();
 
         expect(await screen.findByText('My schemes of work')).toBeInTheDocument();
-        expect(screen.queryAllByRole('tab')).toHaveLength(0);
+        expect(screen.getAllByRole('tab')).toHaveLength(2);
         expect(screen.queryByText('Staff overview')).not.toBeInTheDocument();
         expect(screen.queryByText('Teacher progress')).not.toBeInTheDocument();
     });
