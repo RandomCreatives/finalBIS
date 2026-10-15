@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const schoolTime = require('../utils/schoolTime');
 const { resolveTermId, requireTerm, weekCount } = require('./term.controller');
 const {
     NotFoundError, ConflictError, ForbiddenError, BadRequestError, asyncHandler,
@@ -492,7 +493,7 @@ const getPlanningOverview = asyncHandler(async (req, res) => {
     const expectedWeeks = weekCount(term.starts_on, term.ends_on);
 
     // Which teaching week are we in? Same math as GET /api/terms/current.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = schoolTime.todayIso();
     let currentWeek = null;
     if (today >= term.starts_on && today <= term.ends_on) {
         const elapsed = (new Date(today) - new Date(term.starts_on)) / 86400000;

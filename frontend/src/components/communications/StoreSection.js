@@ -9,6 +9,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import useApi from '../../hooks/useApi';
 import { storeApi } from '../../api/endpoints';
+import { formatDate } from '../../utils/schoolTime';
 
 /*
  * Store (Admin Communications) — a class's material requests.
@@ -123,8 +124,7 @@ export default function StoreSection({ klass, classId }) {
                                 <Chip size="small" label={meta.label} color={meta.color}
                                     sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
                                 <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                                    {new Date(r.createdAt).toLocaleDateString(undefined,
-                                        { day: 'numeric', month: 'short' })}
+                                    {formatDate(r.createdAt, { day: 'numeric', month: 'short' })}
                                 </Typography>
                             </Box>
                             <Typography sx={{ fontSize: 13.5, fontWeight: 600, mt: 0.75 }}>

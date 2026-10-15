@@ -21,18 +21,25 @@ jest.mock('../api/endpoints', () => ({
 }));
 
 describe('signInMeta', () => {
-    const now = new Date('2026-09-22T10:00:00');
+    // Times are on the school's clock: Addis Ababa, GMT+3.
+    const now = new Date('2026-09-22T10:00:00+03:00');
 
     test('no login reads Never; today, yesterday and old dates read naturally', () => {
         expect(signInMeta(null, now)).toMatchObject({ text: 'Never', tone: 'never' });
-        expect(signInMeta('2026-09-22T08:30:00', now)).toMatchObject({ text: 'Today 08:30', tone: 'fresh' });
-        expect(signInMeta('2026-09-21T17:00:00', now)).toMatchObject({ text: 'Yesterday', tone: 'fresh' });
-        expect(signInMeta('2026-09-20T09:00:00', now)).toMatchObject({ text: '2 days ago', tone: 'fresh' });
+        expect(signInMeta('2026-09-22T08:30:00+03:00', now)).toMatchObject({ text: 'Today 08:30', tone: 'fresh' });
+        expect(signInMeta('2026-09-21T17:00:00+03:00', now)).toMatchObject({ text: 'Yesterday', tone: 'fresh' });
+        expect(signInMeta('2026-09-20T09:00:00+03:00', now)).toMatchObject({ text: '2 days ago', tone: 'fresh' });
         // 3+ days quiet = stale, same bar as the dashboard card.
-        expect(signInMeta('2026-09-19T09:00:00', now)).toMatchObject({ text: '3 days ago', tone: 'stale' });
-        const old = signInMeta('2026-09-10T09:00:00', now);
+        expect(signInMeta('2026-09-19T09:00:00+03:00', now)).toMatchObject({ text: '3 days ago', tone: 'stale' });
+        const old = signInMeta('2026-09-10T09:00:00+03:00', now);
         expect(old.tone).toBe('stale');
         expect(old.text).toBe('10 Sept 2026');
+    });
+
+    test('days and times follow Addis Ababa, not UTC or the device', () => {
+        // 22:30 UTC on the 21st is 01:30 on the 22nd at school.
+        expect(signInMeta('2026-09-21T22:30:00Z', now)).toMatchObject({ text: 'Today 01:30', tone: 'fresh' });
+        expect(signInMeta('2026-09-22T05:12:00Z', now).text).toBe('Today 08:12');
     });
 });
 

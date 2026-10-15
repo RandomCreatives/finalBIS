@@ -7,6 +7,7 @@ import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import useApi from '../../hooks/useApi';
 import { permissionApi } from '../../api/endpoints';
+import { formatDate, formatDateTime } from '../../utils/schoolTime';
 
 /*
  * Request (Admin Communications) — permission requests to the admin.
@@ -26,7 +27,7 @@ export const REQUEST_STATUS_META = {
 
 const fmtPickup = (iso) =>
     iso
-        ? new Date(iso).toLocaleString(undefined, {
+        ? formatDateTime(iso, {
             weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
         })
         : '';
@@ -129,8 +130,7 @@ export default function RequestSection({ klass, classId, roster }) {
                                         sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
                                 )}
                                 <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                                    {new Date(r.createdAt).toLocaleDateString(undefined,
-                                        { day: 'numeric', month: 'short' })}
+                                    {formatDate(r.createdAt, { day: 'numeric', month: 'short' })}
                                 </Typography>
                             </Box>
                             <Typography sx={{ fontSize: 13.5, mt: 0.75, color: 'text.primary' }}>

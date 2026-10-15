@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const schoolTime = require('../utils/schoolTime');
 const { NotFoundError, ConflictError, asyncHandler } = require('../utils/errors');
 
 const MAX_ACTIVE_LOANS = 3;
@@ -19,7 +20,7 @@ const shape = (l) => ({
     returnedOn: l.returned_on,
     status: l.status,
     // Derived on read so it is never stale.
-    isOverdue: l.status === 'borrowed' && l.due_on < new Date().toISOString().slice(0, 10),
+    isOverdue: l.status === 'borrowed' && l.due_on < schoolTime.todayIso(),
     student: l.student,
 });
 
@@ -53,7 +54,7 @@ const issueBook = asyncHandler(async (req, res) => {
         throw new ConflictError(`Student already has ${MAX_ACTIVE_LOANS} books on loan`);
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = schoolTime.todayIso();
     if (active.some((l) => l.due_on < today)) {
         throw new ConflictError('Student has an overdue book and must return it first');
     }
@@ -116,7 +117,7 @@ const listLoans = asyncHandler(async (req, res) => {
     if (studentId) query = query.eq('student_id', studentId);
 
     if (overdue === 'true') {
-        query = query.eq('status', 'borrowed').lt('due_on', new Date().toISOString().slice(0, 10));
+        query = query.eq('status', 'borrowed').lt('due_on', schoolTime.todayIso());
     }
 
     const { data, error } = await query;
@@ -134,7 +135,7 @@ const getLibrarySummary = asyncHandler(async (req, res) => {
 
     if (error) throw error;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = schoolTime.todayIso();
 
     res.json({
         totalLoans: data.length,

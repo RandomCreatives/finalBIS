@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const schoolTime = require('../utils/schoolTime');
 const { NotFoundError, asyncHandler } = require('../utils/errors');
 
 /**
@@ -40,11 +41,10 @@ const shape = (e) => ({
  * Defaults to the current month when no range is given.
  */
 const listEvents = asyncHandler(async (req, res) => {
-    const now = new Date();
-    const from = req.query.from
-        || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const to = req.query.to
-        || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    // This month at school (Addis Ababa), whatever the server's clock says.
+    const month = schoolTime.monthBounds(schoolTime.currentMonth());
+    const from = req.query.from || month.from;
+    const to = req.query.to || month.to;
 
     let query = supabase
         .from('calendar_events')
@@ -101,8 +101,8 @@ const listEvents = asyncHandler(async (req, res) => {
  */
 const getUpcoming = asyncHandler(async (req, res) => {
     const days = Math.min(Number(req.query.days) || 14, 90);
-    const today = new Date().toISOString().slice(0, 10);
-    const horizon = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const today = schoolTime.todayIso();
+    const horizon = schoolTime.addDays(today, days);
 
     const { data, error } = await supabase
         .from('calendar_events')

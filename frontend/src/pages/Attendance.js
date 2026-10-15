@@ -8,12 +8,17 @@ import {
 import SaveIcon from '@mui/icons-material/Save';
 import TodayIcon from '@mui/icons-material/Today';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import InsightsIcon from '@mui/icons-material/Insights';
 import { attendanceApi, classApi, studentApi, subjectApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
+import useLiveApi from '../hooks/useLiveApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import LiveStatus from '../components/LiveStatus';
+import DailyReport from '../components/attendance/DailyReport';
 import { StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+import { formatDateTime, schoolMonth, schoolToday } from '../utils/schoolTime';
 
 const STATUSES = [
     { value: 'present', label: 'Present', color: 'success' },
@@ -34,11 +39,15 @@ const SORT_ORDER = { submitted: 0, pending: 1, returned: 2 };
 
 const TAB_SX = { minHeight: 44, textTransform: 'none', fontWeight: 700, fontSize: 14 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Dates and times on the school's clock (Addis Ababa, GMT+3).
+const today = () => schoolToday();
 
-const fmtDateTime = (iso) => (iso
-    ? new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : '—');
+const fmtDateTime = (iso) => (iso ? formatDateTime(iso) : '—');
+
+// Admin tabs.
+const TAB_REPORT = 0;
+const TAB_REGISTER = 1;
+const TAB_MONTHLY = 2;
 
 /**
  * Admin: every class's monthly submission for one chosen month, with the
@@ -46,13 +55,14 @@ const fmtDateTime = (iso) => (iso
  * a locked register).
  */
 function MonthlySubmissions() {
-    const [month, setMonth] = useState(today().slice(0, 7));
+    const [month, setMonth] = useState(schoolMonth());
     const [returnDialog, setReturnDialog] = useState(null); // { classId, className, note }
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const submissions = useApi(() => attendanceApi.submissions({ month }), [month]);
+    // Hand-ins arrive while the office watches: keep the list fresh.
+    const submissions = useLiveApi(() => attendanceApi.submissions({ month }), [month], { intervalMs: 60_000 });
 
     const rows = [...(submissions.data?.submissions || [])].sort(
         (a, b) => (SORT_ORDER[a.status] ?? 3) - (SORT_ORDER[b.status] ?? 3)
@@ -89,10 +99,12 @@ function MonthlySubmissions() {
                     onChange={(e) => setMonth(e.target.value)}
                     InputLabelProps={{ shrink: true }} sx={{ width: 170 }}
                 />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
                     Each main teacher submits their month at month end; submitted registers
                     lock. Returning one is the only way to reopen it.
                 </Typography>
+                <LiveStatus updatedAt={submissions.updatedAt} refreshing={submissions.refreshing}
+                    stale={submissions.stale} onRefresh={submissions.refresh} intervalMs={60_000} />
             </Stack>
 
             <DataState loading={submissions.loading} error={submissions.error}
@@ -196,7 +208,8 @@ export default function Attendance() {
     const isAdmin = user?.role === 'admin';
     const [searchParams] = useSearchParams();
 
-    const [tab, setTab] = useState(0);
+    // Admins land on the live daily report — unless a link opened a register.
+    const [tab, setTab] = useState(searchParams.get('classId') ? TAB_REGISTER : TAB_REPORT);
     const [classId, setClassId] = useState(searchParams.get('classId') || '');
     const [subjectId, setSubjectId] = useState('');
     const [date, setDate] = useState(searchParams.get('date') || today());
@@ -267,7 +280,7 @@ export default function Attendance() {
                 title="Attendance"
                 subtitle={
                     isAdmin
-                        ? 'Record daily registers, and track each class\u2019s monthly submission.'
+                        ? 'Today\u2019s registers as they come in, every class\u2019s register, and monthly submissions.'
                         : 'Record homeroom or subject attendance for a class.'
                 }
             />
@@ -275,6 +288,8 @@ export default function Attendance() {
             {isAdmin && (
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} aria-label="Attendance views"
                     sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', minHeight: 44 }}>
+                    <Tab icon={<InsightsIcon fontSize="small" />} iconPosition="start"
+                        label="Daily report" sx={TAB_SX} />
                     <Tab icon={<TodayIcon fontSize="small" />} iconPosition="start"
                         label="Daily register" sx={TAB_SX} />
                     <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start"
@@ -282,9 +297,20 @@ export default function Attendance() {
                 </Tabs>
             )}
 
-            {isAdmin && tab === 1 ? (
-                <MonthlySubmissions />
-            ) : (
+            {isAdmin && tab === TAB_MONTHLY && <MonthlySubmissions />}
+
+            {isAdmin && tab === TAB_REPORT && (
+                <DailyReport
+                    onOpenRegister={(id, day) => {
+                        setClassId(id);
+                        setSubjectId('');
+                        setDate(day);
+                        setTab(TAB_REGISTER);
+                    }}
+                />
+            )}
+
+            {(!isAdmin || tab === TAB_REGISTER) && (
                 <>
                     <Card sx={{ p: 2, mb: 2.5 }}>
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>

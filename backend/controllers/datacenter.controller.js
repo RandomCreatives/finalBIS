@@ -55,6 +55,7 @@ const getStats = asyncHandler(async (req, res) => {
         subjectsRes,
         classRollsRes,
         attendanceRes,
+        attendedRes,
     ] = await Promise.all([
         supabase
             .from('students')
@@ -99,13 +100,20 @@ const getStats = asyncHandler(async (req, res) => {
             .eq('school_id', schoolId)
             .eq('is_active', true)
             .not('class_id', 'is', null),
+        // Exact counts: the school's whole history is far beyond one API page
+        // (1000 rows), which used to freeze this rate on the first few days.
         supabase
             .from('attendance')
-            .select('status')
+            .select('id', { count: 'exact', head: true })
             .eq('school_id', schoolId),
+        supabase
+            .from('attendance')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', schoolId)
+            .in('status', ['present', 'late']),
     ]);
 
-    for (const r of [studentsRes, maleStudentsRes, femaleStudentsRes, otherGenderStudentsRes, classesRes, staffRes, subjectsRes, classRollsRes, attendanceRes]) {
+    for (const r of [studentsRes, maleStudentsRes, femaleStudentsRes, otherGenderStudentsRes, classesRes, staffRes, subjectsRes, classRollsRes, attendanceRes, attendedRes]) {
         if (r.error) throw r.error;
     }
 
@@ -141,10 +149,10 @@ const getStats = asyncHandler(async (req, res) => {
         .sort((a, b) => a.className.localeCompare(b.className));
 
     // Attendance rate: present and late count as attended.
-    const attendanceRows = attendanceRes.data || [];
-    const attended = attendanceRows.filter((a) => a.status === 'present' || a.status === 'late').length;
-    const attendanceRate = attendanceRows.length
-        ? Math.round((attended / attendanceRows.length) * 100)
+    const recorded = attendanceRes.count ?? 0;
+    const attended = attendedRes.count ?? 0;
+    const attendanceRate = recorded
+        ? Math.round((attended / recorded) * 100)
         : null;
 
     const stats = {

@@ -3,8 +3,11 @@ const { resolveYearId } = require('./academicYear.controller');
 const { weekCount } = require('./term.controller');
 const { isFixtureSubject } = require('../utils/subjects');
 const { asyncHandler } = require('../utils/errors');
+const { selectAll } = require('../utils/selectAll');
+const schoolTime = require('../utils/schoolTime');
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today at school (Addis Ababa, GMT+3) — never the server's UTC date. */
+const today = () => schoolTime.todayIso();
 
 /**
  * GET /api/dashboard/summary
@@ -13,21 +16,15 @@ const today = () => new Date().toISOString().slice(0, 10);
 const getAdminSummary = asyncHandler(async (req, res) => {
     const schoolId = req.user.school_id;
     const todayIso = today();
-    const todayDate = new Date(`${todayIso}T00:00:00Z`);
-    const dayOfWeek = todayDate.getUTCDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(todayDate);
-    monday.setUTCDate(monday.getUTCDate() + mondayOffset);
-    const weekDates = Array.from({ length: 5 }, (_, index) => {
-        const date = new Date(monday);
-        date.setUTCDate(monday.getUTCDate() + index);
-        return date.toISOString().slice(0, 10);
-    });
+    const weekDates = schoolTime.schoolWeek(todayIso);
+    // Today's card and the week grid share one read; a weekend register
+    // still counts for "today".
+    const attendanceDates = weekDates.includes(todayIso) ? weekDates : [...weekDates, todayIso];
 
     const countOf = (table, apply = (q) => q) =>
         apply(supabase.from(table).select('id', { count: 'exact', head: true }).eq('school_id', schoolId));
 
-    const [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceToday, attendanceWeekRows] =
+    const [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceRows] =
         await Promise.all([
             countOf('students', (q) => q.eq('is_active', true)),
             countOf('classes'),
@@ -42,27 +39,22 @@ const getAdminSummary = asyncHandler(async (req, res) => {
             countOf('clinic_visits', (q) => q.eq('leave_status', 'pending')),
             countOf('threads', (q) => q.eq('status', 'open')),
             countOf('tasks', (q) => q.in('status', ['pending', 'in_progress'])),
-            supabase
-                .from('attendance')
-                .select('status')
-                .eq('school_id', schoolId)
-                .eq('date', todayIso)
-                .is('subject_id', null),
-            supabase
-                .from('attendance')
-                .select('class_id, date')
-                .eq('school_id', schoolId)
-                .in('date', weekDates)
-                .is('subject_id', null),
+            // ~400 homeroom rows per school day: a week is far past the API's
+            // 1000-row cap, so this must page or later days silently vanish.
+            selectAll(
+                'attendance',
+                'class_id, date, status',
+                (q) => q.eq('school_id', schoolId).in('date', attendanceDates).is('subject_id', null),
+            ),
         ]);
 
-    for (const r of [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceToday, attendanceWeekRows]) {
+    for (const r of [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks]) {
         if (r.error) throw r.error;
     }
 
-    const records = attendanceToday.data || [];
+    const records = attendanceRows.filter((r) => r.date === todayIso);
     const present = records.filter((r) => r.status === 'present' || r.status === 'late').length;
-    const markedCells = new Set((attendanceWeekRows.data || []).map((row) => `${row.class_id}|${row.date}`));
+    const markedCells = new Set(attendanceRows.map((row) => `${row.class_id}|${row.date}`));
     const dayLabels = ['M', 'Tu', 'W', 'Th', 'F'];
     const attendanceWeek = {
         today: todayIso,
@@ -113,9 +105,8 @@ const getMySummary = asyncHandler(async (req, res) => {
 
     const yearScoped = yearId
         ? await (async () => {
-            // JS getDay(): Sunday=0. Schema uses ISO 1..7 with Monday=1.
-            const jsDay = new Date().getDay();
-            const isoDay = jsDay === 0 ? 7 : jsDay;
+            // ISO 1..7 with Monday=1, on the school's clock.
+            const isoDay = schoolTime.weekdayToday();
 
             const [staffRes, subjectRes] = await Promise.all([
                 supabase
@@ -299,7 +290,7 @@ const getMySummary = asyncHandler(async (req, res) => {
         }
     }
 
-    const horizon = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const horizon = schoolTime.addDays(today(), 14);
     const { data: events, error: eventError } = await supabase
         .from('calendar_events')
         .select('id, title, category, starts_on, ends_on, all_day, location, audience')
@@ -541,12 +532,11 @@ const getDataFlow = asyncHandler(async (req, res) => {
                 yearId
                     ? countOf(schoolId, 'class_staff', (q) => q.eq('academic_year_id', yearId))
                     : Promise.resolve({ count: 0, error: null }),
-                supabase
-                    .from('attendance')
-                    .select('class_id, status')
-                    .eq('school_id', schoolId)
-                    .eq('date', today())
-                    .is('subject_id', null),
+                selectAll(
+                    'attendance',
+                    'class_id, status',
+                    (q) => q.eq('school_id', schoolId).eq('date', today()).is('subject_id', null),
+                ).then((data) => ({ data, error: null })),
                 (term
                     ? supabase.from('schemes_of_work').select('status').eq('school_id', schoolId).eq('term_id', term.id)
                     : supabase.from('schemes_of_work').select('status').eq('school_id', schoolId)),

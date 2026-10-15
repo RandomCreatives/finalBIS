@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useWindowManager } from '../context/WindowManager';
+import { formatDate, formatTime } from '../utils/schoolTime';
 
 /* ── Styled components ───────────────────────────────────── */
 const TaskbarRoot = styled(Box)(({ theme }) => ({
@@ -224,10 +225,10 @@ export function Taskbar() {
                     {/* Clock */}
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 4, minWidth: 80 }}>
                         <Typography variant="h6" sx={{ fontWeight: 700, fontVariant: 'tabular-nums', lineHeight: 1.2 }}>
-                            {clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatTime(clock)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ fontVariant: 'tabular-nums', lineHeight: 1 }}>
-                            {clock.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                            {formatDate(clock, { weekday: 'short', day: 'numeric', month: 'short' })}
                         </Typography>
                     </Box>
                 </Box>

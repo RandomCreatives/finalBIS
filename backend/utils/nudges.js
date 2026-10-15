@@ -22,11 +22,15 @@ const ignorable = (error) => missingTable(error) || error?.code === '23505';
 /**
  * Create one nudge row per recipient, skipping anyone who already has the
  * same nudge (same dedupe key). Recipients are in-app user ids.
+ *
+ * Resolves to the ids that received the nudge just now ([] when everyone
+ * already had it, or on any failure), so a producer can follow up exactly
+ * once per recipient — e.g. one Telegram message per reminder.
  */
 const notify = async ({ schoolId, userIds, kind, title, body = '', link = null, dedupeKey }) => {
     try {
         const recipients = [...new Set((userIds || []).filter(Boolean))];
-        if (!schoolId || recipients.length === 0 || !title || !dedupeKey) return;
+        if (!schoolId || recipients.length === 0 || !title || !dedupeKey) return [];
 
         // Who already has this exact nudge?
         const { data: existing, error: selectError } = await supabase
@@ -37,7 +41,7 @@ const notify = async ({ schoolId, userIds, kind, title, body = '', link = null, 
             .in('user_id', recipients);
 
         if (selectError) {
-            if (missingTable(selectError)) return;
+            if (missingTable(selectError)) return [];
             throw selectError;
         }
 
@@ -54,12 +58,18 @@ const notify = async ({ schoolId, userIds, kind, title, body = '', link = null, 
                 dedupe_key: dedupeKey,
             }));
 
-        if (rows.length === 0) return;
+        if (rows.length === 0) return [];
 
         const { error: insertError } = await supabase.from('notifications').insert(rows);
-        if (insertError && !ignorable(insertError)) throw insertError;
+        if (insertError) {
+            // A concurrent producer won the race (23505): it owns the follow-up.
+            if (ignorable(insertError)) return [];
+            throw insertError;
+        }
+        return rows.map((row) => row.user_id);
     } catch (error) {
         console.warn('[nudges] skipped:', error.message);
+        return [];
     }
 };
 
@@ -75,9 +85,10 @@ const notifyAdmins = async ({ schoolId, excludeUserId = null, ...rest }) => {
 
         if (error) throw error;
         const ids = (data || []).map((u) => u.id).filter((id) => id !== excludeUserId);
-        await notify({ schoolId, userIds: ids, ...rest });
+        return await notify({ schoolId, userIds: ids, ...rest });
     } catch (error) {
         console.warn('[nudges] admin lookup failed:', error.message);
+        return [];
     }
 };
 

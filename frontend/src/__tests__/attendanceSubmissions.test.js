@@ -5,6 +5,7 @@ import { ThemeProvider } from '../theme';
 import Attendance from '../pages/Attendance';
 import { attendanceApi, classApi, studentApi, subjectApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
+import { schoolMonth } from '../utils/schoolTime';
 
 jest.mock('../auth/AuthContext', () => ({ useAuth: jest.fn() }));
 
@@ -14,6 +15,7 @@ jest.mock('../api/endpoints', () => ({
         forClass: jest.fn(),
         forStudent: jest.fn(),
         monthly: jest.fn(),
+        daily: jest.fn(),
         monthlyGrid: jest.fn(),
         submitMonth: jest.fn(),
         returnMonth: jest.fn(),
@@ -25,7 +27,7 @@ jest.mock('../api/endpoints', () => ({
     subjectApi: { list: jest.fn() },
 }));
 
-const MONTH = new Date().toISOString().slice(0, 7);
+const MONTH = schoolMonth();
 
 const SUBMISSIONS = {
     submissions: [
@@ -62,6 +64,10 @@ beforeEach(() => {
     attendanceApi.forClass.mockResolvedValue([]);
     attendanceApi.submissions.mockResolvedValue(SUBMISSIONS);
     attendanceApi.returnMonth.mockResolvedValue({ message: 'returned' });
+    attendanceApi.daily.mockResolvedValue({
+        date: '2026-10-15', isToday: true, reminderTime: '08:45', classes: [],
+        totals: { classes: 0, taken: 0, notTaken: 0, partial: 0, roster: 0, marked: 0, present: 0, late: 0, absent: 0, excused: 0, rate: null },
+    });
 });
 
 describe('Attendance — admin monthly submissions', () => {

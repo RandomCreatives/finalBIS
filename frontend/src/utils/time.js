@@ -1,6 +1,8 @@
 /*
  * Small human-time helpers shared by the staff screens.
+ * Always on the school's clock (Addis Ababa, GMT+3).
  */
+import { formatDate, formatDateTime, formatTime, schoolToday } from './schoolTime';
 
 /**
  * Turn a last-login timestamp into words an admin can scan.
@@ -16,17 +18,18 @@ export const signInMeta = (iso, now = new Date()) => {
         return { text: String(iso), tone: 'stale', title: String(iso) };
     }
 
-    const title = then.toLocaleString('en-GB', {
+    const title = formatDateTime(then, {
         weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
 
-    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const dayDiff = Math.round((startOfDay(now) - startOfDay(then)) / 86400000);
+    // Calendar days between the two, as the school's calendar counts them.
+    const dayOf = (d) => Date.parse(`${schoolToday(d)}T00:00:00Z`);
+    const dayDiff = Math.round((dayOf(now) - dayOf(then)) / 86400000);
 
     if (dayDiff <= 0) {
         return {
-            text: `Today ${then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+            text: `Today ${formatTime(then)}`,
             tone: 'fresh',
             title,
         };
@@ -36,7 +39,7 @@ export const signInMeta = (iso, now = new Date()) => {
         return { text: `${dayDiff} days ago`, tone: dayDiff >= 3 ? 'stale' : 'fresh', title };
     }
     return {
-        text: then.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+        text: formatDate(then, { day: 'numeric', month: 'short', year: 'numeric' }),
         tone: 'stale',
         title,
     };

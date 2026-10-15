@@ -54,6 +54,7 @@ import RequestSection from '../components/communications/RequestSection';
 import ConductSection from '../components/communications/ConductSection';
 import TentativeChip from '../components/TentativeChip';
 import { mainTeacherMarksheetSubjectsFor } from '../utils/marksheetSubjects';
+import { formatDate, formatDay, schoolHour, schoolToday } from '../utils/schoolTime';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -82,17 +83,19 @@ const GRADE_COLORS = {
     C: '#d97706', D: '#ea580c', F: '#dc2626',
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Today on the school's clock (Addis Ababa, GMT+3).
+const today = () => schoolToday();
 
 // Term 1 starts 24 Aug 2026 (per the school calendar) — derive the week.
-const TERM1_START = new Date('2026-08-24T00:00:00');
+// Plain calendar-date arithmetic, so no time zone can shift it.
+const TERM1_START = Date.parse('2026-08-24T00:00:00Z');
 const termWeekOf = (dateStr) => {
-    const days = Math.floor((new Date(dateStr) - TERM1_START) / 86400000);
+    const days = Math.floor((Date.parse(`${dateStr}T00:00:00Z`) - TERM1_START) / 86400000);
     return Math.min(17, Math.max(1, Math.floor(days / 7) + 1));
 };
 
 const greeting = () => {
-    const h = new Date().getHours();
+    const h = schoolHour();
     if (h < 12) return 'Good morning';
     if (h < 18) return 'Good afternoon';
     return 'Good evening';
@@ -177,8 +180,7 @@ const GRID_STATUS_META = {
     excused: { label: 'E', color: '#0284c7' },
 };
 
-const monthLabel = (month) => new Date(`${month}-01T00:00:00`)
-    .toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+const monthLabel = (month) => formatDay(`${month}-01`, { month: 'long', year: 'numeric' });
 
 function MonthlyGridDialog({ classId, month, klassName, open, onClose }) {
     const theme = useTheme();
@@ -505,7 +507,7 @@ function MonthlyReview({ klass, classId, onToast }) {
                         {submission && (
                             <Chip size="small"
                                 label={submission.status === 'submitted'
-                                    ? `Submitted ${new Date(submission.submittedAt).toLocaleDateString('en-GB')}`
+                                    ? `Submitted ${formatDate(submission.submittedAt, { day: '2-digit', month: '2-digit', year: 'numeric' })}`
                                     : 'Returned for correction'}
                                 color={submission.status === 'submitted' ? 'success' : 'warning'}
                                 sx={{ fontWeight: 700, borderRadius: 1 }} />
@@ -1637,7 +1639,7 @@ export default function ClassHome() {
         navigate('/classes');
     };
 
-    const dateLine = new Date().toLocaleDateString('en-GB', {
+    const dateLine = formatDay(today(), {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     });
 

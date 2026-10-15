@@ -11,6 +11,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 import { useSearchParams } from 'react-router-dom';
+import { formatDate } from '../utils/schoolTime';
 
 const INCIDENT_TYPES = [
     'illness', 'injury', 'accident', 'emergency',
@@ -171,7 +172,7 @@ export default function Clinic() {
                         <TableBody>
                             {rows.map((v) => (
                                 <TableRow key={v.id} hover>
-                                    <TableCell>{new Date(v.visitDate).toLocaleDateString()}</TableCell>
+                                    <TableCell>{formatDate(v.visitDate)}</TableCell>
                                     <TableCell sx={{ fontWeight: 500 }}>{v.student?.name}</TableCell>
                                     <TableCell>{v.complaint}</TableCell>
                                     <TableCell>{titleise(v.incidentType)}</TableCell>

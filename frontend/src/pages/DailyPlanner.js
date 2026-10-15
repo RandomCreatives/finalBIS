@@ -18,13 +18,8 @@ import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 import { lessonLabel } from '../utils/periods';
+import { formatDay, schoolToday, weekdayOf } from '../utils/schoolTime';
 
-const DAY_LABEL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-const pad = (n) => String(n).padStart(2, '0');
-const now = new Date();
-const TODAY_KEY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-const DOW = ((now.getDay()) + 6) % 7 + 1; // 1=Mon … 5=Fri, 6=Sat, 7=Sun
 
 const DEFAULT_STATE = {
     objectives: {}, // slotId -> { objective, links }
@@ -97,7 +92,11 @@ function PlannerList({ items, placeholder, addLabel, onAdd, onToggle, onRemove }
 
 export default function DailyPlanner() {
     const { user } = useAuth();
-    const storageKey = `planner:${user?.id}:${TODAY_KEY}`;
+    // Today on the school's clock (Addis Ababa), fixed for this visit so the
+    // day's notes stay under one key.
+    const [todayKey] = useState(() => schoolToday());
+    const dow = weekdayOf(todayKey); // 1=Mon … 5=Fri, 6=Sat, 7=Sun
+    const storageKey = `planner:${user?.id}:${todayKey}`;
 
     const [state, setState] = useState(() => {
         try {
@@ -113,7 +112,7 @@ export default function DailyPlanner() {
 
     const myWeek = useApi(() => timetableApi.myWeek(), []);
     const todaySlots = (myWeek.data || [])
-        .filter((s) => s.dayOfWeek === DOW)
+        .filter((s) => s.dayOfWeek === dow)
         .sort((a, b) => (a.startsAt || '').localeCompare(b.endsAt || ''));
 
     const setObjective = (slotId, field, value) =>
@@ -144,7 +143,7 @@ export default function DailyPlanner() {
         <>
             <PageHeader
                 title="Daily Planner"
-                subtitle={`${DAY_LABEL[now.getDay()]}, ${TODAY_KEY} — ${user?.name}`}
+                subtitle={`${formatDay(todayKey, { weekday: 'long' })}, ${todayKey} — ${user?.name}`}
                 action={<Chip icon={<TodayIcon />} label="Saved on this device" variant="outlined" />}
             />
 
@@ -159,7 +158,7 @@ export default function DailyPlanner() {
                     loading={myWeek.loading}
                     error={myWeek.error}
                     empty={!myWeek.loading && todaySlots.length === 0}
-                    emptyMessage={DOW > 5 ? 'No school days on weekends.' : 'No periods scheduled for you today.'}
+                    emptyMessage={dow > 5 ? 'No school days on weekends.' : 'No periods scheduled for you today.'}
                 >
                     <Stack spacing={1.5}>
                         {todaySlots.map((slot) => {

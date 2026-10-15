@@ -18,6 +18,9 @@ import SyncAltIcon from '@mui/icons-material/SyncAlt';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import { dashboardApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
+import useLiveApi from '../hooks/useLiveApi';
+import LiveStatus from '../components/LiveStatus';
+import { schoolHour } from '../utils/schoolTime';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
@@ -25,7 +28,7 @@ import { useAuth } from '../auth/AuthContext';
 import { lessonLabel } from '../utils/periods';
 
 const greeting = () => {
-    const hour = new Date().getHours();
+    const hour = schoolHour(); // the school's clock, not the device's
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
@@ -151,7 +154,8 @@ function FlowCard({ item }) {
 }
 
 function DataFlowCommandCenter() {
-    const { data, loading, error } = useApi(() => dashboardApi.dataFlow(), []);
+    // A live map: keeps itself current while the dashboard is open.
+    const { data, loading, error } = useLiveApi(() => dashboardApi.dataFlow(), [], { intervalMs: 60_000 });
 
     // Folded by default — the command center is the busiest card on the page;
     // one tap opens it when you want the full data-flow map.
@@ -221,7 +225,7 @@ function DataFlowCommandCenter() {
     );
 }
 
-function AttendanceWeekGrid({ data }) {
+function AttendanceWeekGrid({ data, live }) {
     const days = data?.days || [];
     const classes = data?.classes || [];
     return (
@@ -234,9 +238,12 @@ function AttendanceWeekGrid({ data }) {
                             Green tick means attendance has been saved for that class and day.
                         </Typography>
                     </Box>
-                    <Button size="small" component={RouterLink} to="/app/attendance" sx={{ fontWeight: 800 }}>
-                        Open attendance
-                    </Button>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        {live && <LiveStatus {...live} />}
+                        <Button size="small" component={RouterLink} to="/app/attendance" sx={{ fontWeight: 800 }}>
+                            Open attendance
+                        </Button>
+                    </Stack>
                 </Stack>
                 {classes.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">No classes found.</Typography>
@@ -288,7 +295,10 @@ function AttendanceWeekGrid({ data }) {
 
 /** School-wide view for administrators. */
 function AdminDashboard() {
-    const { data, loading, error } = useApi(() => dashboardApi.summary(), []);
+    // Registers arrive all morning: the attendance figures keep themselves fresh.
+    const { data, loading, error, updatedAt, refreshing, stale, refresh } =
+        useLiveApi(() => dashboardApi.summary(), []);
+    const live = { updatedAt, refreshing, stale, onRefresh: refresh };
 
     return (
         <DataState loading={loading} error={error}>
@@ -314,7 +324,7 @@ function AdminDashboard() {
                     </Grid>
 
                     <Grid item xs={12}>
-                        <AttendanceWeekGrid data={data.attendanceWeek} />
+                        <AttendanceWeekGrid data={data.attendanceWeek} live={live} />
                     </Grid>
 
                     <Grid item xs={12} md={6}>
@@ -364,7 +374,8 @@ function AdminDashboard() {
 
 /** Personal view for teaching staff: my classes, my day, my work. */
 function TeacherDashboard() {
-    const { data, loading, error } = useApi(() => dashboardApi.me(), []);
+    // "Attendance not yet recorded" clears itself once the register is in.
+    const { data, loading, error } = useLiveApi(() => dashboardApi.me(), [], { intervalMs: 60_000 });
 
     return (
         <DataState loading={loading} error={error}>

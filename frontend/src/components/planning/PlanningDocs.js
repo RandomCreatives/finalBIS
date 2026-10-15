@@ -16,6 +16,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import WordEditor from '../WordEditor';
 import Spreadsheet, { makeModel } from '../Spreadsheet';
+import { formatDate, formatTime } from '../../utils/schoolTime';
 
 const PLANNING_STORE_KEY = 'bisnoc.demo.planningDocs';
 const readDocs = () => JSON.parse(localStorage.getItem(PLANNING_STORE_KEY) || '{}');
@@ -241,8 +242,8 @@ function PlanningSection({ klass, onToast }) {
                                         {d.title}
                                     </Typography>
                                     <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .75 }}>
-                                        Last edited {new Date(d.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}{' '}
-                                        at {new Date(d.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                        Last edited {formatDate(d.updatedAt, { day: 'numeric', month: 'short' })}{' '}
+                                        at {formatTime(d.updatedAt)}
                                     </Typography>
                                 </CardContent>
                             </Card>

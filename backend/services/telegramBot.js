@@ -5,6 +5,8 @@ const {
     editMessageText,
     answerCallbackQuery,
 } = require('../utils/telegram');
+const schoolTime = require('../utils/schoolTime');
+const { resolveAttendanceReminder } = require('./attendanceReminders');
 
 const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
 
@@ -18,8 +20,12 @@ const kb = (rows) => ({ inline_keyboard: rows });
 // Short text so callback_data stays well under Telegram's 64-byte limit.
 const trunc = (s, n) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const fmtTime = (t) => (t || '').slice(0, 5);
+// Dates and weekdays on the school's clock (Addis Ababa, GMT+3), not the server's UTC.
 const todayStr = () =>
-    new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+    schoolTime.formatDay(schoolTime.todayIso(), { weekday: 'long', day: 'numeric', month: 'short' });
+
+// Same roles the website lets record attendance (routes: STAFF).
+const ATTENDANCE_ROLES = new Set(['admin', 'main_teacher', 'assistant_teacher', 'subject_teacher']);
 
 // ---------------------------------------------------------------------------
 // Data access (scoped exactly like the HTTP controllers)
@@ -55,8 +61,8 @@ async function getCurrentYearId(user) {
 const TT_SELECT = `id, starts_at, ends_at, room, class:classes(name), assignment:class_subjects(subject:subjects(name))`;
 
 async function getTodayTimetable(user, yearId) {
-    // JS getDay(): 0=Sun..6=Sat → DB day_of_week 1=Mon..7=Sun
-    const dow = ((new Date().getDay() + 6) % 7) + 1;
+    // DB day_of_week 1=Mon..7=Sun, today at school.
+    const dow = schoolTime.weekdayToday();
     const { data, error } = await supabase
         .from('timetable_slots')
         .select(TT_SELECT)
@@ -180,25 +186,50 @@ async function acknowledgeNotice(user, noticeId) {
         );
 }
 
+/**
+ * "Mark all present" for today's homeroom register — held to the same rules
+ * as the website: staff roles only, the class must be in the user's school,
+ * and a submitted (locked) month stays locked for everyone but admins.
+ */
 async function markAllPresent(classId, user) {
+    if (!ATTENDANCE_ROLES.has(user.role)) return { ok: false, reason: 'Only teachers can record attendance' };
+
+    const klass = await getKlass(classId, user.school_id);
+    if (!klass) return { ok: false, reason: 'Class not found' };
+
+    const date = schoolTime.todayIso();
+    if (user.role !== 'admin') {
+        const { data: submission } = await supabase
+            .from('attendance_submissions')
+            .select('status')
+            .eq('class_id', classId)
+            .eq('month', date.slice(0, 7))
+            .maybeSingle();
+        if (submission?.status === 'submitted') {
+            return { ok: false, reason: 'This month is submitted and locked — ask an admin to return it' };
+        }
+    }
+
     const students = await getStudents(classId);
-    if (!students.length) return false;
+    if (!students.length) return { ok: false, reason: 'No students in this class' };
 
     const records = students.map((s) => ({ studentId: s.id, status: 'present', note: '' }));
     const { error } = await supabase.rpc('mark_attendance', {
         p_school_id: user.school_id,
         p_class_id: classId,
         p_subject_id: null,
-        p_date: new Date().toISOString().slice(0, 10),
+        p_date: date,
         p_marked_by: user.id,
         p_records: records,
     });
 
     if (error) {
         console.error('[telegram] markAttendance failed:', error.message);
-        return false;
+        return { ok: false, reason: 'Failed to save' };
     }
-    return true;
+
+    await resolveAttendanceReminder({ schoolId: user.school_id, classId, date });
+    return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +311,7 @@ function buildAttendanceOptions(klass, classId) {
     const text = `✅ Attendance — ${klass?.name || 'class'}\nQuick action, or open the full register.`;
     const replyMarkup = kb([
         [btn('✅ Mark all present', `ap:${classId}`)],
-        [urlBtn('🌐 Detailed register', `${WEB_APP}/app/attendance?class=${classId}`)],
+        [urlBtn('🌐 Detailed register', `${WEB_APP}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`)],
         [btn('⬅️ Back', `c:${classId}`)],
     ]);
     return { text, replyMarkup };
@@ -405,8 +436,8 @@ async function handleCallback(query) {
         await editMessage(chatId, messageId, buildAttendanceOptions(klass, classId));
     } else if (data.startsWith('ap:')) {
         const classId = data.slice(3);
-        const ok = await markAllPresent(classId, user);
-        await answerCallbackQuery(cbId, { text: ok ? '✅ All present saved' : 'Failed to save' });
+        const { ok, reason } = await markAllPresent(classId, user);
+        await answerCallbackQuery(cbId, { text: ok ? '✅ All present saved' : reason, showAlert: !ok });
         if (ok) {
             const klass = await getKlass(classId, user.school_id);
             const students = await getStudents(classId);

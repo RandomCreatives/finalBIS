@@ -18,6 +18,7 @@ import { compressStudentPhoto } from '../utils/studentPhotos';
 import { useAuth } from '../auth/AuthContext';
 import { classIdFor } from '../utils/studentIds';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
+import { formatDate } from '../utils/schoolTime';
 
 export { classIdFor } from '../utils/studentIds';
 
@@ -93,7 +94,7 @@ const markedLine = (payment) => {
     const fmt = new Date(payment.markedAt);
     const date = Number.isNaN(fmt.getTime())
         ? ''
-        : fmt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        : formatDate(fmt, { day: 'numeric', month: 'short', year: 'numeric' });
     return `Recorded by ${payment.markedBy || 'staff'}${date ? ` · ${date}` : ''}`;
 };
 
