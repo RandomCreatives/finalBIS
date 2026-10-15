@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+require('dotenv').config({ path: './.env' });
 require('dotenv').config({ path: './backend/.env' });
 
 const { createClient } = require('@supabase/supabase-js');
@@ -15,6 +17,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
     auth: { persistSession: false, autoRefreshToken: false }
 });
 
+const RESET_PASSWORDS = process.argv.includes('--reset-passwords');
+const ENV_INITIAL_PASS = process.env.STAFF_INITIAL_PASSWORD;
+
 async function getSchoolId() {
     const { data: school, error } = await supabase
         .from('schools')
@@ -26,9 +31,7 @@ async function getSchoolId() {
     return school.id;
 }
 
-async function createUser(schoolId, { name, email, password, role }) {
-    const password_hash = await bcrypt.hash(password, 12);
-    
+async function handleUser(schoolId, { name, email, role }) {
     // Check if exists
     const { data: existing } = await supabase
         .from('users')
@@ -36,78 +39,86 @@ async function createUser(schoolId, { name, email, password, role }) {
         .eq('email', email)
         .maybeSingle();
     
-    if (existing) {
-        // Update
+    if (existing && !RESET_PASSWORDS) {
+        // Update without touching password_hash
+        const { error } = await supabase
+            .from('users')
+            .update({ name, role, is_active: true })
+            .eq('id', existing.id);
+        if (error) throw error;
+        console.log(`Updated existing: ${email} (${role}, password unchanged)`);
+        return { email, name, role, displayPass: '(password unchanged)' };
+    }
+    
+    const passToSet = ENV_INITIAL_PASS || crypto.randomBytes(16).toString('hex');
+    const password_hash = await bcrypt.hash(passToSet, 12);
+    const displayPass = ENV_INITIAL_PASS ? '(from STAFF_INITIAL_PASSWORD)' : passToSet;
+
+    if (existing && RESET_PASSWORDS) {
         const { error } = await supabase
             .from('users')
             .update({ name, password_hash, role, is_active: true })
             .eq('id', existing.id);
         if (error) throw error;
-        console.log(`Updated: ${email} (${role})`);
-        return existing.id;
+        console.log(`Reset password for existing: ${email} (${role})`);
+    } else {
+        const { error } = await supabase
+            .from('users')
+            .insert({
+                school_id: schoolId,
+                name,
+                email,
+                password_hash,
+                role,
+                is_active: true,
+            });
+        if (error) throw error;
+        console.log(`Created: ${email} (${role})`);
     }
-    
-    const { data, error } = await supabase
-        .from('users')
-        .insert({
-            school_id: schoolId,
-            name,
-            email,
-            password_hash,
-            role,
-            is_active: true,
-        })
-        .select('id')
-        .single();
-    
-    if (error) throw error;
-    console.log(`Created: ${email} (${role})`);
-    return data.id;
+
+    return { email, name, role, displayPass };
 }
 
 async function main() {
     const schoolId = await getSchoolId();
     console.log(`Using school: ${schoolId}\n`);
 
+    const results = [];
+
     // 2 Admins
-    await createUser(schoolId, {
+    results.push(await handleUser(schoolId, {
         name: 'System Administrator',
         email: 'admin1@bisnoc.local',
-        password: 'Admin2026!',
         role: 'admin'
-    });
-    await createUser(schoolId, {
+    }));
+    results.push(await handleUser(schoolId, {
         name: 'Deputy Administrator',
         email: 'admin2@bisnoc.local',
-        password: 'Admin2026!',
         role: 'admin'
-    });
+    }));
 
-    // 1 Clinic (role: main_teacher per create-test-accounts convention)
-    await createUser(schoolId, {
+    // 1 Clinic
+    results.push(await handleUser(schoolId, {
         name: 'Clinic Nurse',
         email: 'clinic@bisnoc.local',
-        password: 'Clinic2026!',
         role: 'main_teacher'
-    });
+    }));
 
-    // 1 Store (using assistant_teacher role until migration adds store_manager)
-    await createUser(schoolId, {
+    // 1 Store
+    results.push(await handleUser(schoolId, {
         name: 'Store Manager',
         email: 'store@bisnoc.local',
-        password: 'Store2026!',
         role: 'assistant_teacher'
-    });
+    }));
 
     // 1 Main Teacher
-    await createUser(schoolId, {
+    results.push(await handleUser(schoolId, {
         name: 'Main Teacher',
         email: 'mainteacher@bisnoc.local',
-        password: 'Teacher2026!',
         role: 'main_teacher'
-    });
+    }));
 
-    // 6 Subject Teachers (one per subject)
+    // 6 Subject Teachers
     const subjects = [
         { name: 'English Teacher', email: 'english@bisnoc.local' },
         { name: 'Amharic Teacher', email: 'amharic@bisnoc.local' },
@@ -118,26 +129,17 @@ async function main() {
     ];
 
     for (const s of subjects) {
-        await createUser(schoolId, {
+        results.push(await handleUser(schoolId, {
             name: s.name,
             email: s.email,
-            password: 'Teacher2026!',
             role: 'subject_teacher'
-        });
+        }));
     }
 
-    console.log('\n=== ALL ACCOUNTS CREATED ===');
-    console.log('Admins:');
-    console.log('  admin1@bisnoc.local / Admin2026!');
-    console.log('  admin2@bisnoc.local / Admin2026!');
-    console.log('Clinic:');
-    console.log('  clinic@bisnoc.local / Clinic2026! (role: main_teacher)');
-    console.log('Store:');
-    console.log('  store@bisnoc.local / Store2026! (role: store_manager)');
-    console.log('Main Teacher:');
-    console.log('  mainteacher@bisnoc.local / Teacher2026!');
-    console.log('Subject Teachers (all password: Teacher2026!):');
-    subjects.forEach(s => console.log(`  ${s.email}`));
+    console.log('\n=== ALL ACCOUNTS PROCESSED ===');
+    results.forEach(r => {
+        console.log(`  ${r.email.padEnd(25)} / ${r.displayPass.padEnd(35)} (${r.role})`);
+    });
 }
 
 main().catch(err => {

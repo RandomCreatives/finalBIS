@@ -1,7 +1,16 @@
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: './.env' });
+require('dotenv').config({ path: './backend/.env' });
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.API_URL || 'http://localhost:5000/api';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error('Error: ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.');
+    process.exit(1);
+}
 
 async function fetchAPI(endpoint, options, token) {
     const headers = { 'Content-Type': 'application/json' };
@@ -30,7 +39,7 @@ function parseCSV(content) {
 
 async function main() {
     // Read CSV
-    const csvPath = 'D:/DEV_TRIAL/BISFINAL/staff_info.csv';
+    const csvPath = path.join(__dirname, '..', '..', 'staff_info.csv');
     const csvContent = fs.readFileSync(csvPath, 'utf8');
     const staff = parseCSV(csvContent);
     console.log(`Parsed ${staff.length} staff records from CSV`);
@@ -38,14 +47,18 @@ async function main() {
     // Login as admin
     const loginRes = await fetchAPI('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email: 'admin@bisnoc.local', password: 'changeme123' })
+        body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD })
     });
     const token = loginRes.token;
+    if (!token) {
+        console.error('Admin login failed. Check ADMIN_EMAIL and ADMIN_PASSWORD.');
+        process.exit(1);
+    }
     console.log('Logged in as admin');
 
     // Get classes
     const classesRes = await fetchAPI('/classes', {}, token);
-    const classes = classesRes.classes;
+    const classes = classesRes.classes || [];
     const classByNameColor = {};
     classes.forEach(c => { 
         const color = c.name.replace('Year 3 - ', '');
@@ -55,13 +68,13 @@ async function main() {
 
     // Get subjects
     const subjectsRes = await fetchAPI('/subjects', {}, token);
-    const subjects = subjectsRes.subjects;
+    const subjects = subjectsRes.subjects || [];
     const subjectByName = {};
     subjects.forEach(s => { subjectByName[s.name] = s; });
 
     // Get existing users
     const usersRes = await fetchAPI('/users', {}, token);
-    const users = usersRes.users;
+    const users = usersRes.users || [];
     const userByName = {};
     users.forEach(u => { userByName[u.name] = u; });
 

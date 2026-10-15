@@ -1,6 +1,15 @@
 const fs = require('fs');
+require('dotenv').config({ path: './.env' });
+require('dotenv').config({ path: './backend/.env' });
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.API_URL || 'http://localhost:5000/api';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error('Error: ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.');
+    process.exit(1);
+}
 
 async function fetchAPI(endpoint, options, token) {
     const headers = { 'Content-Type': 'application/json' };
@@ -17,18 +26,22 @@ async function fetchAPI(endpoint, options, token) {
 async function main() {
     const loginRes = await fetchAPI('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email: 'admin@bisnoc.local', password: 'changeme123' })
+        body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD })
     });
     const token = loginRes.token;
+    if (!token) {
+        console.error('Admin login failed. Check ADMIN_EMAIL and ADMIN_PASSWORD.');
+        process.exit(1);
+    }
 
     // Get classes
     const classesRes = await fetchAPI('/classes', {}, token);
-    const classes = classesRes.classes;
+    const classes = classesRes.classes || [];
     const classIds = classes.map(c => c.id);
 
     // Get subjects
     const subjectsRes = await fetchAPI('/subjects', {}, token);
-    const subjects = subjectsRes.subjects;
+    const subjects = subjectsRes.subjects || [];
     const subjectByName = {};
     subjects.forEach(s => { subjectByName[s.name] = s; });
 
@@ -46,7 +59,7 @@ async function main() {
 
     // Get users (teachers)
     const usersRes = await fetchAPI('/users', {}, token);
-    const users = usersRes.users;
+    const users = usersRes.users || [];
 
     // Helper to find user by name
     function findUser(name) {
@@ -89,7 +102,6 @@ async function main() {
         }
 
         const teachers = teacherNames.map(name => findUser(name)).filter(Boolean);
-        const teacherNamesFound = teachers.map(t => t.name);
         const missing = teacherNames.filter(name => !findUser(name));
         
         if (missing.length > 0) {
