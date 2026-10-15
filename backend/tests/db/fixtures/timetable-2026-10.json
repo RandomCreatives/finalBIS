@@ -1,0 +1,646 @@
+{
+  "source": [
+    "Year_3_Time_Table_Updated.pdf",
+    "Year_4_Time_Table_Updated.pdf"
+  ],
+  "periods": [
+    "08:30-09:20",
+    "09:20-10:10",
+    "10:40-11:30",
+    "11:30-12:20",
+    "13:10-14:00",
+    "14:10-15:00"
+  ],
+  "classes": {
+    "Year 3 - Blue": {
+      "classTeacher": "Ms. Mahilet",
+      "days": {
+        "Mon": [
+          "MAT|Ms. Mahilet",
+          "FRA|French Teacher (TBC)",
+          "MAT|Ms. Mahilet",
+          "AMH|Ms. Fremnet",
+          "PE|Mr. Gebre",
+          "ENG|Mr. Emmanuel"
+        ],
+        "Tue": [
+          "ENG|Mr. Emmanuel",
+          "MAT|Ms. Mahilet",
+          "ART|Mr. Andu",
+          "GLS|Ms. Mahilet",
+          "SPL|Mr. Emmanuel",
+          "SCI|Ms. Mahilet"
+        ],
+        "Wed": [
+          "ENG|Mr. Emmanuel",
+          "MAT|Ms. Mahilet",
+          "MUS|New Teacher (Music)",
+          "SCI|Ms. Mahilet",
+          "AMH|Ms. Fremnet",
+          "GLS|Ms. Mahilet"
+        ],
+        "Thu": [
+          "ENG|Mr. Emmanuel",
+          "ART|Mr. Andu",
+          "MAT|Ms. Mahilet",
+          "FRA|French Teacher (TBC)",
+          "SCI|Ms. Mahilet",
+          "MUS|New Teacher (Music)"
+        ],
+        "Fri": [
+          "AMH|Ms. Fremnet",
+          "ENG|Mr. Emmanuel",
+          "MAT|Ms. Mahilet",
+          "ICT|Mr. Amanuel",
+          "GLS|Ms. Mahilet",
+          "PE|Mr. Gebre"
+        ]
+      }
+    },
+    "Year 3 - Yellow": {
+      "classTeacher": "Ms. Meron",
+      "days": {
+        "Mon": [
+          "ART|Mr. Andu",
+          "ENG|Mr. Yadan",
+          "MAT|Ms. Meron",
+          "ICT|Mr. Amanuel",
+          "SCI|Ms. Meron",
+          "AMH|Ms. Fremnet"
+        ],
+        "Tue": [
+          "AMH|Ms. Fremnet",
+          "MAT|Ms. Meron",
+          "ENG|Mr. Yadan",
+          "GLS|Ms. Meron",
+          "MUS|New Teacher (Music)",
+          "PE|Mr. Gebre"
+        ],
+        "Wed": [
+          "MUS|New Teacher (Music)",
+          "MAT|Ms. Meron",
+          "ENG|Mr. Yadan",
+          "PE|Mr. Gebre",
+          "SCI|Ms. Meron",
+          "AMH|Ms. Fremnet"
+        ],
+        "Thu": [
+          "MAT|Ms. Meron",
+          "FRA|French Teacher (TBC)",
+          "MAT|Ms. Meron",
+          "ART|Mr. Andu",
+          "GLS|Ms. Meron",
+          "ENG|Mr. Yadan"
+        ],
+        "Fri": [
+          "ENG|Mr. Yadan",
+          "MAT|Ms. Meron",
+          "FRA|French Teacher (TBC)",
+          "SCI|Ms. Meron",
+          "SPL|Mr. Yadan",
+          "GLS|Ms. Meron"
+        ]
+      }
+    },
+    "Year 3 - Red": {
+      "classTeacher": "Ms. Kalkidan",
+      "days": {
+        "Mon": [
+          "ENG|Mr. Mike",
+          "PE|Mr. Yalew",
+          "MAT|Ms. Kalkidan",
+          "FRA|Mr. Thomas",
+          "SCI|Ms. Kalkidan",
+          "ART|Mr. Kal"
+        ],
+        "Tue": [
+          "MAT|Ms. Kalkidan",
+          "PE|Mr. Yalew",
+          "ART|Mr. Kal",
+          "GLS|Ms. Kalkidan",
+          "AMH|Ms. Mihret",
+          "ENG|Mr. Mike"
+        ],
+        "Wed": [
+          "ENG|Mr. Mike",
+          "SCI|Ms. Kalkidan",
+          "MAT|Ms. Kalkidan",
+          "ICT|Mr. Amanuel",
+          "GLS|Ms. Kalkidan",
+          "AMH|Ms. Mihret"
+        ],
+        "Thu": [
+          "MAT|Ms. Kalkidan",
+          "ENG|Mr. Mike",
+          "MAT|Ms. Kalkidan",
+          "FRA|Mr. Thomas",
+          "GLS|Ms. Kalkidan",
+          "MUS|Mr. Sena"
+        ],
+        "Fri": [
+          "MUS|Mr. Sena",
+          "MAT|Ms. Kalkidan",
+          "AMH|Ms. Mihret",
+          "SCI|Ms. Kalkidan",
+          "ENG|Mr. Mike",
+          "SPL|Mr. Mike"
+        ]
+      }
+    },
+    "Year 3 - Green": {
+      "classTeacher": "Mr. Degnet",
+      "days": {
+        "Mon": [
+          "SCI|Mr. Degnet",
+          "ICT|Mr. Amanuel",
+          "MAT|Mr. Degnet",
+          "MUS|Mr. Sena",
+          "ENG|Mr. Desire",
+          "AMH|Ms. Mihret"
+        ],
+        "Tue": [
+          "ENG|Mr. Desire",
+          "MAT|Mr. Degnet",
+          "MAT|Mr. Degnet",
+          "MUS|Mr. Sena",
+          "SPL|Mr. Desire",
+          "GLS|Mr. Degnet"
+        ],
+        "Wed": [
+          "ART|Mr. Kal",
+          "MAT|Mr. Degnet",
+          "ENG|Mr. Desire",
+          "GLS|Mr. Degnet",
+          "AMH|Ms. Mihret",
+          "SCI|Mr. Degnet"
+        ],
+        "Thu": [
+          "ENG|Mr. Desire",
+          "PE|Mr. Yalew",
+          "MAT|Mr. Degnet",
+          "ART|Mr. Kal",
+          "SCI|Mr. Degnet",
+          "FRA|Mr. Thomas"
+        ],
+        "Fri": [
+          "ENG|Mr. Desire",
+          "FRA|Mr. Thomas",
+          "MAT|Mr. Degnet",
+          "AMH|Ms. Mihret",
+          "GLS|Mr. Degnet",
+          "PE|Mr. Yalew"
+        ]
+      }
+    },
+    "Year 4 - Blue": {
+      "classTeacher": "Mr. Mulugeta",
+      "days": {
+        "Mon": [
+          "MAT|Mr. Mulugeta",
+          "MUS|Mr. Sena",
+          "MAT|Mr. Mulugeta",
+          "PE|Mr. Yalew",
+          "GLS|Mr. Mulugeta",
+          "ENG|Mr. Desire"
+        ],
+        "Tue": [
+          "FRA|Mr. Thomas",
+          "MAT|Mr. Mulugeta",
+          "ICT|Mr. Amanuel",
+          "ENG|Mr. Desire",
+          "GLS|Mr. Mulugeta",
+          "AMH|Ms. Mihret"
+        ],
+        "Wed": [
+          "FRA|Mr. Thomas",
+          "MAT|Mr. Mulugeta",
+          "ART|Mr. Kal",
+          "SCI|Mr. Mulugeta",
+          "ENG|Mr. Desire",
+          "PE|Mr. Yalew"
+        ],
+        "Thu": [
+          "MAT|Mr. Mulugeta",
+          "ART|Mr. Kal",
+          "AMH|Ms. Mihret",
+          "SCI|Mr. Mulugeta",
+          "ENG|Mr. Desire",
+          "SPL|Mr. Desire"
+        ],
+        "Fri": [
+          "AMH|Ms. Mihret",
+          "MAT|Mr. Mulugeta",
+          "MUS|Mr. Sena",
+          "GLS|Mr. Mulugeta",
+          "ENG|Mr. Desire",
+          "SCI|Mr. Mulugeta"
+        ]
+      }
+    },
+    "Year 4 - Purple": {
+      "classTeacher": "Ms. Mekdelawit",
+      "days": {
+        "Mon": [
+          "FRA|Mr. Thomas",
+          "MAT|Ms. Mekdelawit",
+          "ENG|Mr. Emmanuel",
+          "SCI|Ms. Mekdelawit",
+          "SPL|Mr. Emmanuel",
+          "GLS|Ms. Mekdelawit"
+        ],
+        "Tue": [
+          "ICT|Mr. Amanuel",
+          "MAT|Ms. Mekdelawit",
+          "AMH|Ms. Mihret",
+          "SCI|Ms. Mekdelawit",
+          "ART|Mr. Kal",
+          "ENG|Mr. Emmanuel"
+        ],
+        "Wed": [
+          "PE|Mr. Yalew",
+          "AMH|Ms. Mihret",
+          "MAT|Ms. Mekdelawit",
+          "MUS|Mr. Sena",
+          "GLS|Ms. Mekdelawit",
+          "ENG|Mr. Emmanuel"
+        ],
+        "Thu": [
+          "GLS|Ms. Mekdelawit",
+          "MUS|Mr. Sena",
+          "MAT|Ms. Mekdelawit",
+          "PE|Mr. Yalew",
+          "ENG|Mr. Emmanuel",
+          "AMH|Ms. Mihret"
+        ],
+        "Fri": [
+          "MAT|Ms. Mekdelawit",
+          "MAT|Ms. Mekdelawit",
+          "ART|Mr. Kal",
+          "FRA|Mr. Thomas",
+          "SCI|Ms. Mekdelawit",
+          "ENG|Mr. Emmanuel"
+        ]
+      }
+    },
+    "Year 4 - Lavender": {
+      "classTeacher": "Ms. Selam",
+      "days": {
+        "Mon": [
+          "ART|Mr. Kal",
+          "MAT|Ms. Selam",
+          "AMH|Ms. Mihret",
+          "GLS|Ms. Selam",
+          "ENG|Mr. Yadan",
+          "MUS|Mr. Sena"
+        ],
+        "Tue": [
+          "MAT|Ms. Selam",
+          "ENG|Mr. Yadan",
+          "MAT|Ms. Selam",
+          "FRA|Mr. Thomas",
+          "GLS|Ms. Selam",
+          "PE|Mr. Yalew"
+        ],
+        "Wed": [
+          "MAT|Ms. Selam",
+          "MUS|Mr. Sena",
+          "SCI|Ms. Selam",
+          "AMH|Ms. Mihret",
+          "ENG|Mr. Yadan",
+          "GLS|Ms. Selam"
+        ],
+        "Thu": [
+          "MAT|Ms. Selam",
+          "FRA|Mr. Thomas",
+          "ENG|Mr. Yadan",
+          "AMH|Ms. Mihret",
+          "SCI|Ms. Selam",
+          "ICT|Mr. Amanuel"
+        ],
+        "Fri": [
+          "PE|Mr. Yalew",
+          "MAT|Ms. Selam",
+          "ENG|Mr. Yadan",
+          "SCI|Ms. Selam",
+          "ART|Mr. Kal",
+          "SPL|Mr. Yadan"
+        ]
+      }
+    },
+    "Year 4 - Crimson": {
+      "classTeacher": "Ms. Simegn",
+      "days": {
+        "Mon": [
+          "ENG|Mr. Emmanuel",
+          "MAT|Ms. Simegn",
+          "ART|Mr. Kal",
+          "AMH|Ms. Mihret",
+          "SCI|Ms. Simegn",
+          "FRA|Mr. Thomas"
+        ],
+        "Tue": [
+          "AMH|Ms. Mihret",
+          "MUS|Mr. Sena",
+          "MAT|Ms. Simegn",
+          "ENG|Mr. Emmanuel",
+          "GLS|Ms. Simegn",
+          "FRA|Mr. Thomas"
+        ],
+        "Wed": [
+          "MAT|Ms. Simegn",
+          "ENG|Mr. Emmanuel",
+          "GLS|Ms. Simegn",
+          "PE|Mr. Yalew",
+          "SCI|Ms. Simegn",
+          "ICT|Mr. Amanuel"
+        ],
+        "Thu": [
+          "MAT|Ms. Simegn",
+          "ENG|Mr. Emmanuel",
+          "MAT|Ms. Simegn",
+          "MUS|Mr. Sena",
+          "SCI|Ms. Simegn",
+          "SPL|Mr. Emmanuel"
+        ],
+        "Fri": [
+          "ART|Mr. Kal",
+          "GLS|Ms. Simegn",
+          "MAT|Ms. Simegn",
+          "PE|Mr. Yalew",
+          "ENG|Mr. Emmanuel",
+          "AMH|Ms. Mihret"
+        ]
+      }
+    },
+    "Year 4 - Green": {
+      "classTeacher": "Ms. Samrawit",
+      "days": {
+        "Mon": [
+          "AMH|Ms. Mihret",
+          "MAT|Ms. Samrawit",
+          "ENG|Mr. Mike",
+          "GLS|Ms. Samrawit",
+          "SPL|Mr. Mike",
+          "PE|Mr. Yalew"
+        ],
+        "Tue": [
+          "MAT|Ms. Samrawit",
+          "ENG|Mr. Mike",
+          "MAT|Ms. Samrawit",
+          "PE|Mr. Yalew",
+          "SCI|Ms. Samrawit",
+          "MUS|Mr. Sena"
+        ],
+        "Wed": [
+          "AMH|Ms. Mihret",
+          "MAT|Ms. Samrawit",
+          "FRA|Mr. Thomas",
+          "GLS|Ms. Samrawit",
+          "ART|Mr. Kal",
+          "ENG|Mr. Mike"
+        ],
+        "Thu": [
+          "AMH|Ms. Mihret",
+          "MAT|Ms. Samrawit",
+          "ICT|Mr. Amanuel",
+          "SCI|Ms. Samrawit",
+          "ENG|Mr. Mike",
+          "ART|Mr. Kal"
+        ],
+        "Fri": [
+          "MAT|Ms. Samrawit",
+          "GLS|Ms. Samrawit",
+          "ENG|Mr. Mike",
+          "SCI|Ms. Samrawit",
+          "MUS|Mr. Sena",
+          "FRA|Mr. Thomas"
+        ]
+      }
+    },
+    "Year 4 - Yellow": {
+      "classTeacher": "Ms. Mariamawit",
+      "days": {
+        "Mon": [
+          "AMH|Ms. Fremnet",
+          "ENG|Mr. Mike",
+          "MAT|Ms. Mariamawit",
+          "FRA|French Teacher (TBC)",
+          "GLS|Ms. Mariamawit",
+          "MUS|New Teacher (Music)"
+        ],
+        "Tue": [
+          "MAT|Ms. Mariamawit",
+          "PE|Mr. Gebre",
+          "ENG|Mr. Mike",
+          "GLS|Ms. Mariamawit",
+          "SPL|Mr. Mike",
+          "SCI|Ms. Mariamawit"
+        ],
+        "Wed": [
+          "MAT|Ms. Mariamawit",
+          "ENG|Mr. Mike",
+          "MAT|Ms. Mariamawit",
+          "ART|Mr. Andu",
+          "SCI|Ms. Mariamawit",
+          "FRA|French Teacher (TBC)"
+        ],
+        "Thu": [
+          "AMH|Ms. Fremnet",
+          "MAT|Ms. Mariamawit",
+          "ENG|Mr. Mike",
+          "GLS|Ms. Mariamawit",
+          "PE|Mr. Gebre",
+          "ART|Mr. Andu"
+        ],
+        "Fri": [
+          "ICT|Mr. Amanuel",
+          "ENG|Mr. Mike",
+          "MAT|Ms. Mariamawit",
+          "AMH|Ms. Fremnet",
+          "SCI|Ms. Mariamawit",
+          "MUS|New Teacher (Music)"
+        ]
+      }
+    },
+    "Year 4 - Magenta": {
+      "classTeacher": "Ms. Abigail",
+      "days": {
+        "Mon": [
+          "MAT|Ms. Abigail",
+          "GLS|Ms. Abigail",
+          "PE|Mr. Gebre",
+          "MUS|New Teacher (Music)",
+          "SCI|Ms. Abigail",
+          "ENG|Mr. Mike"
+        ],
+        "Tue": [
+          "ENG|Mr. Mike",
+          "MAT|Ms. Abigail",
+          "AMH|Ms. Fremnet",
+          "FRA|French Teacher (TBC)",
+          "SCI|Ms. Abigail",
+          "ICT|Mr. Amanuel"
+        ],
+        "Wed": [
+          "MAT|Ms. Abigail",
+          "ART|Mr. Andu",
+          "MAT|Ms. Abigail",
+          "ENG|Mr. Mike",
+          "SPL|Mr. Mike",
+          "GLS|Ms. Abigail"
+        ],
+        "Thu": [
+          "ENG|Mr. Mike",
+          "MAT|Ms. Abigail",
+          "AMH|Ms. Fremnet",
+          "MUS|New Teacher (Music)",
+          "GLS|Ms. Abigail",
+          "FRA|French Teacher (TBC)"
+        ],
+        "Fri": [
+          "ENG|Mr. Mike",
+          "MAT|Ms. Abigail",
+          "ART|Mr. Andu",
+          "PE|Mr. Gebre",
+          "SCI|Ms. Abigail",
+          "AMH|Ms. Fremnet"
+        ]
+      }
+    },
+    "Year 4 - Red": {
+      "classTeacher": "Ms. Denebe",
+      "days": {
+        "Mon": [
+          "MAT|Ms. Denebe",
+          "AMH|Ms. Fremnet",
+          "ENG|Mr. Yadan",
+          "SCI|Ms. Denebe",
+          "ART|Mr. Andu",
+          "GLS|Ms. Denebe"
+        ],
+        "Tue": [
+          "ENG|Mr. Yadan",
+          "FRA|French Teacher (TBC)",
+          "MAT|Ms. Denebe",
+          "SPL|Mr. Yadan",
+          "ART|Mr. Andu",
+          "AMH|Ms. Fremnet"
+        ],
+        "Wed": [
+          "ENG|Mr. Yadan",
+          "AMH|Ms. Fremnet",
+          "MAT|Ms. Denebe",
+          "FRA|French Teacher (TBC)",
+          "MUS|New Teacher (Music)",
+          "SCI|Ms. Denebe"
+        ],
+        "Thu": [
+          "MAT|Ms. Denebe",
+          "GLS|Ms. Denebe",
+          "PE|Mr. Gebre",
+          "SCI|Ms. Denebe",
+          "ENG|Mr. Yadan",
+          "MAT|Ms. Denebe"
+        ],
+        "Fri": [
+          "PE|Mr. Gebre",
+          "ENG|Mr. Yadan",
+          "MAT|Ms. Denebe",
+          "MUS|New Teacher (Music)",
+          "GLS|Ms. Denebe",
+          "ICT|Mr. Amanuel"
+        ]
+      }
+    },
+    "Year 4 - Violet": {
+      "classTeacher": "Ms. Abigiya",
+      "days": {
+        "Mon": [
+          "ENG|Mr. Desire",
+          "MAT|Ms. Abigiya",
+          "ART|Mr. Andu",
+          "SCI|Ms. Abigiya",
+          "MAT|Ms. Abigiya",
+          "FRA|French Teacher (TBC)"
+        ],
+        "Tue": [
+          "MAT|Ms. Abigiya",
+          "MUS|New Teacher (Music)",
+          "MAT|Ms. Abigiya",
+          "AMH|Ms. Fremnet",
+          "GLS|Ms. Abigiya",
+          "ENG|Mr. Desire"
+        ],
+        "Wed": [
+          "PE|Mr. Gebre",
+          "ICT|Mr. Amanuel",
+          "MAT|Ms. Abigiya",
+          "AMH|Ms. Fremnet",
+          "GLS|Ms. Abigiya",
+          "ENG|Mr. Desire"
+        ],
+        "Thu": [
+          "PE|Mr. Gebre",
+          "MAT|Ms. Abigiya",
+          "ENG|Mr. Desire",
+          "SCI|Ms. Abigiya",
+          "AMH|Ms. Fremnet",
+          "GLS|Ms. Abigiya"
+        ],
+        "Fri": [
+          "ART|Mr. Andu",
+          "MUS|New Teacher (Music)",
+          "ENG|Mr. Desire",
+          "SPL|Mr. Desire",
+          "FRA|French Teacher (TBC)",
+          "SCI|Ms. Abigiya"
+        ]
+      }
+    },
+    "Year 4 - Orange": {
+      "classTeacher": "Ms. Mekdelawit N.",
+      "days": {
+        "Mon": [
+          "MAT|Ms. Mekdelawit N.",
+          "MUS|New Teacher (Music)",
+          "SCI|Ms. Mekdelawit N.",
+          "ENG|Mr. Emmanuel",
+          "GLS|Ms. Mekdelawit N.",
+          "ICT|Mr. Amanuel"
+        ],
+        "Tue": [
+          "ART|Mr. Andu",
+          "ENG|Mr. Emmanuel",
+          "MAT|Ms. Mekdelawit N.",
+          "PE|Mr. Gebre",
+          "GLS|Ms. Mekdelawit N.",
+          "FRA|French Teacher (TBC)"
+        ],
+        "Wed": [
+          "AMH|Ms. Fremnet",
+          "MAT|Ms. Mekdelawit N.",
+          "ENG|Mr. Emmanuel",
+          "GLS|Ms. Mekdelawit N.",
+          "SPL|Mr. Emmanuel",
+          "PE|Mr. Gebre"
+        ],
+        "Thu": [
+          "MAT|Ms. Mekdelawit N.",
+          "MUS|New Teacher (Music)",
+          "MAT|Ms. Mekdelawit N.",
+          "ENG|Mr. Emmanuel",
+          "SCI|Ms. Mekdelawit N.",
+          "AMH|Ms. Fremnet"
+        ],
+        "Fri": [
+          "FRA|French Teacher (TBC)",
+          "MAT|Ms. Mekdelawit N.",
+          "AMH|Ms. Fremnet",
+          "ENG|Mr. Emmanuel",
+          "ART|Mr. Andu",
+          "SCI|Ms. Mekdelawit N."
+        ]
+      }
+    }
+  }
+}
