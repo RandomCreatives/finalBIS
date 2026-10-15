@@ -29,8 +29,8 @@ const dash = <Typography component="span" variant="body2" color="text.disabled">
  * Admin: every class's homeroom register for one school day — taken or not,
  * the day's numbers, and who saved it when. Today's report updates itself.
  */
-export default function DailyReport({ onOpenRegister }) {
-    const [date, setDate] = useState(schoolToday());
+export default function DailyReport({ onOpenRegister, initialDate }) {
+    const [date, setDate] = useState(initialDate || schoolToday());
     const isToday = date === schoolToday();
 
     const report = useLiveApi(() => attendanceApi.daily({ date }), [date], { live: isToday });

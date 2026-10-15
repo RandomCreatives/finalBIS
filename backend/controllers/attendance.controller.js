@@ -690,6 +690,181 @@ const buildDailyReport = async (schoolId, date) => {
     };
 };
 
+/*
+ * Week report — every class's homeroom register for one school week
+ * (Monday–Friday), with previous/next navigation and the term week number.
+ *
+ * Holidays on the calendar and days outside every term are closed days, not
+ * missing registers; days after today are upcoming, and today's untaken
+ * registers are pending (still open), so `missing` counts only school days
+ * before today. "Expected" registers are open days so far × classes with pupils.
+ */
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const mondayOf = (isoDate) => schoolTime.schoolWeek(isoDate)[0];
+
+const buildWeekReport = async (schoolId, date) => {
+    const today = schoolTime.todayIso();
+    const dates = schoolTime.schoolWeek(date);
+    const weekStart = dates[0];
+    const weekEnd = dates[4];
+    const currentWeekStart = mondayOf(today);
+
+    const { data: year, error: yearError } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('is_current', true)
+        .maybeSingle();
+    if (yearError) throw yearError;
+
+    const [classesRes, pupils, rows, staffRes, termsRes, holidaysRes] = await Promise.all([
+        supabase.from('classes').select('id, name').eq('school_id', schoolId).order('name'),
+        selectAll('students', 'class_id', (q) => q.eq('school_id', schoolId).eq('is_active', true)),
+        // A week of homeroom rows is ~2000 at this school: page past the cap.
+        selectAll(
+            'attendance',
+            'class_id, date, status',
+            (q) => q.eq('school_id', schoolId).in('date', dates).is('subject_id', null),
+        ),
+        year
+            ? supabase.from('class_staff')
+                .select('class_id, user:users(id, name)')
+                .eq('school_id', schoolId)
+                .eq('academic_year_id', year.id)
+                .eq('position', 'main')
+            : Promise.resolve({ data: [], error: null }),
+        supabase.from('terms').select('name, starts_on, ends_on').eq('school_id', schoolId).order('starts_on'),
+        supabase.from('calendar_events')
+            .select('title, class_id, starts_on, ends_on')
+            .eq('school_id', schoolId)
+            .eq('category', 'holiday')
+            .lte('starts_on', weekEnd)
+            .gte('ends_on', weekStart),
+    ]);
+    for (const r of [classesRes, staffRes, termsRes, holidaysRes]) {
+        if (r.error) throw r.error;
+    }
+
+    const terms = termsRes.data || [];
+    const holidays = (holidaysRes.data || []).filter((h) => !h.class_id); // whole-school only
+    const closedReason = (day) => {
+        const holiday = holidays.find((h) => h.starts_on <= day && day <= h.ends_on);
+        if (holiday) return holiday.title;
+        if (terms.length && !terms.some((t) => t.starts_on <= day && day <= t.ends_on)) return 'No school';
+        return null;
+    };
+
+    // Term weeks run Monday–Friday, counted from the week the term starts in.
+    const term = terms.find((t) => t.starts_on <= weekEnd && t.ends_on >= weekStart) || null;
+    const termWeek = term
+        ? {
+            name: term.name,
+            weekNumber: Math.floor(schoolTime.daysBetween(mondayOf(term.starts_on), weekStart) / 7) + 1,
+            weekCount: Math.floor(schoolTime.daysBetween(mondayOf(term.starts_on), mondayOf(term.ends_on)) / 7) + 1,
+        }
+        : null;
+
+    const roster = new Map();
+    for (const pupil of pupils) {
+        if (pupil.class_id) roster.set(pupil.class_id, (roster.get(pupil.class_id) || 0) + 1);
+    }
+    const mainTeacher = new Map();
+    for (const seat of staffRes.data || []) {
+        if (seat.user?.name && !mainTeacher.has(seat.class_id)) mainTeacher.set(seat.class_id, seat.user.name);
+    }
+    const counts = new Map();
+    for (const row of rows) {
+        const key = `${row.class_id}|${row.date}`;
+        const c = counts.get(key) || emptyCounts();
+        if (c[row.status] !== undefined) c[row.status] += 1;
+        c.marked += 1;
+        counts.set(key, c);
+    }
+
+    const days = dates.map((day, i) => ({
+        date: day,
+        label: DAY_LABELS[i],
+        isToday: day === today,
+        isFuture: day > today,
+        closed: closedReason(day),
+        taken: 0,
+        expected: 0,
+    }));
+
+    const totals = { expected: 0, taken: 0, missing: 0, openToday: 0, ...emptyCounts() };
+    const classes = (classesRes.data || []).map((klass) => {
+        const size = roster.get(klass.id) || 0;
+        let taken = 0;
+        let expected = 0;
+
+        const cells = days.map((day) => {
+            const open = !day.closed && !day.isFuture;
+            if (open && size > 0) {
+                expected += 1;
+                day.expected += 1;
+            }
+            const c = counts.get(`${klass.id}|${day.date}`);
+            if (c) {
+                if (open) {
+                    taken += 1;
+                    day.taken += 1;
+                }
+                for (const key of ['marked', 'present', 'late', 'absent', 'excused']) totals[key] += c[key];
+                return {
+                    date: day.date,
+                    status: c.marked < size ? 'partial' : 'taken',
+                    ...c,
+                    rate: rate(c.present + c.late, c.marked),
+                };
+            }
+            let status = 'not_taken';
+            if (day.isFuture) status = 'upcoming';
+            else if (day.closed) status = 'closed';
+            else if (size === 0) status = 'no_pupils';
+            else if (day.isToday) status = 'pending';
+            if (status === 'not_taken') totals.missing += 1;
+            if (status === 'pending') totals.openToday += 1;
+            return { date: day.date, status, ...emptyCounts(), rate: null };
+        });
+
+        totals.expected += expected;
+        totals.taken += taken;
+        return {
+            classId: klass.id,
+            className: klass.name,
+            mainTeacher: mainTeacher.get(klass.id) || null,
+            roster: size,
+            taken,
+            expected,
+            days: cells,
+        };
+    });
+    totals.rate = rate(totals.present + totals.late, totals.marked);
+
+    return {
+        weekStart,
+        weekEnd,
+        today,
+        isCurrentWeek: weekStart === currentWeekStart,
+        term: termWeek,
+        previousWeek: schoolTime.addDays(weekStart, -7),
+        nextWeek: weekStart < currentWeekStart ? schoolTime.addDays(weekStart, 7) : null,
+        timeZone: schoolTime.SCHOOL_TIME_ZONE,
+        generatedAt: new Date().toISOString(),
+        days,
+        classes,
+        totals,
+    };
+};
+
+/** GET /api/attendance/week?date=YYYY-MM-DD — admin; the school week containing `date` (default: this week). */
+const getWeekReport = asyncHandler(async (req, res) => {
+    const date = req.query.date || schoolTime.todayIso();
+    if (!DATE_RE.test(date)) throw new BadRequestError('date must be YYYY-MM-DD');
+    res.json(await buildWeekReport(req.user.school_id, date));
+});
+
 /** GET /api/attendance/daily?date=YYYY-MM-DD — admin; defaults to today (school time). */
 const getDailyReport = asyncHandler(async (req, res) => {
     const date = req.query.date || schoolTime.todayIso();
@@ -700,5 +875,5 @@ const getDailyReport = asyncHandler(async (req, res) => {
 module.exports = {
     markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary,
     getMonthlySummary, getMonthlyGrid, submitMonth, returnMonth, listSubmissions, exportCsv,
-    getDailyReport, buildDailyReport,
+    getDailyReport, buildDailyReport, getWeekReport, buildWeekReport,
 };

@@ -9,6 +9,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import TodayIcon from '@mui/icons-material/Today';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import InsightsIcon from '@mui/icons-material/Insights';
+import DateRangeIcon from '@mui/icons-material/DateRange';
 import { attendanceApi, classApi, studentApi, subjectApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import useLiveApi from '../hooks/useLiveApi';
@@ -16,9 +17,10 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import LiveStatus from '../components/LiveStatus';
 import DailyReport from '../components/attendance/DailyReport';
+import WeekView from '../components/attendance/WeekView';
 import { StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
-import { formatDateTime, schoolMonth, schoolToday } from '../utils/schoolTime';
+import { formatDateTime, schoolMonth, schoolToday, schoolWeekStart } from '../utils/schoolTime';
 
 const STATUSES = [
     { value: 'present', label: 'Present', color: 'success' },
@@ -46,8 +48,11 @@ const fmtDateTime = (iso) => (iso ? formatDateTime(iso) : '—');
 
 // Admin tabs.
 const TAB_REPORT = 0;
-const TAB_REGISTER = 1;
-const TAB_MONTHLY = 2;
+const TAB_WEEK = 1;
+const TAB_REGISTER = 2;
+const TAB_MONTHLY = 3;
+
+const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Admin: every class's monthly submission for one chosen month, with the
@@ -208,8 +213,15 @@ export default function Attendance() {
     const isAdmin = user?.role === 'admin';
     const [searchParams] = useSearchParams();
 
-    // Admins land on the live daily report — unless a link opened a register.
-    const [tab, setTab] = useState(searchParams.get('classId') ? TAB_REGISTER : TAB_REPORT);
+    // Admins land on the live daily report — unless a link opened a register
+    // (?classId=&date=) or a week (?week=YYYY-MM-DD).
+    const weekParam = DATE_PARAM.test(searchParams.get('week') || '') ? searchParams.get('week') : null;
+    const [tab, setTab] = useState(() => {
+        if (searchParams.get('classId')) return TAB_REGISTER;
+        return weekParam ? TAB_WEEK : TAB_REPORT;
+    });
+    const [week, setWeek] = useState(() => schoolWeekStart(weekParam || undefined));
+    const [reportDate, setReportDate] = useState(() => schoolToday());
     const [classId, setClassId] = useState(searchParams.get('classId') || '');
     const [subjectId, setSubjectId] = useState('');
     const [date, setDate] = useState(searchParams.get('date') || today());
@@ -266,6 +278,14 @@ export default function Attendance() {
         }
     };
 
+    // From the daily or weekly report: open one class's register for one day.
+    const openRegister = (id, day) => {
+        setClassId(id);
+        setSubjectId('');
+        setDate(day);
+        setTab(TAB_REGISTER);
+    };
+
     const roster = students.data || [];
     const alreadyMarked = (existing.data || []).length > 0;
 
@@ -290,6 +310,8 @@ export default function Attendance() {
                     sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', minHeight: 44 }}>
                     <Tab icon={<InsightsIcon fontSize="small" />} iconPosition="start"
                         label="Daily report" sx={TAB_SX} />
+                    <Tab icon={<DateRangeIcon fontSize="small" />} iconPosition="start"
+                        label="Weekly" sx={TAB_SX} />
                     <Tab icon={<TodayIcon fontSize="small" />} iconPosition="start"
                         label="Daily register" sx={TAB_SX} />
                     <Tab icon={<CalendarMonthIcon fontSize="small" />} iconPosition="start"
@@ -300,12 +322,17 @@ export default function Attendance() {
             {isAdmin && tab === TAB_MONTHLY && <MonthlySubmissions />}
 
             {isAdmin && tab === TAB_REPORT && (
-                <DailyReport
-                    onOpenRegister={(id, day) => {
-                        setClassId(id);
-                        setSubjectId('');
-                        setDate(day);
-                        setTab(TAB_REGISTER);
+                <DailyReport key={reportDate} initialDate={reportDate} onOpenRegister={openRegister} />
+            )}
+
+            {isAdmin && tab === TAB_WEEK && (
+                <WeekView
+                    weekStart={week}
+                    onWeekChange={setWeek}
+                    onOpenRegister={openRegister}
+                    onOpenDay={(day) => {
+                        setReportDate(day);
+                        setTab(TAB_REPORT);
                     }}
                 />
             )}

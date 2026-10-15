@@ -1,6 +1,6 @@
 import {
     addDays, formatDate, formatDateTime, formatDay, formatTime, isoDate,
-    schoolHour, schoolMonth, schoolToday, schoolWeekday, weekdayOf,
+    schoolHour, schoolMonth, schoolToday, schoolWeekday, schoolWeekStart, weekdayOf,
 } from '../utils/schoolTime';
 
 describe('school time — Addis Ababa, GMT+3', () => {
@@ -32,6 +32,14 @@ describe('school time — Addis Ababa, GMT+3', () => {
         expect(addDays('2026-12-30', 3)).toBe('2027-01-02');
         expect(addDays('2028-03-01', -1)).toBe('2028-02-29');
         expect(weekdayOf('2026-10-18')).toBe(7);
+    });
+
+    test('a school week starts on Monday; the weekend belongs to the week just ending (as on the server)', () => {
+        expect(schoolWeekStart('2026-10-12')).toBe('2026-10-12'); // Monday
+        expect(schoolWeekStart('2026-10-15')).toBe('2026-10-12'); // Thursday
+        expect(schoolWeekStart('2026-10-17')).toBe('2026-10-12'); // Saturday
+        expect(schoolWeekStart('2026-10-18')).toBe('2026-10-12'); // Sunday looks back
+        expect(schoolWeekStart('2027-01-01')).toBe('2026-12-28'); // across the new year
     });
 
     test('empty values format as empty text', () => {

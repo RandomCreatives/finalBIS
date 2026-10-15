@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
 import { ThemeProvider } from '../theme';
 import { useAuth } from '../auth/AuthContext';
-import { dashboardApi, termApi } from '../api/endpoints';
+import { attendanceApi, dashboardApi, termApi } from '../api/endpoints';
 
 jest.mock('../auth/AuthContext', () => ({
     useAuth: jest.fn(),
@@ -16,6 +16,7 @@ jest.mock('../api/endpoints', () => ({
         summary: jest.fn(),
         me: jest.fn(),
     },
+    attendanceApi: { week: jest.fn() },
     termApi: { current: jest.fn() },
 }));
 
@@ -43,6 +44,10 @@ beforeEach(() => {
     dashboardApi.dataFlow.mockResolvedValue({
         role: 'admin', healthScore: 92, openItems: 4, flows: [],
     });
+    attendanceApi.week.mockImplementation(async ({ date }) => ({
+        weekStart: date, weekEnd: date, today: date, isCurrentWeek: true, term: null,
+        days: [], classes: [], totals: { expected: 0, taken: 0, missing: 0, marked: 0, present: 0, late: 0, absent: 0, excused: 0, rate: null },
+    }));
 });
 
 describe('Dashboard — collapsible data flow', () => {

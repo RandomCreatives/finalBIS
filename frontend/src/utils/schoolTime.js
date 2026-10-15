@@ -50,6 +50,9 @@ export const isoDate = (year, monthIndex, day) =>
 export const addDays = (date, days) =>
     new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 
+/** Monday of the school week containing `date` (a Sunday looks back). */
+export const schoolWeekStart = (date = schoolToday()) => addDays(date, 1 - weekdayOf(date));
+
 /** A calendar date ('YYYY-MM-DD'), never shifted. "15 Oct 2026" by default. */
 export const formatDay = (date, options = { day: 'numeric', month: 'short', year: 'numeric' }) =>
     (date ? new Date(`${String(date).slice(0, 10)}T00:00:00Z`).toLocaleDateString(LOCALE, { ...options, timeZone: 'UTC' }) : '');

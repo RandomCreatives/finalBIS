@@ -337,10 +337,13 @@ describe('school time (GMT+3) in the reports', () => {
         assert.equal(schoolTime.clock.now().toISOString().slice(0, 10), '2026-11-11', 'UTC: Wednesday');
         const res = await request(app).get('/api/dashboard/summary').auth(signToken(ADMIN));
         assert.equal(res.status, 200);
-        assert.equal(res.body.attendanceWeek.today, DAY);
         assert.equal(res.body.attendanceToday.marked, 2, "Red's register, dated Thursday");
-        const red = res.body.attendanceWeek.classes.find((k) => k.id === RED);
-        assert.deepEqual(red.days.filter((d) => d.marked).map((d) => d.date), [DAY]);
+
+        const week = await request(app).get('/api/attendance/week').auth(signToken(ADMIN));
+        assert.equal(week.body.today, DAY);
+        const red = week.body.classes.find((k) => k.classId === RED);
+        assert.deepEqual(red.days.filter((d) => d.status === 'taken').map((d) => d.date), [DAY]);
+        assert.equal(week.body.days.find((d) => d.isToday).date, DAY);
 
         const report = await request(app).get('/api/attendance/daily').auth(signToken(ADMIN));
         assert.equal(report.body.date, DAY);

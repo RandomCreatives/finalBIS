@@ -72,21 +72,22 @@ describe('attendance reports read past the 1000-row API cap', () => {
     const weekRows = () => week.flatMap((date, d) => CLASS_IDS.flatMap((_, c) =>
         register(date, c, (p) => (d <= 1 || p >= 15 ? 'present' : 'absent'))));
 
-    test('dashboard: every class shows a tick for every day its register was taken', async () => {
+    test('week grid: every class shows a tick for every day its register was taken', async () => {
         const rows = weekRows();
         const today = schoolTime.todayIso();
         if (!week.includes(today)) rows.push(...register(today, 0, 'present'));
         reset(baseTables(rows));
 
-        const res = await request(app).get('/api/dashboard/summary').auth(signToken(ADMIN));
+        const res = await request(app).get(`/api/attendance/week?date=${week[0]}`).auth(signToken(ADMIN));
         assert.equal(res.status, 200);
-
-        const missing = res.body.attendanceWeek.classes.flatMap((k) =>
-            k.days.filter((d) => !d.marked).map((d) => `${k.name} ${d.date}`));
+        const missing = res.body.classes.flatMap((k) =>
+            k.days.filter((d) => !['taken', 'partial'].includes(d.status)).map((d) => `${k.className} ${d.date}`));
         assert.deepEqual(missing, [], 'registers that were taken must show as taken');
+        assert.equal(res.body.totals.marked, 2100);
 
-        const todayRows = rows.filter((r) => r.date === today);
-        assert.equal(res.body.attendanceToday.marked, todayRows.length);
+        const summary = await request(app).get('/api/dashboard/summary').auth(signToken(ADMIN));
+        assert.equal(summary.status, 200);
+        assert.equal(summary.body.attendanceToday.marked, rows.filter((r) => r.date === today).length);
     });
 
     test('data center: the attendance rate uses every record ever taken', async () => {

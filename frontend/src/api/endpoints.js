@@ -194,6 +194,7 @@ export const attendanceApi = {
         client.get(`/attendance/student/${studentId}`, { params }).then((r) => r.data),
     monthly: (params) => client.get('/attendance/monthly', { params }).then((r) => r.data),
     daily: (params) => client.get('/attendance/daily', { params }).then((r) => r.data),
+    week: (params) => client.get('/attendance/week', { params }).then((r) => r.data),
     monthlyGrid: (params) => client.get('/attendance/monthly-grid', { params }).then((r) => r.data),
     submitMonth: (payload) => client.post('/attendance/submit', payload).then((r) => r.data),
     returnMonth: (payload) => client.post('/attendance/return', payload).then((r) => r.data),

@@ -16,6 +16,7 @@ jest.mock('../api/endpoints', () => ({
         forStudent: jest.fn(),
         monthly: jest.fn(),
         daily: jest.fn(),
+        week: jest.fn(),
         monthlyGrid: jest.fn(),
         submitMonth: jest.fn(),
         returnMonth: jest.fn(),

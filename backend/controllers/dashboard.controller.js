@@ -16,55 +16,36 @@ const today = () => schoolTime.todayIso();
 const getAdminSummary = asyncHandler(async (req, res) => {
     const schoolId = req.user.school_id;
     const todayIso = today();
-    const weekDates = schoolTime.schoolWeek(todayIso);
-    // Today's card and the week grid share one read; a weekend register
-    // still counts for "today".
-    const attendanceDates = weekDates.includes(todayIso) ? weekDates : [...weekDates, todayIso];
 
     const countOf = (table, apply = (q) => q) =>
         apply(supabase.from(table).select('id', { count: 'exact', head: true }).eq('school_id', schoolId));
 
-    const [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceRows] =
+    const [students, classes, staff, loans, overdue, pendingLeave, openThreads, openTasks, attendanceRows] =
         await Promise.all([
             countOf('students', (q) => q.eq('is_active', true)),
             countOf('classes'),
-            supabase
-                .from('classes')
-                .select('id, name')
-                .eq('school_id', schoolId)
-                .order('name'),
             countOf('users', (q) => q.eq('is_active', true)),
             countOf('library_loans', (q) => q.eq('status', 'borrowed')),
             countOf('library_loans', (q) => q.eq('status', 'borrowed').lt('due_on', today())),
             countOf('clinic_visits', (q) => q.eq('leave_status', 'pending')),
             countOf('threads', (q) => q.eq('status', 'open')),
             countOf('tasks', (q) => q.in('status', ['pending', 'in_progress'])),
-            // ~400 homeroom rows per school day: a week is far past the API's
-            // 1000-row cap, so this must page or later days silently vanish.
+            // Today's homeroom registers, every page of them (the API caps a
+            // request at 1000 rows). The week grid has its own endpoint:
+            // GET /api/attendance/week, with previous/next navigation.
             selectAll(
                 'attendance',
-                'class_id, date, status',
-                (q) => q.eq('school_id', schoolId).in('date', attendanceDates).is('subject_id', null),
+                'status',
+                (q) => q.eq('school_id', schoolId).eq('date', todayIso).is('subject_id', null),
             ),
         ]);
 
-    for (const r of [students, classes, classRows, staff, loans, overdue, pendingLeave, openThreads, openTasks]) {
+    for (const r of [students, classes, staff, loans, overdue, pendingLeave, openThreads, openTasks]) {
         if (r.error) throw r.error;
     }
 
-    const records = attendanceRows.filter((r) => r.date === todayIso);
+    const records = attendanceRows;
     const present = records.filter((r) => r.status === 'present' || r.status === 'late').length;
-    const markedCells = new Set(attendanceRows.map((row) => `${row.class_id}|${row.date}`));
-    const dayLabels = ['M', 'Tu', 'W', 'Th', 'F'];
-    const attendanceWeek = {
-        today: todayIso,
-        days: weekDates.map((date, index) => ({ date, label: dayLabels[index] })),
-        classes: (classRows.data || []).map((klass) => ({
-            id: klass.id,
-            name: klass.name,
-            days: weekDates.map((date) => ({ date, marked: markedCells.has(`${klass.id}|${date}`) })),
-        })),
-    };
 
     res.json({
         students: students.count ?? 0,
@@ -80,7 +61,6 @@ const getAdminSummary = asyncHandler(async (req, res) => {
             present,
             rate: records.length ? Number(((present / records.length) * 100).toFixed(1)) : null,
         },
-        attendanceWeek,
     });
 });
 
