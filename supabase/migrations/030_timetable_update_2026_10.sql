@@ -735,25 +735,37 @@ END $migration$;
 
 
 -- ---------------------------------------------------------------------------
--- Result: lessons per week for every Year 3/4 teacher (registration excluded)
+-- Result: every Year 3/4 teacher's week (registration excluded). A teacher's
+-- students, marksheets, attendance and planning all follow these classes and
+-- subjects, so nothing else needs setting up per teacher.
 -- ---------------------------------------------------------------------------
-SELECT u.name                                              AS teacher,
-       string_agg(DISTINCT sj.name, ', ' ORDER BY sj.name) AS subjects,
-       count(*)                                            AS lessons_per_week,
-       string_agg(DISTINCT c.name, ', ' ORDER BY c.name)   AS classes,
+WITH lessons AS (
+    SELECT ts.teacher_id, ts.class_id, sj.name AS subject, sj.code
+    FROM timetable_slots ts
+    JOIN academic_years ay ON ay.id = ts.academic_year_id AND ay.is_current
+    JOIN classes c         ON c.id = ts.class_id
+    JOIN class_subjects cs ON cs.id = ts.class_subject_id
+    JOIN subjects sj       ON sj.id = cs.subject_id
+    WHERE c.name ~ '^Year [34] - ' AND sj.code <> 'REG'
+)
+SELECT u.name                                                  AS teacher,
+       string_agg(DISTINCT l.subject, ', ' ORDER BY l.subject) AS subjects,
+       count(*)                                                AS lessons_per_week,
+       string_agg(DISTINCT c.name, ', ' ORDER BY c.name)       AS classes,
+       (SELECT count(*)
+        FROM students st
+        WHERE st.is_active
+          AND st.class_id IN (SELECT l2.class_id FROM lessons l2 WHERE l2.teacher_id = u.id))
+                                                               AS students,
        CASE
            WHEN u.name ~* '\steacher\s+\d+$'
                THEN 'placeholder: rename on the Staff page once the teacher is confirmed'
            WHEN u.email = 'emmanuel@bisnoc.local' AND u.last_login_at IS NULL
                THEN 'new account: first password BisNoc2026! (change it under Settings)'
            ELSE ''
-       END                                                 AS note
-FROM timetable_slots ts
-JOIN academic_years ay ON ay.id = ts.academic_year_id AND ay.is_current
-JOIN classes c         ON c.id = ts.class_id
-JOIN class_subjects cs ON cs.id = ts.class_subject_id
-JOIN subjects sj       ON sj.id = cs.subject_id
-JOIN users u           ON u.id = ts.teacher_id
-WHERE c.name ~ '^Year [34] - ' AND sj.code <> 'REG'
+       END                                                     AS note
+FROM lessons l
+JOIN users u   ON u.id = l.teacher_id
+JOIN classes c ON c.id = l.class_id
 GROUP BY u.id, u.name, u.email, u.last_login_at
-ORDER BY bool_or(sj.code IN ('MAT', 'SCI', 'GLS', 'GCT')), min(sj.name), u.name;
+ORDER BY bool_or(l.code IN ('MAT', 'SCI', 'GLS', 'GCT')), min(l.subject), u.name;

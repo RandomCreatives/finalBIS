@@ -188,6 +188,18 @@ async function seedSeptember() {
         [school.id, JSON.stringify(CLASSES.map((name) => ({ name, level: Number(name[5]) })))]
     )) classes.set(c.name, c.id);
 
+    // Three pupils per class, plus one who has left (not counted).
+    const pupils = CLASSES.flatMap((c, i) => [1, 2, 3].map((n) => ({
+        class_id: classes.get(c), admission_no: `BIS-${i + 1}-${n}`, name: `Pupil ${i + 1}.${n}`, roll: n, active: true,
+    })));
+    pupils.push({ class_id: classes.get('Year 3 - Blue'), admission_no: 'BIS-LEFT', name: 'Former Pupil', roll: null, active: false });
+    await t.query(
+        `INSERT INTO students (school_id, class_id, admission_no, name, roll_num, is_active)
+         SELECT $1, x.class_id, x.admission_no, x.name, x.roll, x.active
+         FROM jsonb_to_recordset($2::jsonb) AS x(class_id UUID, admission_no TEXT, name TEXT, roll INT, active BOOLEAN)`,
+        [school.id, JSON.stringify(pupils)]
+    );
+
     await t.query(
         `INSERT INTO class_staff (school_id, academic_year_id, class_id, user_id, position)
          SELECT $1, $2, x.class_id, x.user_id, 'main'
@@ -282,7 +294,7 @@ async function seedSeptember() {
         [school.id, term.id, seatId.get(`${classes.get('Year 4 - Purple')}|ENG`), users.get('Dihurwe Desire')]
     );
 
-    return { school, year, pastYear, users, subjects, classes, seatId, scheme, oldSeatId: oldSeat.id };
+    return { school, year, pastYear, term, users, subjects, classes, seatId, scheme, oldSeatId: oldSeat.id };
 }
 
 /** Lesson grid of the 14 classes as `${class}|${day}|${period}` -> `${code}|${teacher}`. */
@@ -447,6 +459,69 @@ describe('030 timetable update on the September database', () => {
         assert.equal(et4.is_active, false, 'unrelated deactivated placeholder left alone');
     });
 
+    // The app derives a teacher's sign-in card, classes, students and marks
+    // permissions from their teaching seats (auth.listSubjectTeachers,
+    // utils/classAccess, marksheet.controller). Mirror those rules here.
+    test('Mr. Emmanuel can work from day one: card, classes, students, marks', async () => {
+        const me = await one(`SELECT id FROM users WHERE email = 'emmanuel@bisnoc.local'`);
+        const args = [me.id, seed.year.id];
+
+        const card = await rows(
+            `SELECT s.name AS subject, count(*)::int AS seats
+             FROM class_subjects cs
+             JOIN subjects s ON s.id = cs.subject_id
+             JOIN users u ON u.id = cs.teacher_id
+             WHERE cs.teacher_id = $1 AND cs.academic_year_id = $2 AND s.code <> 'REG'
+               AND u.is_active AND u.role = 'subject_teacher'
+             GROUP BY s.name ORDER BY s.name`,
+            args
+        );
+        assert.deepEqual(card, [{ subject: 'English', seats: 4 }, { subject: 'Spelling', seats: 4 }]);
+
+        const classes = await rows(
+            `SELECT name FROM classes WHERE id IN (
+                 SELECT class_id FROM class_staff WHERE user_id = $1 AND academic_year_id = $2
+                 UNION
+                 SELECT class_id FROM class_subjects WHERE teacher_id = $1 AND academic_year_id = $2)
+             ORDER BY name`,
+            args
+        );
+        assert.deepEqual(classes.map((c) => c.name),
+            ['Year 3 - Blue', 'Year 4 - Crimson', 'Year 4 - Orange', 'Year 4 - Purple']);
+
+        const pupils = await rows(
+            `SELECT id, class_id FROM students
+             WHERE is_active AND class_id IN (
+                 SELECT class_id FROM class_subjects WHERE teacher_id = $1 AND academic_year_id = $2)`,
+            args
+        );
+        assert.equal(pupils.length, 12);
+
+        const pairs = new Set((await rows(
+            `SELECT c.name || ' ' || s.code AS pair
+             FROM class_subjects cs
+             JOIN classes c ON c.id = cs.class_id
+             JOIN subjects s ON s.id = cs.subject_id
+             WHERE cs.teacher_id = $1 AND cs.academic_year_id = $2`,
+            args
+        )).map((r) => r.pair));
+        assert.ok(pairs.has('Year 4 - Purple ENG') && pairs.has('Year 4 - Purple SPL'));
+        assert.ok(!pairs.has('Year 4 - Purple MAT'), 'Maths stays with the class teacher');
+        assert.ok(!pairs.has('Year 3 - Yellow ENG'), 'not one of his classes');
+
+        // English marks for his pupils save like anyone else's.
+        for (const pupil of pupils) {
+            await t.query(
+                `INSERT INTO marksheets (school_id, academic_year_id, student_id, subject_id, class_id,
+                                         term_id, marks, max_marks, entered_by)
+                 VALUES ($1, $2, $3, $4, $5, $6, 42, 50, $7)`,
+                [seed.school.id, seed.year.id, pupil.id, seed.subjects.get('ENG'), pupil.class_id, seed.term.id, me.id]
+            );
+        }
+        const saved = await one(`SELECT count(*)::int AS n FROM marksheets WHERE entered_by = $1`, [me.id]);
+        assert.equal(saved.n, 12);
+    });
+
     test('teacher loads match the PDFs; the result table reports them', async () => {
         const byTeacher = Object.fromEntries(summary.map((r) => [r.teacher, r]));
         const expected = {
@@ -473,6 +548,10 @@ describe('030 timetable update on the September database', () => {
         );
         assert.equal(byTeacher.Emmanuel.classes, 'Year 3 - Blue, Year 4 - Crimson, Year 4 - Orange, Year 4 - Purple');
         assert.equal(byTeacher.Emmanuel.subjects, 'English, Spelling');
+        // His students come with his classes: 4 classes x 3 active pupils.
+        assert.equal(Number(byTeacher.Emmanuel.students), 12);
+        assert.equal(Number(byTeacher['Sena Elias Tasisa'].students), 21);
+        assert.equal(Number(byTeacher['Mahilet N.'].students), 3, 'pupils who left are not counted');
         assert.match(byTeacher.Emmanuel.note, /BisNoc2026!/);
         assert.match(byTeacher['English Teacher 3'].note, /placeholder/);
         assert.match(byTeacher['French Teacher 2'].note, /placeholder/);
