@@ -100,6 +100,41 @@ app.get('/api/keep-alive', async (req, res) => {
     }
 });
 
+/**
+ * Daily attendance reminders (Vercel cron, vercel.json — weekdays 06:00 UTC,
+ * i.e. 09:00 in Addis Ababa). The backstop for the bell-driven trigger:
+ * idempotent and time-gated, so a stray call can only send what is already
+ * due. With CRON_SECRET set (recommended) Vercel sends it as a bearer token
+ * and anything else is refused. The response carries counts only.
+ */
+app.get('/api/cron/attendance-reminders', async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+        return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+    try {
+        const { runAttendanceReminders } = require('./services/attendanceReminders');
+        const result = await runAttendanceReminders();
+        console.log('[attendance-reminders]', JSON.stringify(result));
+        res.json({
+            status: 'ok',
+            date: result.date,
+            time: result.time,
+            due: result.due,
+            schools: result.schools.map((s) => ({
+                schoolDay: s.schoolDay,
+                missingRegisters: s.missing.length,
+                teachersReminded: s.reminded.reduce((n, r) => n + r.teachers.length, 0),
+                telegramSent: s.telegram,
+                officeDigest: s.digest,
+            })),
+        });
+    } catch (err) {
+        console.error('[attendance-reminders] failed:', err.message);
+        res.status(500).json({ status: 'error', message: 'Attendance reminders failed' });
+    }
+});
+
 // Telegram webhook: registered before the IP limiter so Telegram's own
 // delivery IPs are never throttled, and the secret-token header is checked.
 app.post('/api/telegram/webhook', telegramBot.webhookHandler);

@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const schoolTime = require('../utils/schoolTime');
 const { NotFoundError, ForbiddenError, asyncHandler } = require('../utils/errors');
 
 /**
@@ -32,7 +33,7 @@ const shape = (t) => ({
     // Overdue is derived on read so it can never go stale in storage.
     isOverdue:
         t.due_on && !['done', 'cancelled'].includes(t.status)
-            ? t.due_on < new Date().toISOString().slice(0, 10)
+            ? t.due_on < schoolTime.todayIso()
             : false,
 });
 

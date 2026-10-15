@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const schoolTime = require('../utils/schoolTime');
 const { resolveYearId } = require('./academicYear.controller');
 const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 
@@ -8,13 +9,10 @@ const weekCount = (startsOn, endsOn) => {
     return Math.max(1, Math.ceil(days / 7));
 };
 
-/** The Monday-based date range of a given teaching week. */
+/** The Monday-based date range of a given teaching week (plain calendar dates). */
 const weekRange = (startsOn, weekNumber) => {
-    const start = new Date(startsOn);
-    start.setDate(start.getDate() + (weekNumber - 1) * 7);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
-    return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
+    const from = schoolTime.addDays(startsOn, (weekNumber - 1) * 7);
+    return { from, to: schoolTime.addDays(from, 6) };
 };
 
 const shape = (t) => ({
@@ -94,7 +92,7 @@ const getCurrentTerm = asyncHandler(async (req, res) => {
     if (error) throw error;
     if (!data) return res.json({ term: null, currentWeek: null });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = schoolTime.todayIso();
     const total = weekCount(data.starts_on, data.ends_on);
 
     let currentWeek = null;
@@ -113,7 +111,7 @@ const getCurrentTerm = asyncHandler(async (req, res) => {
 const getTermWeeks = asyncHandler(async (req, res) => {
     const term = await requireTerm(req.params.id, req.user.school_id);
     const total = weekCount(term.starts_on, term.ends_on);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = schoolTime.todayIso();
 
     const weeks = Array.from({ length: total }, (_, i) => {
         const n = i + 1;

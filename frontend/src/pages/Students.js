@@ -21,6 +21,7 @@ import { PaymentChip, paymentLabel } from '../utils/payments';
 import StudentIdCard, { classIdFor } from '../components/StudentIdCard';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
 import { compressStudentPhoto } from '../utils/studentPhotos';
+import { formatDate } from '../utils/schoolTime';
 
 const EMPTY = {
     admissionNo: '', name: '', classId: '', gender: '',
@@ -381,7 +382,7 @@ export default function Students() {
                                 <Box sx={{ minWidth: 240 }}>
                                     <Typography sx={{ fontWeight: 700 }}>{r.name}</Typography>
                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                        {r.requestedByName} · {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                        {r.requestedByName} · {formatDate(r.createdAt, { day: 'numeric', month: 'short' })}
                                         {r.guardianPhone ? ` · ${r.guardianPhone}` : ''}
                                     </Typography>
                                 </Box>
@@ -714,7 +715,7 @@ export default function Students() {
                         <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: .75 }}>
                             {payMap[payTarget?.id]?.status
                                 ? `Recorded by ${payMap[payTarget.id].markedBy || 'staff'}${payMap[payTarget.id].markedAt
-                                    ? ` · ${new Date(payMap[payTarget.id].markedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                    ? ` · ${formatDate(payMap[payTarget.id].markedAt)}`
                                     : ''}`
                                 : 'No payment recorded for this term yet.'}
                         </Typography>

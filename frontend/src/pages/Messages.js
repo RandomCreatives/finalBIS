@@ -13,6 +13,7 @@ import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
+import { formatDate } from '../utils/schoolTime';
 
 const PRIORITY_COLOR = { high: 'error', normal: 'default', low: 'info' };
 
@@ -23,7 +24,7 @@ const timeAgo = (iso) => {
     if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours}h ago`;
-    return new Date(iso).toLocaleDateString();
+    return formatDate(iso);
 };
 
 export default function Messages() {

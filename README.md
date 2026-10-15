@@ -405,3 +405,11 @@ and `REACT_APP_API_URL` on the frontend must point at the deployed backend.
 For **Telegram sign-in** in production, also set `TELEGRAM_BOT_TOKEN` and
 `TELEGRAM_BOT_USERNAME` on the backend and register the deployed domain with
 `@BotFather → /setdomain` — the widget only renders on that exact HTTPS domain.
+
+**Daily attendance** runs on school time — Addis Ababa, GMT+3 — throughout the app.
+From 08:45 on school days, class teachers whose register isn't in are reminded (in the
+bell, and on Telegram if they've linked it) and the office gets one digest of missing
+registers. The first bell refresh after 08:45 sends them; the Vercel cron in
+`vercel.json` (`/api/cron/attendance-reminders`, weekdays at 09:00 school time) is the
+backstop for when nobody is online. Set `CRON_SECRET` on the backend so only Vercel can
+call the cron, and optionally `ATTENDANCE_REMINDER_TIME` (default `08:45`).

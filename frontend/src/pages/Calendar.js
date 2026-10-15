@@ -18,6 +18,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { Section, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+import { isoDate, schoolMonth, schoolToday } from '../utils/schoolTime';
 
 const CATEGORIES = [
     { value: 'event', label: 'Event', color: '#3b82f6' },
@@ -30,19 +31,28 @@ const CATEGORIES = [
 ];
 
 const catColor = (c) => CATEGORIES.find((x) => x.value === c)?.color || '#6b7280';
-const iso = (d) => d.toISOString().slice(0, 10);
+// A month-grid Date (built from local calendar parts) as 'YYYY-MM-DD'.
+// Never toISOString(): on a device set to Addis time, local midnight is
+// 21:00 UTC the day before, which shifted every cell back one day.
+const iso = (d) => isoDate(d.getFullYear(), d.getMonth(), d.getDate());
 
-const EMPTY = {
-    title: '', description: '', category: 'event', audience: 'all',
-    startsOn: iso(new Date()), endsOn: iso(new Date()),
-    allDay: true, startsAt: '09:00', endsAt: '10:00', location: '', classId: '',
+// The month that is current at school.
+const schoolMonthStart = () => {
+    const [y, m] = schoolMonth().split('-').map(Number);
+    return new Date(y, m - 1, 1);
 };
+
+const blankEvent = () => ({
+    title: '', description: '', category: 'event', audience: 'all',
+    startsOn: schoolToday(), endsOn: schoolToday(),
+    allDay: true, startsAt: '09:00', endsAt: '10:00', location: '', classId: '',
+});
 
 export default function Calendar() {
     const { user, isAdmin } = useAuth();
     const canPost = ['admin', 'main_teacher'].includes(user?.role);
 
-    const [cursor, setCursor] = useState(new Date());
+    const [cursor, setCursor] = useState(schoolMonthStart);
     const [dialog, setDialog] = useState(null);
     const [termDialog, setTermDialog] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -155,7 +165,7 @@ export default function Calendar() {
         const rows = events.data?.events || [];
         const firstWeekday = (monthStart.getDay() + 6) % 7; // Monday = 0
         const daysInMonth = monthEnd.getDate();
-        const today = iso(new Date());
+        const today = schoolToday();
 
         const cells = [
             ...Array.from({ length: firstWeekday }, () => null),
@@ -247,7 +257,7 @@ export default function Calendar() {
                 action={canPost && (
                     <Button
                         variant="contained" startIcon={<AddIcon />}
-                        onClick={() => { setFormError(''); setDialog({ ...EMPTY }); }}
+                        onClick={() => { setFormError(''); setDialog(blankEvent()); }}
                     >
                         Add event
                     </Button>
@@ -274,7 +284,7 @@ export default function Calendar() {
                             <ChevronRightIcon />
                         </IconButton>
                     </Stack>
-                    <Button size="small" onClick={() => setCursor(new Date())}>Today</Button>
+                    <Button size="small" onClick={() => setCursor(schoolMonthStart())}>Today</Button>
                 </Stack>
 
                 <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>

@@ -17,6 +17,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import { filesApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
+import { formatDate } from '../utils/schoolTime';
 
 const CATEGORIES = [
     { value: 'academic', label: 'Academic' },
@@ -219,7 +220,7 @@ export default function Files() {
                                     </TableCell>
                                     <TableCell>{formatSize(file.sizeBytes)}</TableCell>
                                     <TableCell>{file.uploadedBy?.name || '—'}</TableCell>
-                                    <TableCell>{new Date(file.createdAt).toLocaleDateString()}</TableCell>
+                                    <TableCell>{formatDate(file.createdAt)}</TableCell>
                                     <TableCell align="right">
                                         <Tooltip title="Download">
                                             <IconButton size="small" onClick={() => handleDownload(file)}>

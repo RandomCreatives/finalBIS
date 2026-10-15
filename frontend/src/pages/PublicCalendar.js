@@ -22,6 +22,7 @@ import { useColorScheme } from '../theme';
 import {
     CATEGORIES, SEED_EVENTS, TERM_SPANS, CALENDAR_MONTHS, CALENDAR_STORE_KEY,
 } from '../data/academicCalendar';
+import { schoolToday } from '../utils/schoolTime';
 
 /*
  * Public academic calendar 2026/27 — seeded from the approved calendar PDF,
@@ -34,10 +35,8 @@ import {
  */
 
 const toStr = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-const todayStr = () => {
-    const n = new Date();
-    return toStr(n.getFullYear(), n.getMonth(), n.getDate());
-};
+// Today at school (Addis Ababa), whatever the visitor's device is set to.
+const todayStr = () => schoolToday();
 const coversDay = (e, day) => e.date <= day && (e.endDate || e.date) >= day;
 const rgba = (hex, a) => {
     const n = parseInt(hex.slice(1), 16);

@@ -20,6 +20,7 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { FilterChips, StatGrid, StatCard } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
+import { formatDate } from '../utils/schoolTime';
 
 const STATUS_META = {
     pending: { label: 'Pending', color: 'warning' },
@@ -46,8 +47,7 @@ const itemTotal = (items) => (items || []).reduce((sum, it) => sum + Number.pars
 
 const fmtDate = (iso) => {
     if (!iso) return '';
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    return formatDate(iso, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 export default function Store() {

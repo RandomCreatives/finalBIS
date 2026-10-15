@@ -16,6 +16,7 @@ import DataState from '../components/DataState';
 import { FilterChips } from '../components/DashboardSections';
 import { REQUEST_STATUS_META } from '../components/communications/RequestSection';
 import { CONDUCT_STATUS_META, CONDUCT_TYPE_META } from '../components/communications/ConductSection';
+import { formatDate, formatDateTime } from '../utils/schoolTime';
 
 /*
  * Admin Communications — the review queue for the teacher→admin channels.
@@ -43,7 +44,7 @@ const CONDUCT_FILTERS = [
 
 const fmtPickup = (iso) =>
     iso
-        ? new Date(iso).toLocaleString(undefined, {
+        ? formatDateTime(iso, {
             weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
         })
         : null;
@@ -111,8 +112,7 @@ function RequestsTab({ onChanged, onToast }) {
                                             sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
                                     )}
                                     <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                                        {r.requester?.name} · {new Date(r.createdAt).toLocaleDateString(
-                                            undefined, { day: 'numeric', month: 'short' })}
+                                        {r.requester?.name} · {formatDate(r.createdAt, { day: 'numeric', month: 'short' })}
                                     </Typography>
                                 </Box>
                                 <Typography sx={{ fontSize: 13.5, mt: 0.75 }}>{r.reason}</Typography>
@@ -235,8 +235,7 @@ function ConductTab({ onChanged, onToast }) {
                                     <Chip size="small" variant="outlined" label={meta.label} color={meta.color}
                                         sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
                                     <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                                        {r.reporter?.name} · {new Date(r.createdAt).toLocaleDateString(
-                                            undefined, { day: 'numeric', month: 'short' })}
+                                        {r.reporter?.name} · {formatDate(r.createdAt, { day: 'numeric', month: 'short' })}
                                     </Typography>
                                 </Box>
                                 <Typography sx={{ fontSize: 13.5, mt: 0.75 }}>{r.body}</Typography>

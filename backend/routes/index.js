@@ -505,6 +505,26 @@ router.get(
 
 router.get('/attendance/summary', authenticate, attendance.getAttendanceSummary);
 
+// The office's week view: every class's registers Monday–Friday, any week.
+router.get(
+    '/attendance/week',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    query('date').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('date must be YYYY-MM-DD'),
+    validate,
+    attendance.getWeekReport
+);
+
+// The office's live daily report: every class's register for one day.
+router.get(
+    '/attendance/daily',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    query('date').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('date must be YYYY-MM-DD'),
+    validate,
+    attendance.getDailyReport
+);
+
 // Monthly review & submission workflow
 router.get(
     '/attendance/monthly',

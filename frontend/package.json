@@ -53,5 +53,8 @@
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^13.5.0",
     "react-scripts": "5.0.1"
+  },
+  "jest": {
+    "globalSetup": "<rootDir>/src/testTimezone.js"
   }
 }

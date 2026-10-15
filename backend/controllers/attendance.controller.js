@@ -2,6 +2,9 @@ const supabase = require('../config/supabase');
 const { BadRequestError, NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
 const { notifyAdmins } = require('../utils/nudges');
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
+const { selectAll } = require('../utils/selectAll');
+const schoolTime = require('../utils/schoolTime');
+const { resolveAttendanceReminder, reminderWindow } = require('../services/attendanceReminders');
 
 /**
  * Attendance in two modes:
@@ -47,6 +50,11 @@ const markAttendance = asyncHandler(async (req, res) => {
         throw error;
     }
 
+    // The daily register is in: the main teacher's reminder has done its job.
+    if (!subjectId) {
+        await resolveAttendanceReminder({ schoolId: req.user.school_id, classId, date });
+    }
+
     const count = data?.count ?? records.length;
     res.status(201).json({ message: `Attendance saved for ${count} student(s)`, count });
 });
@@ -74,18 +82,15 @@ const getClassAttendance = asyncHandler(async (req, res) => {
 const getStudentAttendance = asyncHandler(async (req, res) => {
     const { from, to } = req.query;
 
-    let query = supabase
-        .from('attendance')
-        .select('id, date, status, note, subject:subjects(id, name)')
-        .eq('student_id', req.params.studentId)
-        .eq('school_id', req.user.school_id)
-        .order('date', { ascending: false });
-
-    if (from) query = query.gte('date', from);
-    if (to) query = query.lte('date', to);
-
-    const { data, error } = await query;
-    if (error) throw error;
+    // A year of lesson-by-lesson registers passes the API's 1000-row cap.
+    const data = await selectAll('attendance', 'id, date, status, note, subject:subjects(id, name)', (query) => {
+        let q = query
+            .eq('student_id', req.params.studentId)
+            .eq('school_id', req.user.school_id);
+        if (from) q = q.gte('date', from);
+        if (to) q = q.lte('date', to);
+        return q;
+    }, { order: [['date', false], ['id', true]] });
 
     const total = data.length;
     const present = data.filter((r) => r.status === 'present').length;
@@ -109,28 +114,36 @@ const getStudentAttendance = asyncHandler(async (req, res) => {
     });
 });
 
+const STATUS_LIST = ['present', 'absent', 'late', 'excused'];
+
 /** GET /api/attendance/summary?classId=&from=&to= */
 const getAttendanceSummary = asyncHandler(async (req, res) => {
     const { classId, from, to } = req.query;
 
-    let query = supabase
-        .from('attendance')
-        .select('status, date')
-        .eq('school_id', req.user.school_id);
+    // Exact counts per status: a school's history is far beyond what one
+    // API page returns, and the summary must not stop at the first 1000 rows.
+    const countFor = (status) => {
+        let query = supabase
+            .from('attendance')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', req.user.school_id)
+            .eq('status', status);
+        if (classId) query = query.eq('class_id', classId);
+        if (from) query = query.gte('date', from);
+        if (to) query = query.lte('date', to);
+        return query;
+    };
 
-    if (classId) query = query.eq('class_id', classId);
-    if (from) query = query.gte('date', from);
-    if (to) query = query.lte('date', to);
+    const results = await Promise.all(STATUS_LIST.map(countFor));
+    const byStatus = {};
+    let total = 0;
+    results.forEach(({ count, error }, i) => {
+        if (error) throw error;
+        if (count) byStatus[STATUS_LIST[i]] = count;
+        total += count || 0;
+    });
 
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const byStatus = data.reduce((acc, r) => {
-        acc[r.status] = (acc[r.status] || 0) + 1;
-        return acc;
-    }, {});
-
-    res.json({ total: data.length, byStatus });
+    res.json({ total, byStatus });
 });
 
 
@@ -196,6 +209,21 @@ const assertMonthEditable = async (req, classId, dateStr) => {
     }
 };
 
+/**
+ * One class's homeroom rows for a month, every page of them, shaped like a
+ * supabase result so the callers' error labelling keeps working.
+ */
+const monthRows = (schoolId, classId, month, daysInMonth) => selectAll(
+    'attendance',
+    'student_id, date, status',
+    (query) => query
+        .eq('school_id', schoolId)
+        .eq('class_id', classId)
+        .is('subject_id', null)
+        .gte('date', `${month}-01`)
+        .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
+).then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
+
 /** Shared builder for the review screen and the CSV export. */
 const buildMonthlySummary = async (schoolId, classId, month) => {
     const daysInMonth = lastDayOf(month);
@@ -209,13 +237,7 @@ const buildMonthlySummary = async (schoolId, classId, month) => {
             .eq('class_id', classId)
             .eq('is_active', true)
             .order('name'),
-        supabase.from('attendance')
-            .select('student_id, date, status')
-            .eq('school_id', schoolId)
-            .eq('class_id', classId)
-            .is('subject_id', null)
-            .gte('date', `${month}-01`)
-            .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
+        monthRows(schoolId, classId, month, daysInMonth),
         supabase.from('attendance_submissions')
             .select('id, class_id, month, status, submitted_by, submitted_at, note')
             .eq('class_id', classId)
@@ -268,7 +290,7 @@ const buildMonthlySummary = async (schoolId, classId, month) => {
         classId: klass.id,
         className: klass.name,
         month,
-        schoolDays: schoolDaysSoFar(month, new Date().toISOString().slice(0, 10)),
+        schoolDays: schoolDaysSoFar(month, schoolTime.todayIso()),
         daysMarked: markedDates.size,
         submission: submission
             ? {
@@ -303,7 +325,7 @@ const getMonthlyGrid = asyncHandler(async (req, res) => {
     await assertClassAccess(req, classId);
 
     const daysInMonth = lastDayOf(month);
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = schoolTime.todayIso();
     const [y, m] = month.split('-').map(Number);
 
     // School days (Mon–Fri) up to today — future days have no data yet.
@@ -324,13 +346,7 @@ const getMonthlyGrid = asyncHandler(async (req, res) => {
             .eq('class_id', classId)
             .eq('is_active', true)
             .order('name'),
-        supabase.from('attendance')
-            .select('student_id, date, status')
-            .eq('school_id', req.user.school_id)
-            .eq('class_id', classId)
-            .is('subject_id', null)
-            .gte('date', `${month}-01`)
-            .lte('date', `${month}-${String(daysInMonth).padStart(2, '0')}`),
+        monthRows(req.user.school_id, classId, month, daysInMonth),
         supabase.from('attendance_submissions')
             .select('status, submitted_at, note')
             .eq('class_id', classId)
@@ -558,7 +574,306 @@ const exportCsv = asyncHandler(async (req, res) => {
     res.send(`${lines.join('\n')}\n`);
 });
 
+/*
+ * Daily report — every class's homeroom register for one school day.
+ *
+ * The office's live view: which registers are in, who still owes one, and
+ * the day's numbers. Rate convention matches the dashboard's "Attendance
+ * today" card: present or late, out of the pupils marked.
+ */
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const rate = (attended, marked) => (marked ? Number(((attended / marked) * 100).toFixed(1)) : null);
+const emptyCounts = () => ({ marked: 0, present: 0, late: 0, absent: 0, excused: 0 });
+
+const buildDailyReport = async (schoolId, date) => {
+    const { data: year, error: yearError } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('is_current', true)
+        .maybeSingle();
+    if (yearError) throw yearError;
+
+    const [classesRes, pupils, rows, staffRes] = await Promise.all([
+        supabase.from('classes').select('id, name').eq('school_id', schoolId).order('name'),
+        selectAll('students', 'class_id', (q) => q.eq('school_id', schoolId).eq('is_active', true)),
+        selectAll(
+            'attendance',
+            'class_id, status, marked_by, updated_at',
+            (q) => q.eq('school_id', schoolId).eq('date', date).is('subject_id', null),
+        ),
+        year
+            ? supabase.from('class_staff')
+                .select('class_id, user:users(id, name)')
+                .eq('school_id', schoolId)
+                .eq('academic_year_id', year.id)
+                .eq('position', 'main')
+            : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (classesRes.error) throw classesRes.error;
+    if (staffRes.error) throw staffRes.error;
+
+    const roster = new Map();
+    for (const pupil of pupils) {
+        if (pupil.class_id) roster.set(pupil.class_id, (roster.get(pupil.class_id) || 0) + 1);
+    }
+
+    const mainTeacher = new Map();
+    for (const seat of staffRes.data || []) {
+        if (seat.user?.name && !mainTeacher.has(seat.class_id)) mainTeacher.set(seat.class_id, seat.user.name);
+    }
+
+    const perClass = new Map();
+    for (const row of rows) {
+        const c = perClass.get(row.class_id) || { ...emptyCounts(), lastAt: null, lastBy: null };
+        if (c[row.status] !== undefined) c[row.status] += 1;
+        c.marked += 1;
+        if (row.updated_at && (!c.lastAt || row.updated_at > c.lastAt)) {
+            c.lastAt = row.updated_at;
+            c.lastBy = row.marked_by;
+        }
+        perClass.set(row.class_id, c);
+    }
+
+    // Names of whoever saved each register last.
+    const markerIds = [...new Set([...perClass.values()].map((c) => c.lastBy).filter(Boolean))];
+    const markerName = new Map();
+    if (markerIds.length) {
+        const { data: markers, error } = await supabase.from('users').select('id, name').in('id', markerIds);
+        if (error) throw error;
+        for (const m of markers || []) markerName.set(m.id, m.name);
+    }
+
+    const totals = { classes: 0, taken: 0, notTaken: 0, partial: 0, roster: 0, ...emptyCounts() };
+    const classes = (classesRes.data || []).map((klass) => {
+        const c = perClass.get(klass.id) || { ...emptyCounts(), lastAt: null, lastBy: null };
+        const size = roster.get(klass.id) || 0;
+        const status = c.marked === 0 ? 'not_taken' : (c.marked < size ? 'partial' : 'taken');
+
+        totals.classes += 1;
+        totals.roster += size;
+        if (status === 'not_taken') totals.notTaken += 1;
+        else totals.taken += 1;
+        if (status === 'partial') totals.partial += 1;
+        for (const key of ['marked', 'present', 'late', 'absent', 'excused']) totals[key] += c[key];
+
+        return {
+            classId: klass.id,
+            className: klass.name,
+            mainTeacher: mainTeacher.get(klass.id) || null,
+            status,
+            roster: size,
+            marked: c.marked,
+            present: c.present,
+            late: c.late,
+            absent: c.absent,
+            excused: c.excused,
+            rate: rate(c.present + c.late, c.marked),
+            lastSavedAt: c.lastAt,
+            lastSavedBy: c.lastBy ? markerName.get(c.lastBy) || null : null,
+        };
+    });
+    totals.rate = rate(totals.present + totals.late, totals.marked);
+
+    const today = schoolTime.todayIso();
+    return {
+        date,
+        today,
+        isToday: date === today,
+        timeZone: schoolTime.SCHOOL_TIME_ZONE,
+        // When class teachers still owing a register are reminded (school time).
+        reminderTime: reminderWindow().from,
+        generatedAt: new Date().toISOString(),
+        totals,
+        classes,
+    };
+};
+
+/*
+ * Week report — every class's homeroom register for one school week
+ * (Monday–Friday), with previous/next navigation and the term week number.
+ *
+ * Holidays on the calendar and days outside every term are closed days, not
+ * missing registers; days after today are upcoming, and today's untaken
+ * registers are pending (still open), so `missing` counts only school days
+ * before today. "Expected" registers are open days so far × classes with pupils.
+ */
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const mondayOf = (isoDate) => schoolTime.schoolWeek(isoDate)[0];
+
+const buildWeekReport = async (schoolId, date) => {
+    const today = schoolTime.todayIso();
+    const dates = schoolTime.schoolWeek(date);
+    const weekStart = dates[0];
+    const weekEnd = dates[4];
+    const currentWeekStart = mondayOf(today);
+
+    const { data: year, error: yearError } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('is_current', true)
+        .maybeSingle();
+    if (yearError) throw yearError;
+
+    const [classesRes, pupils, rows, staffRes, termsRes, holidaysRes] = await Promise.all([
+        supabase.from('classes').select('id, name').eq('school_id', schoolId).order('name'),
+        selectAll('students', 'class_id', (q) => q.eq('school_id', schoolId).eq('is_active', true)),
+        // A week of homeroom rows is ~2000 at this school: page past the cap.
+        selectAll(
+            'attendance',
+            'class_id, date, status',
+            (q) => q.eq('school_id', schoolId).in('date', dates).is('subject_id', null),
+        ),
+        year
+            ? supabase.from('class_staff')
+                .select('class_id, user:users(id, name)')
+                .eq('school_id', schoolId)
+                .eq('academic_year_id', year.id)
+                .eq('position', 'main')
+            : Promise.resolve({ data: [], error: null }),
+        supabase.from('terms').select('name, starts_on, ends_on').eq('school_id', schoolId).order('starts_on'),
+        supabase.from('calendar_events')
+            .select('title, class_id, starts_on, ends_on')
+            .eq('school_id', schoolId)
+            .eq('category', 'holiday')
+            .lte('starts_on', weekEnd)
+            .gte('ends_on', weekStart),
+    ]);
+    for (const r of [classesRes, staffRes, termsRes, holidaysRes]) {
+        if (r.error) throw r.error;
+    }
+
+    const terms = termsRes.data || [];
+    const holidays = (holidaysRes.data || []).filter((h) => !h.class_id); // whole-school only
+    const closedReason = (day) => {
+        const holiday = holidays.find((h) => h.starts_on <= day && day <= h.ends_on);
+        if (holiday) return holiday.title;
+        if (terms.length && !terms.some((t) => t.starts_on <= day && day <= t.ends_on)) return 'No school';
+        return null;
+    };
+
+    // Term weeks run Monday–Friday, counted from the week the term starts in.
+    const term = terms.find((t) => t.starts_on <= weekEnd && t.ends_on >= weekStart) || null;
+    const termWeek = term
+        ? {
+            name: term.name,
+            weekNumber: Math.floor(schoolTime.daysBetween(mondayOf(term.starts_on), weekStart) / 7) + 1,
+            weekCount: Math.floor(schoolTime.daysBetween(mondayOf(term.starts_on), mondayOf(term.ends_on)) / 7) + 1,
+        }
+        : null;
+
+    const roster = new Map();
+    for (const pupil of pupils) {
+        if (pupil.class_id) roster.set(pupil.class_id, (roster.get(pupil.class_id) || 0) + 1);
+    }
+    const mainTeacher = new Map();
+    for (const seat of staffRes.data || []) {
+        if (seat.user?.name && !mainTeacher.has(seat.class_id)) mainTeacher.set(seat.class_id, seat.user.name);
+    }
+    const counts = new Map();
+    for (const row of rows) {
+        const key = `${row.class_id}|${row.date}`;
+        const c = counts.get(key) || emptyCounts();
+        if (c[row.status] !== undefined) c[row.status] += 1;
+        c.marked += 1;
+        counts.set(key, c);
+    }
+
+    const days = dates.map((day, i) => ({
+        date: day,
+        label: DAY_LABELS[i],
+        isToday: day === today,
+        isFuture: day > today,
+        closed: closedReason(day),
+        taken: 0,
+        expected: 0,
+    }));
+
+    const totals = { expected: 0, taken: 0, missing: 0, openToday: 0, ...emptyCounts() };
+    const classes = (classesRes.data || []).map((klass) => {
+        const size = roster.get(klass.id) || 0;
+        let taken = 0;
+        let expected = 0;
+
+        const cells = days.map((day) => {
+            const open = !day.closed && !day.isFuture;
+            if (open && size > 0) {
+                expected += 1;
+                day.expected += 1;
+            }
+            const c = counts.get(`${klass.id}|${day.date}`);
+            if (c) {
+                if (open) {
+                    taken += 1;
+                    day.taken += 1;
+                }
+                for (const key of ['marked', 'present', 'late', 'absent', 'excused']) totals[key] += c[key];
+                return {
+                    date: day.date,
+                    status: c.marked < size ? 'partial' : 'taken',
+                    ...c,
+                    rate: rate(c.present + c.late, c.marked),
+                };
+            }
+            let status = 'not_taken';
+            if (day.isFuture) status = 'upcoming';
+            else if (day.closed) status = 'closed';
+            else if (size === 0) status = 'no_pupils';
+            else if (day.isToday) status = 'pending';
+            if (status === 'not_taken') totals.missing += 1;
+            if (status === 'pending') totals.openToday += 1;
+            return { date: day.date, status, ...emptyCounts(), rate: null };
+        });
+
+        totals.expected += expected;
+        totals.taken += taken;
+        return {
+            classId: klass.id,
+            className: klass.name,
+            mainTeacher: mainTeacher.get(klass.id) || null,
+            roster: size,
+            taken,
+            expected,
+            days: cells,
+        };
+    });
+    totals.rate = rate(totals.present + totals.late, totals.marked);
+
+    return {
+        weekStart,
+        weekEnd,
+        today,
+        isCurrentWeek: weekStart === currentWeekStart,
+        term: termWeek,
+        previousWeek: schoolTime.addDays(weekStart, -7),
+        nextWeek: weekStart < currentWeekStart ? schoolTime.addDays(weekStart, 7) : null,
+        timeZone: schoolTime.SCHOOL_TIME_ZONE,
+        generatedAt: new Date().toISOString(),
+        days,
+        classes,
+        totals,
+    };
+};
+
+/** GET /api/attendance/week?date=YYYY-MM-DD — admin; the school week containing `date` (default: this week). */
+const getWeekReport = asyncHandler(async (req, res) => {
+    const date = req.query.date || schoolTime.todayIso();
+    if (!DATE_RE.test(date)) throw new BadRequestError('date must be YYYY-MM-DD');
+    res.json(await buildWeekReport(req.user.school_id, date));
+});
+
+/** GET /api/attendance/daily?date=YYYY-MM-DD — admin; defaults to today (school time). */
+const getDailyReport = asyncHandler(async (req, res) => {
+    const date = req.query.date || schoolTime.todayIso();
+    if (!DATE_RE.test(date)) throw new BadRequestError('date must be YYYY-MM-DD');
+    res.json(await buildDailyReport(req.user.school_id, date));
+});
+
 module.exports = {
     markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary,
     getMonthlySummary, getMonthlyGrid, submitMonth, returnMonth, listSubmissions, exportCsv,
+    getDailyReport, buildDailyReport, getWeekReport, buildWeekReport,
 };

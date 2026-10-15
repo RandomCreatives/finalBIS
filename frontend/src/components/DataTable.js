@@ -24,6 +24,7 @@ import {
     MoreVert as MoreIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
+import { formatDate } from '../utils/schoolTime';
 
 /* ── Styled components ───────────────────────────────────── */
 const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
@@ -604,7 +605,7 @@ function renderCell(value, column) {
         case COLUMN_TYPES.NUMBER:
             return <Typography variant="body2" sx={{ fontVariant: 'tabular-nums', fontWeight: 500 }}>{Number(value).toLocaleString()}</Typography>;
         case COLUMN_TYPES.DATE:
-            return <Typography variant="body2">{new Date(value).toLocaleDateString()}</Typography>;
+            return <Typography variant="body2">{formatDate(value)}</Typography>;
         case COLUMN_TYPES.BOOLEAN:
             return <Chip label={value ? 'Yes' : 'No'} size="small" color={value ? 'success' : 'default'} variant={value ? 'filled' : 'outlined'} />;
         case COLUMN_TYPES.CHIP:

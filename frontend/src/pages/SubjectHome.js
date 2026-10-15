@@ -34,6 +34,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useColorScheme } from '../theme';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import { schoolHour, schoolWeekday } from '../utils/schoolTime';
 
 const DAYS = [
     { value: 1, label: 'Monday' },
@@ -539,7 +540,7 @@ export default function SubjectHome() {
     }, [myAssignments.data]);
 
     const todaySlots = useMemo(() => {
-        const dow = new Date().getDay(); // 0 Sun … 6 Sat; school days 1–5 match the timetable
+        const dow = schoolWeekday(); // today at school: 1 Mon … 5 Fri match the timetable
         return (week.data || [])
             .filter((s) => s.dayOfWeek === dow)
             .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
@@ -554,7 +555,8 @@ export default function SubjectHome() {
     if (user.role !== 'subject_teacher') return <Navigate to="/app" replace />;
 
     const activeSection = SECTIONS.find((s) => s.id === section);
-    const greeting = `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}`;
+    const hour = schoolHour();
+    const greeting = `Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}`;
 
     // Sidebar nav button — Profile is rendered separately, pinned to the
     // bottom of the full-length sidebar (see below).

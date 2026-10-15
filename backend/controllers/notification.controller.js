@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { NotFoundError, asyncHandler } = require('../utils/errors');
+const { maybeRunAttendanceReminders } = require('../services/attendanceReminders');
 
 /**
  * The notification bell feed.
@@ -55,6 +56,12 @@ const shapeNudge = (n) => ({
  * Latest items for the bell plus the unread badge count.
  */
 const listNotifications = asyncHandler(async (req, res) => {
+    // Every open app refreshes this feed each minute, which makes it the
+    // natural heartbeat for the daily attendance reminders: once they are
+    // due, the first refresh sends them (deduped, throttled, never throws),
+    // and this response already includes the caller's own reminder.
+    await maybeRunAttendanceReminders(req.user.school_id);
+
     // Announcements addressed to this user (same targeting as /api/notices).
     const { data: notices, error: noticesError } = await supabase
         .from('notices')

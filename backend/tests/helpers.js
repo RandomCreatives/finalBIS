@@ -18,11 +18,19 @@ const path = require('path');
 
 const supabasePath = path.join(__dirname, '..', 'config', 'supabase.js');
 
-/** Mutable table store: { tableName: [rows] } */
-const db = { tables: {} };
+/**
+ * Mutable table store: { tableName: [rows] }.
+ *
+ * `maxRows` mirrors Supabase's API cap (1000 rows per request by default):
+ * a plain select silently returns at most that many rows, exactly like
+ * production, so code that forgets to page is caught here.
+ */
+const SUPABASE_MAX_ROWS = 1000;
+const db = { tables: {}, maxRows: SUPABASE_MAX_ROWS };
 
-const reset = (tables = {}) => {
+const reset = (tables = {}, { maxRows = SUPABASE_MAX_ROWS } = {}) => {
     db.tables = tables;
+    db.maxRows = maxRows;
 };
 
 const rowsOf = (table) => (db.tables[table] ||= []);
@@ -31,6 +39,8 @@ const matches = (row, filters) =>
     filters.every(({ op, column, value }) => {
         const actual = row[column];
         switch (op) {
+            // .not(column, op, value) — e.g. .not('class_id', 'is', null)
+            case 'not': return !matches(row, [{ op: value.op, column, value: value.value }]);
             case 'eq': return String(actual) === String(value);
             case 'neq': return String(actual) !== String(value);
             case 'is': return value === null ? actual === null || actual === undefined : actual === value;
@@ -116,6 +126,8 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
     let maybe = false;
     let head = false;
     let selectString = null;
+    let rangeFrom = null;
+    let rangeTo = null;
 
     const builder = {
         select(cols, opts = {}) {
@@ -126,6 +138,7 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
         },
         order() { return builder; },
         limit() { return builder; },
+        range(from, to) { rangeFrom = from; rangeTo = to; return builder; },
         or() { return builder; },
         single() { single = true; return builder; },
         maybeSingle() { maybe = true; return builder; },
@@ -167,9 +180,18 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
                     : { data: null, error: { code: 'PGRST116', message: 'No rows' } };
             }
             if (maybe) return { data: result[0] ? hydrate(result[0]) : null, error: null };
+
+            // Like PostgREST: the count covers every match, the rows are the
+            // requested range, capped at max_rows.
+            const total = result.length;
+            let page = result;
+            if (mode === 'select') {
+                if (rangeFrom !== null) page = page.slice(rangeFrom, rangeTo + 1);
+                page = page.slice(0, db.maxRows);
+            }
             return {
-                data: result.map(hydrate),
-                count: count ? result.length : undefined,
+                data: page.map(hydrate),
+                count: count ? total : undefined,
                 error: null,
             };
         },
@@ -181,6 +203,10 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
             return builder;
         };
     }
+    builder.not = (column, op, value) => {
+        filters.push({ op: 'not', column, value: { op, value } });
+        return builder;
+    };
 
     return builder;
 }
@@ -209,4 +235,4 @@ Module._load = function (request, parent, isMain) {
     return originalLoad.apply(this, arguments);
 };
 
-module.exports = { reset, db, supabaseStub, rowsOf };
+module.exports = { reset, db, supabaseStub, rowsOf, SUPABASE_MAX_ROWS };

@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Link as RouterLink, Navigate } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem,
-    ListItemText, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
+    ListItemText, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ClassIcon from '@mui/icons-material/Class';
@@ -16,8 +17,12 @@ import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import SyncAltIcon from '@mui/icons-material/SyncAlt';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
-import { dashboardApi, termApi } from '../api/endpoints';
+import { attendanceApi, dashboardApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
+import useLiveApi from '../hooks/useLiveApi';
+import LiveStatus from '../components/LiveStatus';
+import { schoolHour, schoolWeekStart } from '../utils/schoolTime';
+import WeekNavigator from '../components/attendance/WeekNavigator';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { Section } from '../components/DashboardSections';
@@ -25,7 +30,7 @@ import { useAuth } from '../auth/AuthContext';
 import { lessonLabel } from '../utils/periods';
 
 const greeting = () => {
-    const hour = new Date().getHours();
+    const hour = schoolHour(); // the school's clock, not the device's
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
@@ -151,7 +156,8 @@ function FlowCard({ item }) {
 }
 
 function DataFlowCommandCenter() {
-    const { data, loading, error } = useApi(() => dashboardApi.dataFlow(), []);
+    // A live map: keeps itself current while the dashboard is open.
+    const { data, loading, error } = useLiveApi(() => dashboardApi.dataFlow(), [], { intervalMs: 60_000 });
 
     // Folded by default — the command center is the busiest card on the page;
     // one tap opens it when you want the full data-flow map.
@@ -221,66 +227,111 @@ function DataFlowCommandCenter() {
     );
 }
 
-function AttendanceWeekGrid({ data }) {
-    const days = data?.days || [];
-    const classes = data?.classes || [];
+const cellMark = (cell) => {
+    switch (cell.status) {
+        case 'taken':
+            return <CheckCircleIcon sx={{ color: 'success.main', fontSize: 21, verticalAlign: 'middle' }} aria-label="Attendance taken" />;
+        case 'partial':
+            return <CheckCircleIcon sx={{ color: 'warning.main', fontSize: 21, verticalAlign: 'middle' }} aria-label="Attendance partly taken" />;
+        case 'not_taken':
+            return <Box component="span" aria-label="Attendance not taken" sx={{ color: 'error.main', fontSize: 22, lineHeight: 1 }}>□</Box>;
+        case 'pending':
+            return <Box component="span" aria-label="Attendance not taken yet today" sx={{ color: 'divider', fontSize: 22, lineHeight: 1 }}>□</Box>;
+        default:
+            return null;
+    }
+};
+
+/**
+ * Every class's registers for one school week, with ◀ ▶ to step back
+ * through earlier weeks. The current week keeps itself up to date.
+ */
+function AttendanceWeekCard() {
+    const [weekStart, setWeekStart] = useState(() => schoolWeekStart());
+    const isCurrent = weekStart === schoolWeekStart();
+    const report = useLiveApi(() => attendanceApi.week({ date: weekStart }), [weekStart], { live: isCurrent });
+    const data = report.data?.weekStart === weekStart ? report.data : null;
+
     return (
         <Card>
             <CardContent sx={{ p: 2.5 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between"
+                    alignItems={{ md: 'center' }} spacing={1} sx={{ mb: 1 }}>
                     <Box>
-                        <Typography variant="h6">Attendance this week</Typography>
+                        <Typography variant="h6">{isCurrent ? 'Attendance this week' : 'Attendance by week'}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                            Green tick means attendance has been saved for that class and day.
+                            Green tick: register saved. Red box: a past day with no register.
                         </Typography>
                     </Box>
-                    <Button size="small" component={RouterLink} to="/app/attendance" sx={{ fontWeight: 800 }}>
-                        Open attendance
-                    </Button>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <WeekNavigator dense weekStart={weekStart} term={data?.term} onChange={setWeekStart} />
+                        {isCurrent && (
+                            <LiveStatus updatedAt={report.updatedAt} refreshing={report.refreshing}
+                                stale={report.stale} onRefresh={report.refresh} />
+                        )}
+                        <Button size="small" component={RouterLink} to={`/app/attendance?week=${weekStart}`} sx={{ fontWeight: 800 }}>
+                            Open attendance
+                        </Button>
+                    </Stack>
                 </Stack>
-                {classes.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No classes found.</Typography>
-                ) : (
-                    <Box sx={{ overflowX: 'auto' }}>
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Class</TableCell>
-                                    {days.map((day) => (
-                                        <TableCell key={day.date} align="center" sx={{ fontWeight: 800, minWidth: 48 }}>
-                                            <Typography variant="body2" sx={{ fontWeight: 800 }}>{day.label}</Typography>
-                                            <Typography variant="caption" color="text.secondary">{day.date.slice(8)}</Typography>
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {classes.map((klass) => (
-                                    <TableRow key={klass.id} hover>
-                                        <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{klass.name}</TableCell>
-                                        {klass.days.map((day) => (
-                                            <TableCell key={day.date} align="center">
-                                                <Button
-                                            component={RouterLink}
-                                            to={`/app/attendance?classId=${klass.id}&date=${day.date}`}
-                                            size="small"
-                                            aria-label={`${klass.name} ${day.date} attendance`}
-                                            sx={{ minWidth: 32, p: 0.25, borderRadius: 1 }}
-                                        >
-                                            {day.marked ? (
-                                                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 21, verticalAlign: 'middle' }} aria-label="Attendance taken" />
-                                            ) : (
-                                                <Box component="span" aria-label="Attendance not taken" sx={{ color: 'divider', fontSize: 22, lineHeight: 1 }}>□</Box>
-                                            )}
-                                        </Button>
+                <DataState loading={report.loading || !data} error={report.error}>
+                    {data && (data.classes.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No classes found.</Typography>
+                    ) : (
+                        <Box sx={{ overflowX: 'auto' }}>
+                            <Table size="small" aria-label="Attendance week grid">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Class</TableCell>
+                                        {data.days.map((day) => (
+                                            <TableCell key={day.date} align="center" sx={{ fontWeight: 800, minWidth: 48 }}>
+                                                <Tooltip title={day.closed || ''}>
+                                                    <Box>
+                                                        <Typography variant="body2" sx={{ fontWeight: 800, color: day.isToday ? 'primary.main' : undefined }}>
+                                                            {day.label}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {day.closed ? 'closed' : day.date.slice(8)}
+                                                        </Typography>
+                                                    </Box>
+                                                </Tooltip>
                                             </TableCell>
                                         ))}
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Box>
-                )}
+                                </TableHead>
+                                <TableBody>
+                                    {data.classes.map((klass) => (
+                                        <TableRow key={klass.classId} hover>
+                                            <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{klass.className}</TableCell>
+                                            {klass.days.map((cell, i) => {
+                                                const mark = cellMark(cell);
+                                                return (
+                                                    <TableCell key={cell.date} align="center">
+                                                        {mark ? (
+                                                            <Button
+                                                                component={RouterLink}
+                                                                to={`/app/attendance?classId=${klass.classId}&date=${cell.date}`}
+                                                                size="small"
+                                                                aria-label={`${klass.className} ${cell.date} attendance`}
+                                                                sx={{ minWidth: 32, p: 0.25, borderRadius: 1 }}
+                                                            >
+                                                                {mark}
+                                                            </Button>
+                                                        ) : (
+                                                            <Tooltip title={data.days[i].closed || (cell.status === 'upcoming' ? 'Still to come' : 'No pupils')}>
+                                                                <Typography component="span" color="text.disabled">–</Typography>
+                                                            </Tooltip>
+                                                        )}
+                                                    </TableCell>
+                                                );
+                                            })}
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Box>
+                    ))}
+                </DataState>
             </CardContent>
         </Card>
     );
@@ -288,7 +339,8 @@ function AttendanceWeekGrid({ data }) {
 
 /** School-wide view for administrators. */
 function AdminDashboard() {
-    const { data, loading, error } = useApi(() => dashboardApi.summary(), []);
+    // Registers arrive all morning: the attendance figures keep themselves fresh.
+    const { data, loading, error } = useLiveApi(() => dashboardApi.summary(), []);
 
     return (
         <DataState loading={loading} error={error}>
@@ -314,7 +366,7 @@ function AdminDashboard() {
                     </Grid>
 
                     <Grid item xs={12}>
-                        <AttendanceWeekGrid data={data.attendanceWeek} />
+                        <AttendanceWeekCard />
                     </Grid>
 
                     <Grid item xs={12} md={6}>
@@ -364,7 +416,8 @@ function AdminDashboard() {
 
 /** Personal view for teaching staff: my classes, my day, my work. */
 function TeacherDashboard() {
-    const { data, loading, error } = useApi(() => dashboardApi.me(), []);
+    // "Attendance not yet recorded" clears itself once the register is in.
+    const { data, loading, error } = useLiveApi(() => dashboardApi.me(), [], { intervalMs: 60_000 });
 
     return (
         <DataState loading={loading} error={error}>

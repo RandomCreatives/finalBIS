@@ -6,6 +6,8 @@ import {
 } from '@mui/material';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
+import AlarmIcon from '@mui/icons-material/Alarm';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { noticeApi, notificationApi } from '../api/endpoints';
@@ -38,6 +40,16 @@ const relTime = (iso) => {
     return `${days} d ago`;
 };
 
+const ICON_SX = { fontSize: 16, flexShrink: 0 };
+
+const itemIcon = (item) => {
+    if (item.type === 'announcement') return <CampaignOutlinedIcon sx={{ ...ICON_SX, color: 'primary.main' }} />;
+    // Daily attendance: the class teacher's reminder, the office's digest.
+    if (item.kind === 'attendance_reminder') return <AlarmIcon sx={{ ...ICON_SX, color: 'warning.main' }} />;
+    if (item.kind === 'attendance_digest') return <FactCheckOutlinedIcon sx={{ ...ICON_SX, color: 'primary.main' }} />;
+    return <NotificationsNoneIcon sx={{ ...ICON_SX, color: 'text.secondary' }} />;
+};
+
 function BellItem({ item, onOpen, onAck }) {
     const unread = !item.readAt;
     return (
@@ -51,9 +63,7 @@ function BellItem({ item, onOpen, onAck }) {
             onClick={() => onOpen(item)}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {item.type === 'announcement'
-                    ? <CampaignOutlinedIcon sx={{ fontSize: 16, color: 'primary.main', flexShrink: 0 }} />
-                    : <NotificationsNoneIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />}
+                {itemIcon(item)}
                 <Typography sx={{
                     fontWeight: unread ? 800 : 600, fontSize: 13, flexGrow: 1,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

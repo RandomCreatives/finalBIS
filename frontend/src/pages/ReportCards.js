@@ -13,6 +13,7 @@ import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { buildReportCards } from '../utils/reportCards';
+import { formatDay } from '../utils/schoolTime';
 
 /*
  * Term report cards — one printable sheet per student, straight from the
@@ -142,17 +143,15 @@ const BIS_SUBJECT_GROUPS = [
 
 const formatReportDate = (value) => {
     if (!value) return '—';
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (!/^\d{4}-\d{2}-\d{2}/.test(String(value))) return value;
+    return formatDay(value, { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const monthYearFromTerm = (term) => {
     if (!term?.endsOn) return '—';
-    const date = new Date(`${term.endsOn}T00:00:00`);
-    return Number.isNaN(date.getTime())
-        ? '—'
-        : date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    return /^\d{4}-\d{2}-\d{2}/.test(String(term.endsOn))
+        ? formatDay(term.endsOn, { month: 'long', year: 'numeric' })
+        : '—';
 };
 
 function BISSummaryPage({ student, className, termName, term, homeroomTeacher, yearName }) {

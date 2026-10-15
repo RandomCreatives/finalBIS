@@ -7,6 +7,7 @@ import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import useApi from '../../hooks/useApi';
 import { conductApi } from '../../api/endpoints';
+import { formatDate } from '../../utils/schoolTime';
 
 /*
  * Conduct report (Admin Communications) — behavior reports to the admin.
@@ -121,8 +122,7 @@ export default function ConductSection({ klass, classId, roster }) {
                                 <Chip size="small" variant="outlined" label={status.label} color={status.color}
                                     sx={{ fontWeight: 700, height: 20, fontSize: 10.5 }} />
                                 <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                                    {new Date(r.createdAt).toLocaleDateString(undefined,
-                                        { day: 'numeric', month: 'short' })}
+                                    {formatDate(r.createdAt, { day: 'numeric', month: 'short' })}
                                 </Typography>
                             </Box>
                             <Typography sx={{ fontSize: 13.5, mt: 0.75, color: 'text.primary' }}>

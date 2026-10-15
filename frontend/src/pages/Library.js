@@ -12,12 +12,10 @@ import DataState from '../components/DataState';
 import { StatGrid } from '../components/DashboardSections';
 import { useAuth } from '../auth/AuthContext';
 import { useSearchParams } from 'react-router-dom';
+import { addDays, schoolToday } from '../utils/schoolTime';
 
-const inTwoWeeks = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    return d.toISOString().slice(0, 10);
-};
+// Due date: two weeks from today at school.
+const inTwoWeeks = () => addDays(schoolToday(), 14);
 
 const CompactLibraryStat = ({ label, value, color = 'primary.main' }) => (
     <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 1.5 }}>

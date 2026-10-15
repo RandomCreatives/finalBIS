@@ -18,6 +18,7 @@ import {
     InlineLessonPlanTable, InlineSchemeCreator, InlineSchemeTable,
 } from '../components/planning/InlinePlanningTables';
 import { useAuth } from '../auth/AuthContext';
+import { formatDateTime } from '../utils/schoolTime';
 
 const STATUS_META = {
     draft: { label: 'Draft', color: 'default' },
@@ -36,7 +37,7 @@ const TAB_SX = { minHeight: 44, textTransform: 'none', fontWeight: 700, fontSize
 
 const fmtSubmitted = (iso) => {
     if (!iso) return 'just now';
-    return new Date(iso).toLocaleString('en-GB', {
+    return formatDateTime(iso, {
         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
     });
 };
