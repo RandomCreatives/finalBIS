@@ -14,10 +14,41 @@ A staff-facing school management system for the British International School, NO
 | **Every PR** | Preview deployment with its own URL | Vercel GitHub integration |
 | **Merge to `main`** | Automatic production deployment | Vercel |
 
-Workflow: branch → PR → CI + preview checks → merge → live. No manual
-deployments, no file copying. Vercel environment variables live in the
-Vercel project settings (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
-`JWT_SECRET`, `CORS_ORIGINS`, optional SMTP/Telegram/Drive credentials).
+Workflow: branch → PR → CI + preview checks → merge → live.
+
+---
+
+## Deploying on Vercel
+
+The application is deployed to Vercel under the single project **`final-bis`**, configured via the root `vercel.json`.
+
+### Environment Variables for Production
+Configure these in Vercel Project Settings → Environment Variables for the **Production** environment:
+- `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`
+- `JWT_SECRET` and `JWT_EXPIRES_IN`
+- `FRONTEND_URL` (public app URL, no trailing slash, e.g. `https://final-bis.vercel.app`)
+- `CORS_ORIGINS`
+- `CRON_SECRET` (protects `/api/cron/attendance-reminders`)
+- Optional integration credentials: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_LOGIN_ENABLED`, `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY`, `GOOGLE_DRIVE_FOLDER_ID`, SMTP variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`).
+
+> **Note:** Any changes to Vercel environment variables take effect only after a new deployment is created.
+
+### Vercel Hobby Plan Deployments & Private Repositories
+Under the Vercel Hobby plan for private repositories, commits deployed automatically must be authored by the GitHub account linked to the Vercel project owner. Otherwise, Vercel will block automatic deployment with a "Deployment Blocked" error.
+- **Unblocking automatic deployments:** Ensure the Vercel owner's account links the GitHub user (e.g. `RandomCreatives`) under Vercel → Settings → Authentication.
+- **Manual deployment option:** From the Vercel dashboard, go to **`final-bis` → Deployments → Create Deployment → `main`**.
+
+### Database Migrations
+Migrations in `supabase/migrations/` are applied **manually in order using the Supabase SQL Editor**. Merging code to `main` does not automatically run SQL migrations.
+- Latest applied migration: `030_timetable_update_2026_10.sql` (applied).
+
+### Verifying Production Deployment Status
+To verify whether production is running the latest deployment carrying the #151 features (or an older build), send unauthenticated HTTP requests:
+
+| Request | New build | Old build |
+|---|---|---|
+| `GET /api/cron/attendance-reminders` | **401** `{"status":"error","message":"Unauthorized"}` (proves `CRON_SECRET` is active) | **404** `{"message":"Route not found: GET /api/cron/attendance-reminders"}` |
+| `GET /api/attendance/week` | **401** "Authentication required" | **404** Route not found |
 
 ---
 

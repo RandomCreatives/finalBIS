@@ -1,17 +1,25 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const readline = require('readline');
+require('dotenv').config({ path: './.env' });
+require('dotenv').config({ path: './backend/.env' });
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.API_URL || 'http://localhost:5000/api';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error('Error: ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.');
+    process.exit(1);
+}
+
+const ENV_INITIAL_PASS = process.env.STAFF_INITIAL_PASSWORD;
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
-
-function ask(question) {
-    return new Promise((resolve) => rl.question(question, resolve));
-}
 
 async function fetchAPI(endpoint, options, token) {
     const headers = { 'Content-Type': 'application/json' };
@@ -40,7 +48,12 @@ function parseCSV(content) {
 
 async function main() {
     // Read CSV
-    const csvPath = path.join(__dirname, '..', '..', '..', 'staff_info.csv');
+    const csvPath = path.join(__dirname, '..', '..', 'staff_info.csv');
+    if (!fs.existsSync(csvPath)) {
+        console.error(`CSV file not found at ${csvPath}`);
+        rl.close();
+        process.exit(1);
+    }
     const csvContent = fs.readFileSync(csvPath, 'utf8');
     const staff = parseCSV(csvContent);
     console.log(`Parsed ${staff.length} staff records from CSV`);
@@ -49,20 +62,22 @@ async function main() {
     const loginRes = await fetchAPI('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
-            email: 'admin@bisnoc.local',
-            password: 'changeme123'
+            email: ADMIN_EMAIL,
+            password: ADMIN_PASSWORD
         })
     });
     const token = loginRes.token;
+    if (!token) {
+        console.error('Admin login failed. Check ADMIN_EMAIL and ADMIN_PASSWORD.');
+        rl.close();
+        process.exit(1);
+    }
     console.log('Logged in as admin');
 
     // Get classes
     const classesRes = await fetchAPI('/classes', {}, token);
-    const classes = classesRes.classes;
-    const classByName = {};
-    classes.forEach(c => { classByName[c.name] = c; });
+    const classes = classesRes.classes || [];
     
-    // Build class name lookup from the CSV format (e.g., "Blue" -> "Year 3 - Blue")
     const classByNameColor = {};
     classes.forEach(c => { 
         const color = c.name.replace('Year 3 - ', '');
@@ -71,7 +86,7 @@ async function main() {
 
     // Get subjects
     const subjectsRes = await fetchAPI('/subjects', {}, token);
-    const subjects = subjectsRes.subjects;
+    const subjects = subjectsRes.subjects || [];
     const subjectByName = {};
     subjects.forEach(s => { subjectByName[s.name] = s; });
 
@@ -80,12 +95,12 @@ async function main() {
 
     // Track created users
     const createdUsers = {};
+    const createdSummary = [];
 
     // Process each staff member
     console.log('\n--- Creating Staff Users ---\n');
     for (const row of staff) {
         const fullName = row['Staff Full Name*'];
-        const gender = row['Gender'];
         const jobTitle = row['Job Title*'];
         const subject = row['Subject'];
         const classroom = row['Class room'];
@@ -94,15 +109,16 @@ async function main() {
         let role = 'subject_teacher';
         if (jobTitle === 'Main Teacher') role = 'main_teacher';
         else if (jobTitle === 'Assistant Teacher') role = 'assistant_teacher';
-        else if (jobTitle === 'Cover Teacher') role = 'subject_teacher'; // cover teachers as subject teachers
-        else if (jobTitle.includes('Special Need')) role = 'subject_teacher'; // special need teachers
+        else if (jobTitle === 'Cover Teacher') role = 'subject_teacher';
+        else if (jobTitle.includes('Special Need')) role = 'subject_teacher';
         else if (jobTitle === 'Teacher') role = 'subject_teacher';
 
         // Generate email from name
-        const nameParts = fullName.toLowerCase().replace(/[^a-z\s]/g, '').split(' ');
+        const nameParts = fullName.toLowerCase().replace(/[^a-z\s]/g, '').split(' ').filter(Boolean);
         const email = `${nameParts[0]}.${nameParts.slice(-1)[0]}@bisnoc.local`;
-        // Simple password - user can change later
-        const password = 'TempPass123!';
+
+        const password = ENV_INITIAL_PASS || crypto.randomBytes(16).toString('hex');
+        const displayPass = ENV_INITIAL_PASS ? '(from STAFF_INITIAL_PASSWORD)' : password;
 
         try {
             const userRes = await fetchAPI('/users', {
@@ -118,6 +134,7 @@ async function main() {
             const user = userRes.user;
             if (user) {
                 createdUsers[fullName] = user;
+                createdSummary.push({ name: fullName, email, role, displayPass });
                 console.log(`Created: ${fullName} (${role}) - email: ${email}`);
             } else {
                 console.log(`Error creating ${fullName}:`, JSON.stringify(userRes));
@@ -163,21 +180,6 @@ async function main() {
                 console.log(`Class not found: ${classroom} for ${fullName}`);
             }
         }
-
-        // Subject Teacher -> assign to subject
-        if ((jobTitle === 'Subject Teacher' || jobTitle === 'Teacher' || jobTitle.includes('Special Need')) && subjectName) {
-            const subjectObj = subjectByName[subjectName];
-            if (subjectObj) {
-                // Get class_subjects - need to find or create the assignment
-                // First, let's just log this for now
-                console.log(`Would assign ${fullName} to teach ${subjectName} (user: ${user.id}, subject: ${subjectObj.id})`);
-                
-                // TODO: Need to create class_subjects entries
-                // The API has /assignments/subjects which takes classId, subjectId, teacherId
-                // But we need to know which classes this teacher should teach
-                // For now, assign to all classes
-            }
-        }
     }
 
     // Special case: assign subject teachers to subjects across classes
@@ -207,7 +209,7 @@ async function main() {
         // Assign this teacher to teach this subject across all classes
         try {
             const classIds = classes.map(c => c.id);
-            const res = await fetchAPI('/assignments/subjects/bulk', {
+            await fetchAPI('/assignments/subjects/bulk', {
                 method: 'POST',
                 body: JSON.stringify({
                     subjectId: subjectObj.id,
@@ -220,6 +222,11 @@ async function main() {
             console.log(`Failed to assign ${fullName} for ${subjectName}:`, e.message);
         }
     }
+
+    console.log('\n--- Staff Credentials Summary ---');
+    createdSummary.forEach(s => {
+        console.log(`  ${s.email.padEnd(30)} / ${s.displayPass.padEnd(35)} (${s.name})`);
+    });
 
     console.log('\n--- Import Complete ---');
     rl.close();

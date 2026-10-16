@@ -20,6 +20,7 @@
  * double-booking attempt fails loudly instead of entering the data.
  */
 const path = require('path');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -39,7 +40,8 @@ const WIPE = process.argv.includes('--wipe');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 const YEAR_NAME = process.env.ACADEMIC_YEAR || '2026/2027';
-const TEMP_PASSWORD = 'BisNoc2026!';
+const RESET_PASSWORDS = process.argv.includes('--reset-passwords');
+const ENV_INITIAL_PASS = process.env.STAFF_INITIAL_PASSWORD;
 
 // ---------------------------------------------------------------------------
 // The 2026/27 staffing plan
@@ -175,22 +177,35 @@ async function main() {
 
     // ── 2. Placeholder teachers ────────────────────────────────────────────
     const { data: existingUsers } = await supabase.from('users')
-        .select('id, name').eq('school_id', school.id);
+        .select('id, name, email').eq('school_id', school.id);
     const userByName = new Map((existingUsers || []).map((u) => [u.name, u]));
 
     if (!DRY_RUN) {
-        const hash = await bcrypt.hash(TEMP_PASSWORD, 12);
         const newTeachers = [];
+        const teacherCredentials = [];
         for (const name of PLACEHOLDER_TEACHERS) {
             if (!userByName.has(name)) {
+                const passToSet = ENV_INITIAL_PASS || crypto.randomBytes(16).toString('hex');
+                const hash = await bcrypt.hash(passToSet, 12);
+                const displayPass = ENV_INITIAL_PASS ? '(from STAFF_INITIAL_PASSWORD)' : passToSet;
+                const email = `${slug(name)}@bisnocgerji.local`;
                 newTeachers.push({
                     school_id: school.id,
                     name,
-                    email: `${slug(name)}@bisnocgerji.local`,
+                    email,
                     password_hash: hash,
                     role: 'subject_teacher',
                     is_active: true,
                 });
+                teacherCredentials.push({ name, email, displayPass });
+            } else if (RESET_PASSWORDS) {
+                const existingUser = userByName.get(name);
+                const passToSet = ENV_INITIAL_PASS || crypto.randomBytes(16).toString('hex');
+                const hash = await bcrypt.hash(passToSet, 12);
+                const displayPass = ENV_INITIAL_PASS ? '(from STAFF_INITIAL_PASSWORD)' : passToSet;
+                await supabase.from('users').update({ password_hash: hash }).eq('id', existingUser.id);
+                console.log(`Reset password for placeholder teacher: ${name}`);
+                teacherCredentials.push({ name, email: existingUser.email || `${slug(name)}@bisnocgerji.local`, displayPass });
             }
         }
         if (newTeachers.length > 0) {
@@ -199,8 +214,12 @@ async function main() {
             if (error) throw error;
             created.forEach((u) => userByName.set(u.name, u));
             console.log(`Created ${created.length} placeholder teachers (${created.map((u) => u.name).join(', ')})`);
-        } else {
-            console.log('Placeholder teachers already exist');
+        } else if (!RESET_PASSWORDS) {
+            console.log('Placeholder teachers already exist (passwords unchanged)');
+        }
+        if (teacherCredentials.length > 0) {
+            console.log('\nPlaceholder Teacher Credentials:');
+            teacherCredentials.forEach(tc => console.log(`  ${tc.name.padEnd(25)} ${tc.email.padEnd(30)} / ${tc.displayPass}`));
         }
     } else {
         console.log(`(dry) would ensure placeholder teachers: ${PLACEHOLDER_TEACHERS.join(', ')}`);
