@@ -78,6 +78,7 @@ describe('AppLayout (staff workspace shell)', () => {
         expect(within(nav).getByText('Daily Planner')).toBeInTheDocument();
         expect(within(nav).getByText('Attendance')).toBeInTheDocument();
         expect(within(nav).getByText('Students')).toBeInTheDocument();
+        expect(within(nav).getByText('Student Portal')).toBeInTheDocument();
         expect(screen.getByText(/Main teacher workspace · 2026\/2027/)).toBeInTheDocument();
     });
 });

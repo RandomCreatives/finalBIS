@@ -71,6 +71,7 @@ const NAV_GROUPS = [
         label: 'People & Classes',
         items: [
             { label: 'Students', hint: 'Find students, open ID cards and manage records.', to: '/app/students', icon: <GroupsIcon fontSize="small" /> },
+            { label: 'Student Portal', hint: 'Open a one-page student snapshot with marks, attendance, and contact details.', to: '/app/student-portal', icon: <SchoolIcon fontSize="small" />, roles: ['admin', 'main_teacher', 'assistant_teacher', 'subject_teacher'] },
             { label: 'Classes', to: '/app/classes', icon: <ClassIcon fontSize="small" /> },
             { label: 'Staff Assignment', to: '/app/staff-assignment', icon: <AssignmentIndIcon fontSize="small" />, roles: ['admin'] },
             { label: 'Subjects', to: '/app/subjects', icon: <MenuBookIcon fontSize="small" />, roles: ['admin'] },

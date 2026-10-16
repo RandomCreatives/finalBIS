@@ -45,6 +45,7 @@ import Settings from './pages/Settings';
 import Files from './pages/Files';
 import Marksheets from './pages/Marksheets';
 import ReportCards from './pages/ReportCards';
+import StudentPortal from './pages/StudentPortal';
 
 export default function App() {
     return (
@@ -106,6 +107,7 @@ export default function App() {
                             <Route path="files" element={<Files />} />
                             <Route path="marksheets" element={<Marksheets />} />
                             <Route path="report-cards" element={<ReportCards />} />
+                            <Route path="student-portal" element={<StudentPortal />} />
                         </Route>
 
                         <Route path="/" element={<Landing />} />
