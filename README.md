@@ -10,7 +10,7 @@ A staff-facing school management system for the British International School, NO
 
 | Stage | What happens | Where |
 |---|---|---|
-| **Every PR** | Backend test suite (212 tests, offline) + frontend ESLint, build & unit tests | `.github/workflows/ci.yml` (GitHub Actions) |
+| **Every PR** | Backend test suite (367 tests, offline) + frontend ESLint, build & unit tests | `.github/workflows/ci.yml` (GitHub Actions) |
 | **Every PR** | Preview deployment with its own URL | Vercel GitHub integration |
 | **Merge to `main`** | Automatic production deployment | Vercel |
 
@@ -357,14 +357,14 @@ missing staff.
 
 ```sh
 cd backend
-npm test          # everything (188 tests)
+npm test          # everything (367 tests)
 npm run test:api  # API layer only
 npm run test:db   # database layer only
 ```
 
 Two layers, both offline — no Supabase project, no Docker, no external server.
 
-**API tests (144)** run the Express app against a stubbed Supabase client: authentication,
+**API tests (323)** run the Express app against a stubbed Supabase client: authentication,
 token handling, role authorisation on every protected route, input validation, password
 hashing, teaching assignments, timetable visibility per role, teacher rotation, student
 placement, scheme and lesson-plan ownership, the submit/review workflow, calendar

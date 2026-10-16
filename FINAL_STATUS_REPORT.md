@@ -13,7 +13,7 @@ We have successfully **transformed the BIS NOC application** from a development 
 
 - ✅ **84% reduction in security vulnerabilities** (31/37 fixed)
 - ✅ **100% of HIGH/Critical vulnerabilities eliminated** (14/14)
-- ✅ **Complete CI/CD infrastructure** built and ready
+- ✅ **CI workflow** built; CD workflow planned
 - ✅ **All critical bugs fixed** (3/3)
 - ✅ **All 174 backend tests passing** (100%)
 - ✅ **Comprehensive documentation** created
@@ -66,7 +66,7 @@ We have successfully **transformed the BIS NOC application** from a development 
 
 **Status:** ✅ **INFRASTRUCTURE READY**
 - CI workflow: Created and tested
-- CD workflow: Created and ready
+- CD workflow: Not yet created (planned)
 - **Next Step:** Enable GitHub Actions in repository settings
 - **Next Step:** Configure Vercel tokens in GitHub secrets
 

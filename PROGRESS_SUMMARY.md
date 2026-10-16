@@ -54,7 +54,7 @@
 
 #### Status
 - ✅ **CI Workflow:** Created and ready
-- ✅ **CD Workflow:** Created and ready
+- ✅ **CD Workflow:** Not yet created (planned)
 - ⏳ **GitHub Actions:** Needs to be enabled in repo settings
 - ⏳ **Vercel Tokens:** Needs to be configured in GitHub secrets
 
