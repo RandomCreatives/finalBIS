@@ -6,6 +6,7 @@ import useApi from '../hooks/useApi';
 import { paymentApi } from '../api/endpoints';
 import {
     IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
+    PushCard,
 } from '../components/settings/profileCards';
 
 const ROLE_LABELS = {
@@ -104,6 +105,7 @@ export default function Settings() {
                             emptyHint="Administrator access"
                         />
                         <PreferencesCard />
+                        <PushCard />
                     </Stack>
                 </Grid>
             </Grid>

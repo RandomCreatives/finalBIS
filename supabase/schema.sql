@@ -886,6 +886,29 @@ CREATE INDEX IF NOT EXISTS idx_receipts_notice ON notice_receipts(notice_id);
 
 
 -- ---------------------------------------------------------------------------
+-- push_subscriptions — Push API endpoints for PWA notifications
+--
+-- One row per (user, endpoint). The frontend subscribes via the Push API and
+-- POSTs the subscription to /api/push/subscribe; the backend delivers with
+-- web-push using the VAPID key pair. Rows are scoped to a school via the
+-- owning user. RLS keeps a subscription private to its user; the backend
+-- service role bypasses RLS as usual.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint    TEXT NOT NULL UNIQUE,
+    p256dh_key  TEXT NOT NULL,
+    auth_key    TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, endpoint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+
+
+-- ---------------------------------------------------------------------------
 -- updated_at triggers
 -- ---------------------------------------------------------------------------
 DO $$
@@ -895,8 +918,8 @@ BEGIN
         'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'attendance',
         'marksheets', 'library_loans', 'clinic_visits', 'schemes_of_work',
-        'scheme_weeks', 'lesson_plans', 'calendar_events', 'threads', 'tasks', 'notices',
-        'store_requests', 'permission_requests', 'conduct_reports'
+        'scheme_weeks', 'lesson_plans',         'calendar_events', 'threads', 'tasks', 'notices',
+        'store_requests', 'permission_requests', 'conduct_reports', 'push_subscriptions'
     ] LOOP
         EXECUTE format('DROP TRIGGER IF EXISTS trg_%1$s_updated_at ON %1$s', t);
         EXECUTE format(
@@ -930,7 +953,7 @@ BEGIN
         'attendance', 'marksheets', 'library_loans', 'clinic_visits',
         'schemes_of_work', 'scheme_weeks', 'lesson_plans', 'calendar_events',
         'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts',
-        'store_requests', 'permission_requests', 'conduct_reports'
+        'store_requests', 'permission_requests', 'conduct_reports', 'push_subscriptions'
     ] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

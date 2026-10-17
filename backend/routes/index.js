@@ -32,6 +32,7 @@ const dashboard = require('../controllers/dashboard.controller');
 const datacenter = require('../controllers/datacenter.controller');
 const store = require('../controllers/store.controller');
 const permissionRequests = require('../controllers/permissionRequests.controller');
+const push = require('../controllers/push.controller');
 const conductReports = require('../controllers/conductReports.controller');
 const files = require('../controllers/files.controller');
 
@@ -40,6 +41,7 @@ const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} 
 const STAFF = [ROLES.ADMIN, ...TEACHER_ROLES];
 const TEACHING = [ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.SUBJECT_TEACHER];
 const PASTORAL = [ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.ASSISTANT_TEACHER];
+const PUSH_ROLES = [ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.ASSISTANT_TEACHER, ROLES.SUBJECT_TEACHER];
 const photoUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
@@ -1056,6 +1058,45 @@ router.patch('/notices/:id', authenticate, authorize(ROLES.ADMIN), uuid('id'), v
 router.post('/notices/:id/read', authenticate, uuid('id'), validate, notices.markRead);
 router.get('/notices/:id/receipts', authenticate, authorize(ROLES.ADMIN), uuid('id'), validate, notices.getReceipts);
 router.delete('/notices/:id', authenticate, authorize(ROLES.ADMIN), uuid('id'), validate, notices.deleteNotice);
+
+// =============================================================================
+// PUSH NOTIFICATIONS (PWA)
+// =============================================================================
+
+router.get('/push/config', authenticate, push.getConfig);
+router.get('/push/stats', authenticate, push.getStats);
+
+router.post(
+    '/push/subscribe',
+    authenticate,
+    body('endpoint').isString().notEmpty().withMessage('A valid endpoint is required'),
+    body('keys.p256dh').isString().notEmpty().withMessage('p256dh key is required'),
+    body('keys.auth').isString().notEmpty().withMessage('auth key is required'),
+    validate,
+    push.subscribe,
+);
+
+router.post(
+    '/push/unsubscribe',
+    authenticate,
+    body('endpoint').isString().notEmpty().withMessage('A valid endpoint is required'),
+    validate,
+    push.unsubscribe,
+);
+
+router.post(
+    '/push/send',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    body('title').trim().notEmpty().withMessage('A title is required'),
+    body('body').trim().notEmpty().withMessage('A body is required'),
+    body('url').optional({ nullable: true }).isString(),
+    body('audience').optional().isIn(PUSH_ROLES),
+    body('userIds').optional().isArray(),
+    body('userIds.*').optional().isUUID(),
+    validate,
+    push.send,
+);
 
 // =============================================================================
 // CONVERSATIONS

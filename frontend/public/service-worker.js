@@ -55,3 +55,33 @@ self.addEventListener('fetch', (event) => {
         }))
     );
 });
+
+/** A push arrived from the office — show it even if the tab is closed. */
+self.addEventListener('push', (event) => {
+    const data = event.data ? event.data.json() : {};
+    const options = {
+        body: data.body || '',
+        icon: data.icon || '/pwa-icon-192.png',
+        badge: '/pwa-icon-192.png',
+        data: { url: data.url || '/' },
+        vibrate: [200, 100, 200],
+        renotify: true,
+        tag: data.title || 'bis-gerji',
+    };
+    event.waitUntil(
+        self.registration.showNotification(data.title || 'BIS Gerji', options),
+    );
+});
+
+/** Tap the notification → open (or focus) the app at the linked page. */
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const url = event.notification.data?.url || '/';
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+            const running = clients.find((c) => new URL(c.url).origin === new URL(url).origin);
+            if (running) return running.focus();
+            return self.clients.openWindow(url);
+        }),
+    );
+});

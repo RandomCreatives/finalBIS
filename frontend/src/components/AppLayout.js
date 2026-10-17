@@ -21,6 +21,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SchoolIcon from '@mui/icons-material/School';
+import SendIcon from '@mui/icons-material/Send';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
@@ -85,6 +86,9 @@ const NAV_GROUPS = [
             {
                 label: 'Communications', to: '/app/communications',
                 icon: <CampaignOutlinedIcon fontSize="small" />, badge: 'communications', roles: ['admin'],
+            },
+            {
+                label: 'Broadcast', hint: 'Send a push notification to staff devices.', to: '/app/push-notifications', icon: <SendIcon fontSize="small" />, roles: ['admin'],
             },
         ],
     },

@@ -12,9 +12,11 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { alpha } from '@mui/material/styles';
 import { authApi } from '../../api/endpoints';
+import { subscriptionState, subscribePush, unsubscribePush } from '../../services/push';
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../auth/AuthContext';
 import { useColorScheme } from '../../theme';
@@ -401,9 +403,77 @@ export function PreferencesCard() {
                 <Switch checked={dark} onChange={toggleColorScheme}
                     inputProps={{ 'aria-label': 'Toggle dark mode' }} />
             </Stack>
-            <Typography variant="caption" color="text.secondary"
-                sx={{ display: 'block', mt: 2, lineHeight: 1.55 }}>
-                Notice and message preferences arrive with the Notices module.
+                <Typography variant="caption" color="text.secondary"
+                    sx={{ display: 'block', mt: 2, lineHeight: 1.55 }}>
+                    Notice and message preferences arrive with the Notices module.
+                </Typography>
+            </CardShell>
+        );
+    }
+
+/* ── push ────────────────────────────────────────────────── */
+/** One device, one subscription: morning attendance reminders and office
+ * broadcasts arrive here. The toggle subscribes/unsubscribes this device
+ * via the Push API and remembers the choice on the server. */
+export function PushCard() {
+    const [state, setState] = useState('loading'); // loading | supported | denied | default | subscribed
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+    const [message, setMessage] = useState('');
+
+    const refresh = async () => {
+        setError(''); setMessage('');
+        try {
+            setState(await subscriptionState());
+        } catch {
+            setState('supported');
+        }
+    };
+
+    useEffect(() => { refresh(); }, []);
+
+    const handleToggle = async () => {
+        setBusy(true); setError(''); setMessage('');
+        try {
+            if (state === 'subscribed') {
+                await unsubscribePush();
+                setMessage('Push notifications turned off for this device.');
+            } else {
+                await subscribePush();
+                setMessage('Subscribed — you will get morning attendance reminders and office broadcasts.');
+            }
+            await refresh();
+        } catch (err) {
+            setError(err.message || 'Could not update push notifications.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const hint = state === 'subscribed'
+        ? 'Subscribed — you will get morning attendance reminders and office broadcasts on this device.'
+        : state === 'unsupported'
+        ? 'This browser does not support push notifications.'
+        : 'Switch on to receive morning attendance reminders and office broadcasts.';
+
+    return (
+        <CardShell icon={NotificationsIcon} title="Push notifications" subtitle="This device only">
+            {(error || message) && (
+                <Alert severity={error ? 'error' : 'success'} sx={{ mb: 2 }}>
+                    {error || message}
+                </Alert>
+            )}
+            <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="body2">Receive push notifications</Typography>
+                <Switch
+                    checked={state === 'subscribed'}
+                    onChange={handleToggle}
+                    disabled={busy}
+                    inputProps={{ 'aria-label': 'Push notifications' }}
+                />
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, lineHeight: 1.55 }}>
+                {hint}
             </Typography>
         </CardShell>
     );

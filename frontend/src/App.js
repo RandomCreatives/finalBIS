@@ -46,6 +46,7 @@ import Files from './pages/Files';
 import Marksheets from './pages/Marksheets';
 import ReportCards from './pages/ReportCards';
 import StudentPortal from './pages/StudentPortal';
+import PushNotifications from './pages/PushNotifications';
 
 export default function App() {
     return (
@@ -108,6 +109,14 @@ export default function App() {
                             <Route path="marksheets" element={<Marksheets />} />
                             <Route path="report-cards" element={<ReportCards />} />
                             <Route path="student-portal" element={<StudentPortal />} />
+                            <Route
+                                path="push-notifications"
+                                element={
+                                    <RequireAuth roles={['admin']}>
+                                        <PushNotifications />
+                                    </RequireAuth>
+                                }
+                            />
                         </Route>
 
                         <Route path="/" element={<Landing />} />

@@ -3,6 +3,7 @@ const schoolTime = require('../utils/schoolTime');
 const { selectAll } = require('../utils/selectAll');
 const { notify, notifyAdmins } = require('../utils/nudges');
 const { sendTelegramMessage } = require('../utils/telegram');
+const { sendPush, subscriptionsForUsers, vapidConfigured } = require('../services/webpush');
 
 /**
  * Daily attendance reminders for main teachers.
@@ -172,6 +173,25 @@ const sweepSchool = async (schoolId, date, time) => {
             dedupeKey: reminderKey(klass.classId, date),
         });
         if (created.length === 0) continue; // already reminded today
+
+        // Push to the same teachers who just got the bell nudge — the
+        // morning attendance reminder lands on their phone even if the app
+        // is closed.
+        if (vapidConfigured) {
+            const subs = await subscriptionsForUsers(created);
+            await Promise.allSettled(
+                subs.map((s) =>
+                    sendPush(
+                        s,
+                        {
+                            title: `Take the register: ${klass.className}`,
+                            body: `${dayLabel} — today's daily attendance hasn't been recorded yet.`,
+                            url: registerPath(klass.classId, date),
+                        },
+                    ),
+                ),
+            );
+        }
 
         reminded.push({ className: klass.className, teachers: klass.teachers.filter((t) => created.includes(t.id)).map((t) => t.name) });
 

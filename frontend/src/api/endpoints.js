@@ -86,6 +86,14 @@ export const planningApi = {
     overview: () => client.get('/planning/overview').then((r) => r.data),
 };
 
+export const pushApi = {
+    config: () => client.get('/push/config').then((r) => r.data),
+    stats: () => client.get('/push/stats').then((r) => r.data),
+    subscribe: (subscription) => client.post('/push/subscribe', subscription).then((r) => r.data),
+    unsubscribe: (endpoint) => client.delete('/push/unsubscribe', { data: { endpoint } }).then((r) => r.data),
+    send: (payload) => client.post('/push/send', payload).then((r) => r.data),
+};
+
 export const assignmentApi = {
     classStaff: (params) => client.get('/assignments/class-staff', { params }).then((r) => r.data),
     assignStaff: (payload) => client.put('/assignments/class-staff', payload).then((r) => r.data),
