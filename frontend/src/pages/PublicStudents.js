@@ -289,7 +289,6 @@ export default function PublicStudents() {
                 <StudentIdCard
                     student={selectedStudent}
                     canManage={canManageSelected}
-                    canUploadPhoto={canManageSelected}
                     classes={CLASS_OPTIONS}
                     onClose={() => setSelectedName(null)}
                     onSave={handleSave}

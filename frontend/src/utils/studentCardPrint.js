@@ -7,16 +7,10 @@ const escapeHtml = (value) => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const initials = (name) => String(name || '?')
-    .trim().split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
-
 const cardFrontMarkup = (student) => {
     const id = classIdFor(student) || 'Not assigned';
     const name = escapeHtml(student.name || 'Student');
     const className = escapeHtml(student.className || 'Class not assigned');
-    const photo = student.photoUrl
-        ? `<img class="photo" src="${escapeHtml(student.photoUrl)}" alt="" />`
-        : `<div class="photo initials">${escapeHtml(initials(student.name))}</div>`;
 
     return `
         <section class="id-card front">
@@ -26,7 +20,6 @@ const cardFrontMarkup = (student) => {
                 <div class="mark">BIS<br><small>Gerji</small></div>
             </header>
             <main>
-                ${photo}
                 <div class="details">
                     <div><span>Name</span><strong>${name}</strong></div>
                     <div><span>Student ID</span><strong>${escapeHtml(id)}</strong></div>
@@ -76,7 +69,6 @@ const printCss = `
     .mark small { font-size: 5px; font-weight: 600; }
     .front main { height: 1.23in; padding: .08in .16in .04in .95in; position: relative; background: #fff; }
     .front main:before { content: ''; position: absolute; left: .04in; right: .04in; top: .03in; bottom: .03in; opacity: .2; background: repeating-radial-gradient(ellipse at 20% 60%, transparent 0 8px, #55b6bc 9px 10px, transparent 11px 16px); }
-    .photo { position: absolute; z-index: 2; left: .08in; top: -.15in; width: .7in; height: .7in; border-radius: 50%; object-fit: cover; border: 5px solid #2cae98; background: #e3f5ef; }
     .initials { display: grid; place-items: center; color: #087d86; font-size: 22px; font-weight: 800; }
     .details { position: relative; z-index: 2; padding-top: .04in; }
     .details div { display: flex; gap: .12in; margin: 3px 0; font-size: 8px; }

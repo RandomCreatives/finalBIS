@@ -9,7 +9,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PrintIcon from '@mui/icons-material/Print';
 import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
@@ -20,7 +19,6 @@ import { useAuth } from '../auth/AuthContext';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import StudentIdCard, { classIdFor } from '../components/StudentIdCard';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
-import { compressStudentPhoto } from '../utils/studentPhotos';
 import { formatDate } from '../utils/schoolTime';
 
 const EMPTY = {
@@ -53,7 +51,6 @@ export default function Students() {
     const [importDialog, setImportDialog] = useState(false);
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
-    const [photoSavingId, setPhotoSavingId] = useState(null);
 
     const classes = useApi(() => classApi.list(), []);
     const students = useApi(
@@ -100,25 +97,6 @@ export default function Students() {
         }
     };
     const setPaymentStatus = (status) => setPaymentForStudent(payTarget, status);
-
-    const uploadPhoto = async (student, event) => {
-        const file = event.target.files?.[0];
-        event.target.value = '';
-        if (!file) return;
-        setPhotoSavingId(student.id);
-        try {
-            const compressed = await compressStudentPhoto(file);
-            const formData = new FormData();
-            formData.append('file', compressed);
-            await studentApi.uploadPhoto(student.id, formData);
-            await students.reload();
-            setToast(`Photo saved for ${student.name}`);
-        } catch (err) {
-            setToast(err.message || 'Could not upload the photo.');
-        } finally {
-            setPhotoSavingId(null);
-        }
-    };
 
     const openCreate = () => { setFormError(''); setDialog({ mode: 'create', values: { ...EMPTY } }); };
     const openEdit = (s) => {
@@ -527,19 +505,6 @@ export default function Students() {
                                                     <EditIcon fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
-                                        )}
-                                        {['admin', 'main_teacher'].includes(user?.role) && (
-                                            <Button
-                                                component="label" size="small" startIcon={<PhotoCameraIcon sx={{ fontSize: 16 }} />}
-                                                disabled={photoSavingId === s.id}
-                                                sx={{ fontWeight: 700, textTransform: 'none', color: 'primary.main' }}
-                                            >
-                                                {photoSavingId === s.id ? 'Uploading…' : 'Upload photo'}
-                                                <input
-                                                    hidden type="file" accept="image/jpeg,image/png"
-                                                    onChange={(event) => uploadPhoto(s, event)}
-                                                />
-                                            </Button>
                                         )}
                                         {canTransfer && (
                                             <Tooltip title="Transfer to another class">

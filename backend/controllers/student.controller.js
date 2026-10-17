@@ -4,13 +4,11 @@ const { resolveYearId } = require('./academicYear.controller');
 
 const XLSX = require('xlsx');
 
-const PHOTO_BUCKET = 'student-photos';
-
 const SELECT = `
     id, admission_no, name, roll_num, date_of_birth, gender,
     guardian_name, guardian_phone, guardian_email,
-    special_needs, special_needs_note, sen_teacher_name, is_active, class_id, photo_file_id,
-    photo_storage_path, class:classes(id, name)
+    special_needs, special_needs_note, sen_teacher_name, is_active, class_id,
+    class:classes(id, name)
 `;
 
 const shape = (s) => ({
@@ -28,8 +26,6 @@ const shape = (s) => ({
     senTeacherName: s.sen_teacher_name || null,
     isActive: s.is_active,
     classId: s.class_id,
-    photoFileId: s.photo_file_id || null,
-    photoStoragePath: s.photo_storage_path || null,
     class: s.class ? { id: s.class.id, name: s.class.name } : null,
 });
 
@@ -43,73 +39,6 @@ const senTeacherNameFor = (specialNeeds, value) => {
     if (!name) throw new BadRequestError('Assigned SEN Teacher is required when special needs is on');
     return name;
 };
-
-/** POST /api/students/:id/photo — compressed JPG to private Supabase Storage. */
-const uploadStudentPhoto = asyncHandler(async (req, res) => {
-    if (!req.file) throw new BadRequestError('No photo uploaded');
-    if (req.file.mimetype !== 'image/jpeg') {
-        throw new BadRequestError('Student photos must be compressed JPG images');
-    }
-    if (req.file.size > 512 * 1024) {
-        throw new BadRequestError('Compressed student photo must be 512 KB or smaller');
-    }
-
-    const { data: student, error: studentError } = await supabase
-        .from('students')
-        .select('id, class_id')
-        .eq('id', req.params.id)
-        .eq('school_id', req.user.school_id)
-        .maybeSingle();
-    if (studentError) throw studentError;
-    if (!student) throw new NotFoundError('Student not found');
-    await assertClassAccess(req, student.class_id);
-
-    const path = `${req.user.school_id}/${student.id}.jpg`;
-    const { error: uploadError } = await supabase.storage
-        .from(PHOTO_BUCKET)
-        .upload(path, req.file.buffer, {
-            contentType: 'image/jpeg',
-            upsert: true,
-            cacheControl: '3600',
-        });
-    if (uploadError) throw new BadRequestError(`Photo storage failed: ${uploadError.message}`);
-
-    const { data: updated, error: updateError } = await supabase
-        .from('students')
-        .update({ photo_storage_path: path })
-        .eq('id', student.id)
-        .eq('school_id', req.user.school_id)
-        .select(SELECT)
-        .single();
-    if (updateError) throw updateError;
-
-    const { data: signed, error: signedError } = await supabase.storage
-        .from(PHOTO_BUCKET)
-        .createSignedUrl(path, 3600);
-    if (signedError) throw signedError;
-
-    res.json({ student: shape(updated), url: signed.signedUrl });
-});
-
-/** GET /api/students/:id/photo — short-lived private photo URL. */
-const getStudentPhoto = asyncHandler(async (req, res) => {
-    const { data: student, error } = await supabase
-        .from('students')
-        .select('id, class_id, photo_storage_path')
-        .eq('id', req.params.id)
-        .eq('school_id', req.user.school_id)
-        .maybeSingle();
-    if (error) throw error;
-    if (!student) throw new NotFoundError('Student not found');
-    await assertClassAccess(req, student.class_id);
-    if (!student.photo_storage_path) return res.json({ url: null });
-
-    const { data: signed, error: signedError } = await supabase.storage
-        .from(PHOTO_BUCKET)
-        .createSignedUrl(student.photo_storage_path, 3600);
-    if (signedError) throw signedError;
-    res.json({ url: signed.signedUrl });
-});
 
 /** GET /api/students?classId=&specialNeeds=&search= */
 const listStudents = asyncHandler(async (req, res) => {
@@ -298,7 +227,6 @@ const updateStudent = asyncHandler(async (req, res) => {
         specialNeedsNote: 'special_needs_note',
         senTeacherName: 'sen_teacher_name',
         isActive: 'is_active',
-        photoFileId: 'photo_file_id',
     };
 
     const patch = {};
@@ -311,18 +239,6 @@ const updateStudent = asyncHandler(async (req, res) => {
     if (req.user.role !== 'admin') delete patch.class_id;
     if (patch.is_active === false && !['admin', 'main_teacher'].includes(req.user.role)) {
         throw new ForbiddenError('Only an admin or the class main teacher can deactivate a student');
-    }
-
-    if (patch.photo_file_id) {
-        const { data: photo, error: photoError } = await supabase
-            .from('file_records')
-            .select('id')
-            .eq('id', patch.photo_file_id)
-            .eq('school_id', req.user.school_id)
-            .eq('category', 'student')
-            .maybeSingle();
-        if (photoError) throw photoError;
-        if (!photo) throw new BadRequestError('Student photo file not found in this school');
     }
 
     // Teachers may only edit students of their own classes.
@@ -578,5 +494,4 @@ const importStudents = asyncHandler(async (req, res) => {
 module.exports = {
     listStudents, listUnassigned, assignStudents, getStudent, createStudent,
     updateStudent, transferStudent, getTransferHistory, importStudents,
-    uploadStudentPhoto, getStudentPhoto,
 };

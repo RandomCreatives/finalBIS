@@ -1304,7 +1304,6 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
                 <StudentIdCard
                     student={{ ...selectedStudent, className: klass.name }}
                     canManage
-                    canUploadPhoto
                     classes={classNames}
                     saving={saving}
                     onClose={() => setSelected(null)}

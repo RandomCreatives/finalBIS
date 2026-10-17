@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
     Box, Button, Checkbox, Chip, Dialog, Divider, FormControlLabel, IconButton,
     MenuItem, TextField, Tooltip, Typography,
@@ -9,13 +9,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CloseIcon from '@mui/icons-material/Close';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import PrintIcon from '@mui/icons-material/Print';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { PaymentChip, paymentLabel } from '../utils/payments';
-import { filesApi, studentApi } from '../api/endpoints';
-import { compressStudentPhoto } from '../utils/studentPhotos';
-import { useAuth } from '../auth/AuthContext';
 import { classIdFor } from '../utils/studentIds';
 import { openStudentCardPrint } from '../utils/studentCardPrint';
 import { formatDate } from '../utils/schoolTime';
@@ -98,15 +94,9 @@ const markedLine = (payment) => {
     return `Recorded by ${payment.markedBy || 'staff'}${date ? ` · ${date}` : ''}`;
 };
 
-export default function StudentIdCard({ student, canManage, canUploadPhoto: canUploadPhotoProp, classes, onClose, onSave, onTransfer, onDeactivate, saving,
+export default function StudentIdCard({ student, canManage, classes, onClose, onSave, onTransfer, onDeactivate, saving,
     payment, termName, onMarkPayment, paymentSaving }) {
     const theme = useTheme();
-    const { user } = useAuth();
-    const canUploadPhoto = canUploadPhotoProp ?? (canManage && ['admin', 'main_teacher'].includes(user?.role));
-    const [photoUrl, setPhotoUrl] = useState('');
-    const [photoSaving, setPhotoSaving] = useState(false);
-    const [photoError, setPhotoError] = useState('');
-    const photoInput = useRef(null);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(null);
     const [editError, setEditError] = useState('');
@@ -115,39 +105,7 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
     const [reason, setReason] = useState('');
     const [transferError, setTransferError] = useState('');
 
-    useEffect(() => {
-        let active = true;
-        const photoRequest = student?.photoStoragePath
-            ? studentApi.photo(student.id)
-            : student?.photoFileId
-                ? filesApi.download(student.photoFileId)
-                : Promise.resolve({ url: null });
-        photoRequest
-            .then((result) => { if (active) setPhotoUrl(result.url || ''); })
-            .catch(() => { if (active) setPhotoUrl(''); });
-        return () => { active = false; };
-    }, [student?.id, student?.photoFileId, student?.photoStoragePath]);
-
     if (!student) return null;
-
-    const uploadPhoto = async (event) => {
-        const file = event.target.files?.[0];
-        event.target.value = '';
-        if (!file) return;
-        setPhotoSaving(true);
-        setPhotoError('');
-        try {
-            const compressed = await compressStudentPhoto(file);
-            const formData = new FormData();
-            formData.append('file', compressed);
-            const stored = await studentApi.uploadPhoto(student.id, formData);
-            setPhotoUrl(stored.url || '');
-        } catch (err) {
-            setPhotoError(err.message || 'Could not upload the photo.');
-        } finally {
-            setPhotoSaving(false);
-        }
-    };
 
     const startEdit = () => {
         setDraft({
@@ -225,42 +183,16 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
             <Box sx={{ p: 2.5 }}>
                 {!editing ? (
                     <>
-                        {/* photo + identity */}
-                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-                            <Box sx={{ position: 'relative', width: 72, height: 88, flexShrink: 0 }}>
-                                {photoUrl ? (
-                                    <Box component="img" src={photoUrl} alt="Student" sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1.25, border: '1px solid', borderColor: 'divider' }} />
-                                ) : (
-                                    <Box sx={{ width: '100%', height: '100%', borderRadius: 1.25,
-                                        border: '1px solid', borderColor: 'divider',
-                                        bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: 30, fontWeight: 800 }}>
-                                        {(student.name || '?').trim().charAt(0).toUpperCase()}
-                                    </Box>
-                                )}
-                                {canUploadPhoto && (
-                                    <>
-                                        <input ref={photoInput} hidden type="file" accept="image/jpeg,image/png" onChange={uploadPhoto} />
-                                        <Tooltip title="Upload or replace the student photo (JPG/PNG, max 5 MB)." arrow>
-                                            <IconButton size="small" aria-label="Upload student photo" onClick={() => photoInput.current?.click()} disabled={photoSaving}
-                                                sx={{ position: 'absolute', right: -8, bottom: -8, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', '&:hover': { bgcolor: 'background.paper' } }}>
-                                                <PhotoCameraIcon sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </>
-                                )}
-                            </Box>
-                            <Box sx={{ minWidth: 0 }}>
-                                {photoError && <Typography sx={{ fontSize: 10.5, color: 'error.main', mb: .4 }}>{photoError}</Typography>}
-                                <Typography sx={{ fontWeight: 800, fontSize: 18, lineHeight: 1.15 }}>
-                                    {student.name}
-                                </Typography>
-                                <Typography sx={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 800,
-                                    color: 'primary.main', letterSpacing: .8, mt: .25 }}>
-                                    {classCardId || 'Not assigned'}
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: .75, mt: 1, flexWrap: 'wrap' }}>
+                        {/* identity */}
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 800, fontSize: 18, lineHeight: 1.15 }}>
+                                {student.name}
+                            </Typography>
+                            <Typography sx={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 800,
+                                color: 'primary.main', letterSpacing: .8, mt: .25 }}>
+                                {classCardId || 'Not assigned'}
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: .75, mt: 1, flexWrap: 'wrap' }}>
                                     {student.className && (
                                         <Chip label={student.className} size="small"
                                             sx={{ fontWeight: 700, borderRadius: 1, height: 22, fontSize: 11.5,
@@ -273,7 +205,6 @@ export default function StudentIdCard({ student, canManage, canUploadPhoto: canU
                                     )}
                                 </Box>
                             </Box>
-                        </Box>
 
                         {rows.length > 0 && <Divider sx={{ mb: 1.5 }} />}
 
