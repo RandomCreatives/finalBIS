@@ -130,6 +130,13 @@ router.post(
     auth.telegramLogin
 );
 
+router.post(
+    '/auth/telegram-webapp',
+    body('init_data').isString().notEmpty().withMessage('init_data is required'),
+    validate,
+    auth.telegramWebApp,
+);
+
 // Public on purpose: the login page reads it to render the widget. It only
 // exposes the bot's public username, never the token.
 router.get('/auth/telegram-config', auth.telegramConfig);

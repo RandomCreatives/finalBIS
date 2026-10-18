@@ -6,6 +6,7 @@ const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, Forbid
 const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
 const { verifyTelegramLogin } = require('../utils/telegram');
 const { isFixtureSubject } = require('../utils/subjects');
+const crypto = require('crypto');
 
 const BCRYPT_ROUNDS = 12;
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -502,6 +503,84 @@ const telegramConfig = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/auth/telegram-webapp
+ *
+ * Exchange a Telegram Mini App `initData` payload for a session. `initData`
+ * is a URL-encoded query string (`user=...&auth_date=...&hash=...`) signed by
+ * the bot via HMAC-SHA256 over the data-check-string — the same scheme the
+ * Login Widget uses, so a payload cannot be forged without the bot token.
+ * The Telegram account must already be linked to a staff account.
+ */
+const telegramWebApp = asyncHandler(async (req, res) => {
+    if (!env.telegram.botToken) {
+        throw new BadRequestError('Telegram is not configured on this server.');
+    }
+
+    const { init_data } = req.body || {};
+    if (!init_data || typeof init_data !== 'string') {
+        throw new BadRequestError('init_data is required');
+    }
+
+    const params = new URLSearchParams(init_data);
+    const hash = params.get('hash');
+    if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
+        throw new UnauthorizedError('Telegram initData could not be verified.');
+    }
+
+    params.delete('hash');
+    const dataCheckString = [...params.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n');
+
+    const secretKey = crypto.createHash('sha256').update(env.telegram.botToken).digest();
+    const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    const a = Buffer.from(hmac, 'hex');
+    const b = Buffer.from(hash, 'hex');
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        throw new UnauthorizedError('Telegram initData could not be verified.');
+    }
+
+    const authDate = Number(params.get('auth_date'));
+    if (!authDate || Date.now() - authDate * 1000 > 24 * 60 * 60 * 1000) {
+        throw new UnauthorizedError('Telegram initData has expired.');
+    }
+
+    let userPayload;
+    try {
+        userPayload = JSON.parse(params.get('user') || '{}');
+    } catch {
+        throw new UnauthorizedError('Telegram initData is malformed.');
+    }
+    const telegramId = String(userPayload.id);
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', telegramId)
+        .maybeSingle();
+    if (error) throw error;
+    if (!user) {
+        throw new UnauthorizedError(
+            'This Telegram account is not linked to any BIS NOC login. Link it from the Staff page first.',
+        );
+    }
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
+    }
+
+    const loginPatch = { last_login_at: new Date().toISOString() };
+    if (userPayload.username) loginPatch.telegram_username = String(userPayload.username);
+    await supabase
+        .from('users')
+        .update(loginPatch)
+        .eq('id', user.id)
+        .then(({ error }) => { if (error) console.error('[auth] Failed to update telegram login:', error.message); });
+
+    res.json({ token: signToken(user), user: publicUser(user) });
+});
+
+/**
  * POST /api/auth/link-telegram
  *
  * Self-service linking. The staff member is already signed in (password or
@@ -820,6 +899,7 @@ module.exports = {
     gmailRequestCode,
     gmailVerifyCode,
     telegramLogin,
+    telegramWebApp,
     telegramConfig,
     linkTelegram,
     unlinkTelegram,
