@@ -10,7 +10,6 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import PrintIcon from '@mui/icons-material/Print';
 import { studentApi, studentRequestApi, classApi, termApi, paymentApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -18,7 +17,6 @@ import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import StudentIdCard, { classIdFor } from '../components/StudentIdCard';
-import { openStudentCardPrint } from '../utils/studentCardPrint';
 import { formatDate } from '../utils/schoolTime';
 
 const EMPTY = {
@@ -324,24 +322,6 @@ export default function Students() {
                         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
                             Add student
                         </Button>
-                        {isAdmin && (
-                            <Button
-                                variant="outlined" startIcon={<PrintIcon />}
-                                disabled={!rows.length || !classFilter}
-                                onClick={() => {
-                                    const ordered = [...rows].sort((a, b) =>
-                                        (a.rollNum ?? 999) - (b.rollNum ?? 999)
-                                        || (a.name || '').localeCompare(b.name || '')
-                                    );
-                                    openStudentCardPrint(ordered.map((s) => ({
-                                        ...s,
-                                        className: s.class?.name || s.className,
-                                    })));
-                                }}
-                            >
-                                Print this class
-                            </Button>
-                        )}
                         <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => setImportDialog(true)}>
                             Import Excel
                         </Button>
@@ -405,7 +385,7 @@ export default function Students() {
                         value={classFilter}
                         onChange={(e) => setClassFilter(e.target.value)}
                         size="small"
-                        helperText={!classFilter ? 'Choose a class to print its cards' : undefined}
+                        helperText={!classFilter ? 'Choose a class to filter the list' : undefined}
                         sx={{ minWidth: 200 }}
                     >
                         <MenuItem value="">All classes</MenuItem>

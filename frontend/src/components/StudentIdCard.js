@@ -9,11 +9,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CloseIcon from '@mui/icons-material/Close';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import PrintIcon from '@mui/icons-material/Print';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { PaymentChip, paymentLabel } from '../utils/payments';
 import { classIdFor } from '../utils/studentIds';
-import { openStudentCardPrint } from '../utils/studentCardPrint';
 import { formatDate } from '../utils/schoolTime';
 
 export { classIdFor } from '../utils/studentIds';
@@ -216,31 +214,6 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
                             ))}
                         </Box>
 
-                        {/* The same school-location QR appears on every student card.
-                            It contains no student data. */}
-                        <Box
-                            data-testid="school-location-qr"
-                            sx={{
-                                mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider',
-                                display: 'flex', alignItems: 'center', gap: 1.5,
-                            }}
-                        >
-                            <Box
-                                component="img"
-                                src="/bis-gerji-location-qr.png"
-                                alt="Scan for BIS NOC Gerji school location"
-                                sx={{ width: 82, height: 82, imageRendering: 'pixelated', flexShrink: 0 }}
-                            />
-                            <Box>
-                                <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: .6 }}>
-                                    School location
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Scan to open BIS NOC Gerji in Google Maps.
-                                </Typography>
-                            </Box>
-                        </Box>
-
                         {/* payment receipt — dotted slip under the record, filled
                             in by the class teacher when the parent pays */}
                         {termName && (
@@ -290,13 +263,6 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
 
                         {/* actions */}
                         <Box sx={{ display: 'flex', gap: 1, mt: 2.5, alignItems: 'center' }}>
-                            <Tooltip title="Open the print dialog or save this card as a PDF." arrow>
-                            <Button size="small" variant="outlined" startIcon={<PrintIcon sx={{ fontSize: 15 }} />}
-                                onClick={() => openStudentCardPrint([student])}
-                                sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1 }}>
-                                Print card
-                            </Button>
-                            </Tooltip>
                             {canManage && (
                                 <>
                                     <Button size="small" variant="outlined" startIcon={<EditIcon sx={{ fontSize: 15 }} />}
