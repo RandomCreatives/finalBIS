@@ -21,8 +21,7 @@ export default function BottomNav({ user, location }: { user: any; location: any
                         key={tab.to}
                         to={tab.to}
                         className={({ isActive }) =>
-                            `nav-item ${isActive ? 'nav-item active' : ''}` +
-                            (user?.role === 'admin' ? '' : ' opacity-90')
+                            `nav-item${isActive ? ' active' : ''}` + (user?.role === 'admin' ? '' : ' opacity-90')
                         }
                         end={tab.to === '/'}
                     >

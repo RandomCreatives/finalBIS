@@ -57,6 +57,22 @@ const authLimiter = rateLimit({
     message: { message: 'Too many login attempts, please try again in 15 minutes.' },
 });
 
+/**
+ * Telegram Mini App sign-in limiter. Keyed on the client IP only (the body is
+ * untrusted and an attacker can vary it), and successful sign-ins are skipped
+ * so normal staff use never consumes the budget. This throttles both password-
+ * free credential stuffing and HMAC brute-force attempts.
+ */
+const telegramLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => req.ip,
+    message: { message: 'Too many Telegram sign-in attempts, please try again in 15 minutes.' },
+});
+
 /** Collects express-validator failures into a single 400. */
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -86,4 +102,4 @@ const uploadSingle = multer({
     },
 }).single('file');
 
-module.exports = { apiLimiter, authLimiter, validate, isAllowedOrigin, uploadSingle };
+module.exports = { apiLimiter, authLimiter, telegramLimiter, validate, isAllowedOrigin, uploadSingle };

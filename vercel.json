@@ -21,6 +21,13 @@
       "config": {
         "distDir": "build"
       }
+    },
+    {
+      "src": "tma/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
   ],
   "routes": [
@@ -35,6 +42,22 @@
     {
       "src": "/favicon.ico",
       "dest": "frontend/favicon.ico"
+    },
+    {
+      "src": "/tma",
+      "dest": "tma/index.html"
+    },
+    {
+      "src": "/tma/assets/(.*)",
+      "dest": "tma/assets/$1"
+    },
+    {
+      "src": "/tma/(.*)\\.(js|css|png|jpg|jpeg|gif|ico|json|svg|woff|woff2|ttf|eot|map|txt|html|webmanifest)$",
+      "dest": "tma/$1.$2"
+    },
+    {
+      "src": "/tma/(.*)",
+      "dest": "tma/index.html"
     },
     {
       "src": "/(.*)\\.(js|css|png|jpg|jpeg|gif|ico|json|svg|woff|woff2|ttf|eot|map|txt|html)$",

@@ -261,6 +261,27 @@ To enable it:
 | `POST /api/auth/link-telegram` | Authenticated. Link the verified account to *my* login |
 | `DELETE /api/auth/link-telegram` | Authenticated. Unlink *my* Telegram account |
 
+### Telegram Mini App (`tma/`)
+
+The staff Mini App is a separate React + Vite app served at **`/tma/`** by the
+same Vercel deployment. It signs staff in with Telegram's Mini App `initData`
+— a different HMAC scheme from the Login Widget:
+
+```
+secret_key        = HMAC_SHA256(key="WebAppData", message=<bot_token>)
+data_check_string = every field except "hash", sorted by key, joined "\n"
+hash              = hex(HMAC_SHA256(key=secret_key, message=data_check_string))
+```
+
+`POST /api/auth/telegram-webapp` verifies that signature with the server-side
+bot token (never exposed to the browser), rejects `auth_date` values older than
+24 hours or more than 5 minutes in the future, rate-limits repeated attempts
+per IP, and only issues a session for a linked, active staff account.
+
+To publish it: create the app in BotFather (`/newapp`) with the URL
+`https://<your-domain>/tma/`. Full setup, local development and deployment
+notes are in [`tma/README.md`](tma/README.md).
+
 ---
 
 ## Getting started

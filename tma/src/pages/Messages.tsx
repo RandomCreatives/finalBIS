@@ -54,7 +54,12 @@ export default function Messages() {
                                         {t.category ? t.category.charAt(0).toUpperCase() + t.category.slice(1) : 'General'}
                                     </p>
                                 </div>
-                                <span className="text-[10px] text-blue-500">{new Date(t.updated_at || t.created_at).toLocaleDateString()}</span>
+                                <span className="text-[10px] text-blue-500">
+                                    {t.lastMessageAt || t.createdAt
+                                        ? new Date(t.lastMessageAt || t.createdAt).toLocaleDateString()
+                                        : ''}
+                                    {t.unreadCount ? ` · ${t.unreadCount} unread` : ''}
+                                </span>
                             </div>
                         </GlassCard>
                     ))}

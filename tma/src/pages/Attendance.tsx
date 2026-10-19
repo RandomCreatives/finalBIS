@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { GlassCard, SectionTitle } from '../components/GlassCard';
 import { api } from '../api/api';
 import { AlertCircle } from 'lucide-react';
+import { todayIso } from '../lib/date';
 
 export default function Attendance() {
     const [loading, setLoading] = useState(true);
@@ -36,7 +37,7 @@ export default function Attendance() {
         if (!selectedClass) return;
         setSaving(true);
         try {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = todayIso();
             await api.post('/attendance', {
                 classId: selectedClass,
                 date: today,
