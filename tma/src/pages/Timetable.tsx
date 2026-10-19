@@ -20,7 +20,8 @@ export default function Timetable() {
     const byDay: Record<string, any[]> = {};
     DAYS.forEach((d) => (byDay[d] = []));
     (slots || []).forEach((s) => {
-        const day = DAYS[s.day_of_week - 1] || String(s.day_of_week);
+        // The API returns camelCase fields (dayOfWeek 1 = Monday).
+        const day = DAYS[(s.dayOfWeek ?? s.day_of_week ?? 0) - 1] || String(s.dayOfWeek ?? '');
         if (byDay[day]) byDay[day].push(s);
     });
 
@@ -49,7 +50,8 @@ export default function Timetable() {
             </div>
 
             {DAYS.map((day) => {
-                const daySlots = byDay[day].sort((a: any, b: any) => a.starts_at.localeCompare(b.starts_at));
+                const daySlots = byDay[day].sort((a: any, b: any) =>
+                    String(a.startsAt ?? '').localeCompare(String(b.startsAt ?? '')));
                 return (
                     <GlassCard key={day} className="mb-3">
                         <div className="flex items-center justify-between pb-2 border-b border-white/40 mb-2">
@@ -69,7 +71,7 @@ export default function Timetable() {
                                             </p>
                                         </div>
                                         <div className="text-right text-[10px] font-semibold text-blue-600">
-                                            {slot.starts_at.slice(0, 5)}
+                                            {String(slot.startsAt ?? '').slice(0, 5)}
                                         </div>
                                     </div>
                                 ))}

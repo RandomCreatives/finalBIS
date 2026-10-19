@@ -3,7 +3,7 @@ const multer = require('multer');
 const { body, param, query } = require('express-validator');
 
 const { authenticate, authorize, ROLES, TEACHER_ROLES } = require('../middleware/auth');
-const { authLimiter, validate, uploadSingle } = require('../middleware/security');
+const { authLimiter, telegramLimiter, validate, uploadSingle } = require('../middleware/security');
 
 const auth = require('../controllers/auth.controller');
 const pub = require('../controllers/public.controller');
@@ -132,7 +132,12 @@ router.post(
 
 router.post(
     '/auth/telegram-webapp',
-    body('init_data').isString().notEmpty().withMessage('init_data is required'),
+    telegramLimiter,
+    body('init_data')
+        .isString()
+        .withMessage('init_data is required')
+        .isLength({ min: 1, max: 8192 })
+        .withMessage('init_data must be a non-empty string of at most 8192 characters'),
     validate,
     auth.telegramWebApp,
 );

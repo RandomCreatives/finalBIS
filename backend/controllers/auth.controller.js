@@ -4,9 +4,12 @@ const supabase = require('../config/supabase');
 const { signToken } = require('../middleware/auth');
 const { UnauthorizedError, NotFoundError, BadRequestError, ConflictError, ForbiddenError, asyncHandler } = require('../utils/errors');
 const { sendMail, smtpConfigured, generateCode } = require('../utils/email');
-const { verifyTelegramLogin } = require('../utils/telegram');
+const {
+    verifyTelegramLogin,
+    verifyTelegramInitData,
+    TELEGRAM_INIT_DATA_MAX_LENGTH,
+} = require('../utils/telegram');
 const { isFixtureSubject } = require('../utils/subjects');
-const crypto = require('crypto');
 
 const BCRYPT_ROUNDS = 12;
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -507,62 +510,51 @@ const telegramConfig = asyncHandler(async (req, res) => {
  *
  * Exchange a Telegram Mini App `initData` payload for a session. `initData`
  * is a URL-encoded query string (`user=...&auth_date=...&hash=...`) signed by
- * the bot via HMAC-SHA256 over the data-check-string — the same scheme the
- * Login Widget uses, so a payload cannot be forged without the bot token.
- * The Telegram account must already be linked to a staff account.
+ * Telegram with the Mini App HMAC scheme:
+ *
+ *   secret = HMAC_SHA256(key="WebAppData", message=<bot_token>)
+ *   hash   = HMAC_SHA256(key=secret, message=<data-check-string>)
+ *
+ * This is NOT the Login Widget scheme (which uses SHA256(bot_token) as the
+ * key); see utils/telegram.js. The bot token stays server-side, so a payload
+ * cannot be forged, and auth_date must be fresh (not stale, not future).
+ * The Telegram account must already be linked to an active staff account.
  */
 const telegramWebApp = asyncHandler(async (req, res) => {
+    // The bot token is read from server-side config only — never from the
+    // request body and never returned to the client.
     if (!env.telegram.botToken) {
         throw new BadRequestError('Telegram is not configured on this server.');
     }
 
     const { init_data } = req.body || {};
-    if (!init_data || typeof init_data !== 'string') {
+    if (typeof init_data !== 'string' || init_data.trim() === '') {
         throw new BadRequestError('init_data is required');
     }
-
-    const params = new URLSearchParams(init_data);
-    const hash = params.get('hash');
-    if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
-        throw new UnauthorizedError('Telegram initData could not be verified.');
+    if (init_data.length > TELEGRAM_INIT_DATA_MAX_LENGTH) {
+        throw new BadRequestError('init_data is too large');
     }
 
-    params.delete('hash');
-    const dataCheckString = [...params.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => `${k}=${v}`)
-        .join('\n');
-
-    const secretKey = crypto.createHash('sha256').update(env.telegram.botToken).digest();
-    const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-    const a = Buffer.from(hmac, 'hex');
-    const b = Buffer.from(hash, 'hex');
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-        throw new UnauthorizedError('Telegram initData could not be verified.');
+    // Verifies Telegram's Web App HMAC (secret = HMAC("WebAppData", bot_token))
+    // and the auth_date freshness window. A single generic failure message
+    // avoids telling an attacker whether the signature or the timestamp was
+    // wrong.
+    const identity = verifyTelegramInitData(init_data, env.telegram.botToken);
+    if (!identity) {
+        throw new UnauthorizedError(
+            'Telegram sign-in data could not be verified. Reopen the Mini App and try again.',
+        );
     }
-
-    const authDate = Number(params.get('auth_date'));
-    if (!authDate || Date.now() - authDate * 1000 > 24 * 60 * 60 * 1000) {
-        throw new UnauthorizedError('Telegram initData has expired.');
-    }
-
-    let userPayload;
-    try {
-        userPayload = JSON.parse(params.get('user') || '{}');
-    } catch {
-        throw new UnauthorizedError('Telegram initData is malformed.');
-    }
-    const telegramId = String(userPayload.id);
 
     const { data: user, error } = await supabase
         .from('users')
         .select('*')
-        .eq('telegram_id', telegramId)
+        .eq('telegram_id', identity.telegramId)
         .maybeSingle();
     if (error) throw error;
     if (!user) {
         throw new UnauthorizedError(
-            'This Telegram account is not linked to any BIS NOC login. Link it from the Staff page first.',
+            'This Telegram account is not linked to any BIS NOC login. Ask an administrator to link it from the Staff page.',
         );
     }
     if (!user.is_active) {
@@ -570,7 +562,7 @@ const telegramWebApp = asyncHandler(async (req, res) => {
     }
 
     const loginPatch = { last_login_at: new Date().toISOString() };
-    if (userPayload.username) loginPatch.telegram_username = String(userPayload.username);
+    if (identity.username) loginPatch.telegram_username = identity.username;
     await supabase
         .from('users')
         .update(loginPatch)

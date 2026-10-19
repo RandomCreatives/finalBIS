@@ -1,6 +1,6 @@
+@tailwind base;
+@tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -13,7 +13,7 @@ body {
     color: #1e3a8a;
     overscroll-behavior: none;
 }
-#root {
+#app {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -153,6 +153,11 @@ body {
     border-color: #fee2e2;
 }
 .safe-area-bottom {
+    /* Room for the fixed tab bar plus the device home indicator. */
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+.nav-bar.safe-area-bottom {
+    height: calc(4rem + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
 }
 .safe-area-top {

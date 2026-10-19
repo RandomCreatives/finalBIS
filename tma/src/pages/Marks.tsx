@@ -47,7 +47,8 @@ export default function Marks() {
                                 <div>
                                     <span className="font-semibold text-sm">{m.subject?.name || 'Subject'}</span>
                                     <p className="text-[10px] text-blue-500">
-                                        {m.class?.name || 'Class'} · {m.term?.name || 'Term'}
+                                        {m.term?.name || 'Term'}
+                                        {m.grade ? ` · Grade ${m.grade}` : ''}
                                     </p>
                                 </div>
                                 <span className="text-xs font-semibold bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md">
