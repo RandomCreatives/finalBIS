@@ -20,8 +20,14 @@ export const fetchTelegramConfig = () => {
                 enabled: Boolean(res.data?.enabled && res.data?.botUsername),
                 botUsername: res.data?.botUsername || '',
                 // Widget sign-in stays grayed out until the bot function
-                // ships; account linking is available either way.
+                // ships; one-time account linking is independent of it.
                 loginEnabled: Boolean(res.data?.loginEnabled),
+                // False while the linking table is still missing (a pending
+                // database migration), so Settings can say so up front
+                // instead of failing on click. An older backend that does
+                // not report the flag is assumed provisioned, so a stale API
+                // never hides a working button.
+                linkEnabled: res.data?.linkEnabled !== false,
             }))
             .catch(() => {
                 // Clear the cache on error so the next call retries the server
@@ -31,6 +37,7 @@ export const fetchTelegramConfig = () => {
                     enabled: Boolean(FALLBACK_BOT_USERNAME),
                     botUsername: FALLBACK_BOT_USERNAME,
                     loginEnabled: false,
+                    linkEnabled: false,
                 };
             });
     }

@@ -26,12 +26,20 @@ const supabasePath = path.join(__dirname, '..', 'config', 'supabase.js');
  * production, so code that forgets to page is caught here.
  */
 const SUPABASE_MAX_ROWS = 1000;
-const db = { tables: {}, maxRows: SUPABASE_MAX_ROWS };
+/** `errors` lets a test make one table behave like it is missing/broken. */
+const db = { tables: {}, maxRows: SUPABASE_MAX_ROWS, errors: {} };
 
-const reset = (tables = {}, { maxRows = SUPABASE_MAX_ROWS } = {}) => {
+const reset = (tables = {}, { maxRows = SUPABASE_MAX_ROWS, errors = {} } = {}) => {
     db.tables = tables;
     db.maxRows = maxRows;
+    db.errors = errors;
 };
+
+/** PostgREST's answer when a table is missing from its schema cache. */
+const missingTableError = (table) => ({
+    code: 'PGRST205',
+    message: `Could not find the table 'public.${table}' in the schema cache`,
+});
 
 const rowsOf = (table) => (db.tables[table] ||= []);
 
@@ -147,6 +155,9 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
             return Promise.resolve(builder._run()).then(resolve, reject);
         },
         _run() {
+            // Simulated database failure (e.g. a migration that has not run).
+            if (db.errors[table]) return { data: null, error: db.errors[table] };
+
             const all = rowsOf(table);
             let result;
 
@@ -236,4 +247,4 @@ Module._load = function (request, parent, isMain) {
     return originalLoad.apply(this, arguments);
 };
 
-module.exports = { reset, db, supabaseStub, rowsOf, SUPABASE_MAX_ROWS };
+module.exports = { reset, db, supabaseStub, rowsOf, missingTableError, SUPABASE_MAX_ROWS };

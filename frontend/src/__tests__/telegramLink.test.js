@@ -32,7 +32,9 @@ const DEEP_LINK = `https://t.me/bisnocbot?start=link_${TOKEN}`;
 beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    fetchTelegramConfig.mockResolvedValue({ enabled: true, botUsername: 'bisnocbot', loginEnabled: false });
+    fetchTelegramConfig.mockResolvedValue({
+        enabled: true, botUsername: 'bisnocbot', loginEnabled: false, linkEnabled: true,
+    });
     authApi.me.mockResolvedValue({ id: 'u1', telegramId: null, telegramUsername: null });
 });
 
@@ -128,5 +130,19 @@ describe('TelegramCard — one-time linking', () => {
 
         await waitFor(() => expect(authApi.unlinkTelegram).toHaveBeenCalled());
         expect(await screen.findByRole('button', { name: /Create link/i })).toBeInTheDocument();
+    });
+});
+
+describe('TelegramCard — database update pending', () => {
+    test('explains the missing migration and offers no link button', async () => {
+        fetchTelegramConfig.mockResolvedValue({
+            enabled: true, botUsername: 'bisnocbot', loginEnabled: false, linkEnabled: false,
+        });
+
+        wrap(<TelegramCard />);
+
+        expect(await screen.findByText(/031_telegram_link_tokens\.sql/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Create link/i })).not.toBeInTheDocument();
+        expect(authApi.requestTelegramLink).not.toHaveBeenCalled();
     });
 });

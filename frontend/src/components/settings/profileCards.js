@@ -282,7 +282,14 @@ export function TelegramCard() {
                         Create a one-time link, then open it in Telegram. It expires in 10 minutes
                         and only works once.
                     </Typography>
-                    {config?.enabled ? (
+                    {config?.enabled && !config.linkEnabled && (
+                        <Alert severity="info" sx={{ mb: 1.5 }}>
+                            Linking is not available yet: the database update
+                            (<code>031_telegram_link_tokens.sql</code>) has not been applied.
+                            Ask an administrator to run it, then reload this page.
+                        </Alert>
+                    )}
+                    {config?.enabled && config.linkEnabled ? (
                         <Stack spacing={1.5}>
                             <Box>
                                 <Button variant="contained" size="small" onClick={createLink}
@@ -318,9 +325,11 @@ export function TelegramCard() {
                             )}
                         </Stack>
                     ) : (
-                        <Typography variant="caption" color="text.secondary">
-                            Telegram linking is not configured yet.
-                        </Typography>
+                        config?.enabled ? null : (
+                            <Typography variant="caption" color="text.secondary">
+                                Telegram linking is not configured yet.
+                            </Typography>
+                        )
                     )}
                 </>
             )}
