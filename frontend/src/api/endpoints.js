@@ -28,6 +28,12 @@ export const authApi = {
     linkTelegram: (payload) =>
         client.post('/auth/link-telegram', payload).then((r) => r.data),
     unlinkTelegram: () => client.delete('/auth/link-telegram').then((r) => r.data),
+    // One-time Telegram linking: mint a short-lived deep link, then poll its
+    // state while the staff member opens it in the bot.
+    requestTelegramLink: () =>
+        client.post('/auth/telegram-link').then((r) => r.data),
+    telegramLinkStatus: (token) =>
+        client.get(`/auth/telegram-link/${encodeURIComponent(token)}`).then((r) => r.data),
     resetPassword: (userId) =>
         client.post(`/auth/reset-password/${userId}`).then((r) => r.data),
 };

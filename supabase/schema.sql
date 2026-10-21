@@ -909,6 +909,39 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(use
 
 
 -- ---------------------------------------------------------------------------
+-- telegram_link_tokens — one-time, short-lived Telegram account links
+--
+-- A signed-in staff member asks the API for a link. Only the SHA-256 of the
+-- random 32-byte token is stored, so a database leak cannot be replayed into
+-- a Telegram binding. The token is consumed exactly once, by the bot, when
+-- the staff member opens https://t.me/<bot>?start=link_<token>; consuming it
+-- writes used_at plus the Telegram identity (for audit). Expired or reused
+-- tokens are refused. One outstanding token per staff account is enforced
+-- with a partial unique index, and the unique index on users.telegram_id
+-- keeps one Telegram account bound to one staff login.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash        TEXT NOT NULL UNIQUE,
+    expires_at        TIMESTAMPTZ NOT NULL,
+    used_at           TIMESTAMPTZ,
+    telegram_id       BIGINT,
+    telegram_username TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT telegram_link_tokens_ttl CHECK (expires_at > created_at),
+    CONSTRAINT telegram_link_tokens_hash_format CHECK (token_hash ~ '^[0-9a-f]{64}$')
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_link_tokens_user ON telegram_link_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_telegram_link_tokens_expires ON telegram_link_tokens(expires_at);
+
+-- At most one outstanding (unused) link per staff account.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_telegram_link_token
+    ON telegram_link_tokens(user_id) WHERE used_at IS NULL;
+
+
+-- ---------------------------------------------------------------------------
 -- updated_at triggers
 -- ---------------------------------------------------------------------------
 DO $$
@@ -953,7 +986,8 @@ BEGIN
         'attendance', 'marksheets', 'library_loans', 'clinic_visits',
         'schemes_of_work', 'scheme_weeks', 'lesson_plans', 'calendar_events',
         'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts',
-        'store_requests', 'permission_requests', 'conduct_reports', 'push_subscriptions'
+        'store_requests', 'permission_requests', 'conduct_reports', 'push_subscriptions',
+        'telegram_link_tokens'
     ] LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);

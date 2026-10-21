@@ -3,7 +3,7 @@ const multer = require('multer');
 const { body, param, query } = require('express-validator');
 
 const { authenticate, authorize, ROLES, TEACHER_ROLES } = require('../middleware/auth');
-const { authLimiter, telegramLimiter, validate, uploadSingle } = require('../middleware/security');
+const { authLimiter, telegramLimiter, telegramLinkLimiter, validate, uploadSingle } = require('../middleware/security');
 
 const auth = require('../controllers/auth.controller');
 const pub = require('../controllers/public.controller');
@@ -35,6 +35,7 @@ const permissionRequests = require('../controllers/permissionRequests.controller
 const push = require('../controllers/push.controller');
 const conductReports = require('../controllers/conductReports.controller');
 const files = require('../controllers/files.controller');
+const telegramLink = require('../controllers/telegramLink.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
 
@@ -194,6 +195,28 @@ router.post(
 );
 
 router.delete('/auth/link-telegram', authenticate, auth.unlinkTelegram);
+
+// One-time Telegram linking — the secure path that works without the Login
+// Widget: a signed-in staff member mints a short-lived link and opens it in
+// the bot, which binds that Telegram account to their existing staff account.
+// Minting is rate-limited per account; the token is single-use.
+router.post(
+    '/auth/telegram-link',
+    authenticate,
+    telegramLinkLimiter,
+    telegramLink.requestLink
+);
+
+// Polling is intentionally NOT on the mint limiter: the Settings card checks
+// every few seconds while a link is open, and the global API limiter already
+// covers it. Minting stays throttled above.
+router.get(
+    '/auth/telegram-link/:token',
+    authenticate,
+    param('token').isString().isLength({ max: 64 }).withMessage('Invalid link token'),
+    validate,
+    telegramLink.linkStatus
+);
 
 // =============================================================================
 // STAFF ACCOUNTS  (admin only)

@@ -45,6 +45,7 @@ const matches = (row, filters) =>
             case 'neq': return String(actual) !== String(value);
             case 'is': return value === null ? actual === null || actual === undefined : actual === value;
             case 'lt': return actual < value;
+            case 'gt': return actual > value;
             case 'gte': return actual >= value;
             case 'lte': return actual <= value;
             case 'in': return value.includes(actual);
@@ -197,7 +198,7 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
         },
     };
 
-    for (const op of ['eq', 'neq', 'is', 'lt', 'gte', 'lte', 'in', 'ilike']) {
+    for (const op of ['eq', 'neq', 'is', 'lt', 'gt', 'gte', 'lte', 'in', 'ilike']) {
         builder[op] = (column, value) => {
             filters.push({ op, column, value });
             return builder;
