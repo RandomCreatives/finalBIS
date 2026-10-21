@@ -20,7 +20,6 @@ import { subscriptionState, subscribePush, unsubscribePush } from '../../service
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../auth/AuthContext';
 import { useColorScheme } from '../../theme';
-import TelegramLoginButton from '../TelegramLoginButton';
 import { fetchTelegramConfig, botChatUrl } from '../../auth/telegram';
 
 /**
@@ -163,6 +162,14 @@ export function IdentityCard({ roleLabel, canEditName = false, nameNote }) {
 }
 
 /* ── telegram ────────────────────────────────────────────── */
+/**
+ * One-time Telegram linking.
+ *
+ * The server mints a short-lived deep link and stores only its hash; opening
+ * the link in @bisnocbot binds that Telegram account to this staff account.
+ * We poll the link's state while the card is open so the "Linked" chip
+ * appears as soon as the bot completes the exchange.
+ */
 export function TelegramCard() {
     const { updateUser } = useAuth();
     const [config, setConfig] = useState(null);
@@ -170,6 +177,7 @@ export function TelegramCard() {
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const [linked, setLinked] = useState(null); // { telegramId, telegramUsername }
+    const [link, setLink] = useState(null); // { token, deepLink, expiresAt }
 
     const me = useApi(() => authApi.me().catch(() => null), []);
     useEffect(() => {
@@ -184,17 +192,54 @@ export function TelegramCard() {
         return () => { cancelled = true; };
     }, []);
 
-    const link = async (payload) => {
+    // Poll only while a link is outstanding, and stop once it is spent.
+    useEffect(() => {
+        if (!link?.token) return undefined;
+
+        let cancelled = false;
+        const timer = setInterval(async () => {
+            try {
+                const state = await authApi.telegramLinkStatus(link.token);
+                if (cancelled) return;
+                if (state.status === 'used') {
+                    const fresh = await authApi.me();
+                    if (cancelled) return;
+                    updateUser(fresh);
+                    setLinked({ telegramId: fresh.telegramId, telegramUsername: fresh.telegramUsername });
+                    setLink(null);
+                    setMessage('Telegram linked — you can now use the bot and sign in with Telegram.');
+                } else if (state.status === 'expired' || state.status === 'invalid') {
+                    setLink(null);
+                    setError('That link is no longer valid. Create a new one.');
+                }
+            } catch {
+                /* transient network hiccup — the next tick retries */
+            }
+        }, 4000);
+
+        return () => { cancelled = true; clearInterval(timer); };
+    }, [link?.token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const createLink = async () => {
         setBusy(true); setError(''); setMessage('');
         try {
-            const { user: updated } = await authApi.linkTelegram(payload);
-            updateUser(updated);
-            setLinked({ telegramId: updated.telegramId, telegramUsername: updated.telegramUsername });
-            setMessage('Telegram linked — you can sign in with it from now on.');
+            const created = await authApi.requestTelegramLink();
+            setLink(created);
+            setMessage('Link created — open it in Telegram within 10 minutes.');
         } catch (err) {
-            setError(err.message || 'Could not link Telegram. Please try again.');
+            setError(err.message || 'Could not create a Telegram link. Please try again.');
         } finally {
             setBusy(false);
+        }
+    };
+
+    const copyLink = async () => {
+        if (!link?.deepLink) return;
+        try {
+            await navigator.clipboard.writeText(link.deepLink);
+            setMessage('Link copied. Paste it into Telegram to finish.');
+        } catch {
+            setError('Could not copy automatically — select the link and copy it.');
         }
     };
 
@@ -204,6 +249,7 @@ export function TelegramCard() {
             const { user: updated } = await authApi.unlinkTelegram();
             updateUser(updated);
             setLinked({ telegramId: null, telegramUsername: null });
+            setLink(null);
             setMessage('Telegram unlinked.');
         } catch (err) {
             setError(err.message || 'Could not unlink Telegram. Please try again.');
@@ -233,13 +279,47 @@ export function TelegramCard() {
             ) : (
                 <>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.6 }}>
-                        Link your Telegram account to sign in with one tap — no password needed.
+                        Create a one-time link, then open it in Telegram. It expires in 10 minutes
+                        and only works once.
                     </Typography>
                     {config?.enabled ? (
-                        <TelegramLoginButton onAuth={link} purpose="link" />
+                        <Stack spacing={1.5}>
+                            <Box>
+                                <Button variant="contained" size="small" onClick={createLink}
+                                    disabled={busy || Boolean(link)}
+                                    sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                                    {link ? 'Link ready' : 'Create link'}
+                                </Button>
+                            </Box>
+                            {link?.deepLink && (
+                                <Box>
+                                    <TextField
+                                        size="small" fullWidth value={link.deepLink}
+                                        InputProps={{ readOnly: true }}
+                                        inputProps={{ 'aria-label': 'One-time Telegram link' }}
+                                        onFocus={(e) => e.target.select()}
+                                    />
+                                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                        <Button size="small" variant="contained" href={link.deepLink}
+                                            target="_blank" rel="noreferrer"
+                                            sx={{ textTransform: 'none', fontWeight: 700 }}>
+                                            Open in Telegram
+                                        </Button>
+                                        <Button size="small" variant="outlined" onClick={copyLink}
+                                            sx={{ textTransform: 'none', fontWeight: 600 }}>
+                                            Copy link
+                                        </Button>
+                                    </Stack>
+                                    <Typography variant="caption" color="text.secondary"
+                                        sx={{ display: 'block', mt: 1 }}>
+                                        Waiting for you to open it in @{config.botUsername}…
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Stack>
                     ) : (
                         <Typography variant="caption" color="text.secondary">
-                            Telegram sign-in is not configured yet.
+                            Telegram linking is not configured yet.
                         </Typography>
                     )}
                 </>

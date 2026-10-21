@@ -7,6 +7,7 @@ const {
 } = require('../utils/telegram');
 const schoolTime = require('../utils/schoolTime');
 const { resolveAttendanceReminder } = require('./attendanceReminders');
+const { consumeLinkToken, LINK_PAYLOAD_PREFIX } = require('./telegramLink');
 
 const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
 
@@ -362,23 +363,88 @@ async function editNoticesWithData(chatId, messageId, user) {
 }
 
 // ---------------------------------------------------------------------------
+// One-time account linking
+// ---------------------------------------------------------------------------
+/**
+ * Plain-English replies for every consume outcome. Nothing here reveals
+ * whether a token existed — an unknown token and a token belonging to
+ * someone else read the same.
+ */
+const LINK_REPLIES = {
+    linked: '✅ Linked! This Telegram account is now connected to your BIS NOC staff account.\n\nSend /start to open your menu.',
+    invalid:
+        '❌ This link is not valid. Open the web app → Settings → Telegram and create a new link.',
+    expired:
+        '⌛ This link has expired. Links last 10 minutes — open the web app → Settings → Telegram and create a new one.',
+    used:
+        '❌ This link has already been used. If you need to link again, create a new link in the web app → Settings → Telegram.',
+    inactive:
+        '🔒 This staff account is not active. Contact the school office.',
+    account_already_linked:
+        '❌ Your staff account is already linked to a different Telegram account. Unlink it in the web app → Settings → Telegram first.',
+    telegram_already_linked:
+        '❌ This Telegram account is already linked to another staff member. Unlink it there first, or use a different Telegram account.',
+};
+
+/** `https://t.me/<bot>?start=link_<token>` — bind the sender to the staff account. */
+async function handleLinkStart(msg, chatId, payload) {
+    const from = msg.from || {};
+
+    // A link binds a person, so it is only honoured in a private chat — never
+    // from a group where anyone could read or forward the payload.
+    if (msg.chat?.type && msg.chat.type !== 'private') {
+        await sendTelegramMessage(
+            chatId,
+            '🔒 For your security, Telegram linking only works in a private chat with me.'
+        );
+        return;
+    }
+
+    const token = payload.slice(LINK_PAYLOAD_PREFIX.length);
+    const result = await consumeLinkToken({
+        token,
+        telegramId: from.id,
+        username: from.username || null,
+    });
+
+    await sendTelegramMessage(chatId, LINK_REPLIES[result.code] || LINK_REPLIES.invalid);
+
+    if (result.ok) {
+        const menu = buildMainMenu(result.user);
+        await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Update handlers
 // ---------------------------------------------------------------------------
 async function handleMessage(msg) {
     const chatId = msg.chat?.id;
     if (!chatId) return;
 
+    // One-time link: Telegram delivers the deep-link payload as the first
+    // argument of /start. Handle it before the linked-user gate, because the
+    // whole point is that this account is not linked yet.
+    const text = (msg.text || '').trim();
+    const startMatch = /^\/start(?:@\w+)?(?:\s+(\S+))?$/i.exec(text);
+    const payload = startMatch?.[1] || '';
+    if (payload.startsWith(LINK_PAYLOAD_PREFIX)) {
+        await handleLinkStart(msg, chatId, payload);
+        return;
+    }
+
     const user = await resolveUser(chatId);
     if (!user) {
         await sendTelegramMessage(
             chatId,
             '👋 Welcome to the BIS NOC staff bot.\n\n' +
-                'Your Telegram account is not linked yet. Open the web app → Settings → Link Telegram, then send /start again.'
+                'Your Telegram account is not linked yet. Open the web app → Settings → Telegram, ' +
+                'create a one-time link, and open it here.'
         );
         return;
     }
 
-    const cmd = (msg.text || '').trim().toLowerCase();
+    const cmd = text.toLowerCase();
     if (['/start', '/menu', '/help'].includes(cmd)) {
         const menu = buildMainMenu(user);
         await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });

@@ -73,6 +73,20 @@ const telegramLimiter = rateLimit({
     message: { message: 'Too many Telegram sign-in attempts, please try again in 15 minutes.' },
 });
 
+/**
+ * One-time Telegram link minting. Keyed on the signed-in account (the route
+ * sits behind `authenticate`) so a single staff member cannot churn links,
+ * with the IP as a fallback. A 10-minute link only needs minting once.
+ */
+const telegramLinkLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => (req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`),
+    message: { message: 'Too many Telegram link requests, please try again in 15 minutes.' },
+});
+
 /** Collects express-validator failures into a single 400. */
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -102,4 +116,12 @@ const uploadSingle = multer({
     },
 }).single('file');
 
-module.exports = { apiLimiter, authLimiter, telegramLimiter, validate, isAllowedOrigin, uploadSingle };
+module.exports = {
+    apiLimiter,
+    authLimiter,
+    telegramLimiter,
+    telegramLinkLimiter,
+    validate,
+    isAllowedOrigin,
+    uploadSingle,
+};

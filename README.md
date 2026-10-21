@@ -41,6 +41,8 @@ Under the Vercel Hobby plan for private repositories, commits deployed automatic
 ### Database Migrations
 Migrations in `supabase/migrations/` are applied **manually in order using the Supabase SQL Editor**. Merging code to `main` does not automatically run SQL migrations.
 - Latest applied migration: `030_timetable_update_2026_10.sql` (applied).
+- **Pending:** `031_telegram_link_tokens.sql` — creates the one-time linking
+  table and must be applied before **Settings → Telegram → Create link** works.
 
 ### Verifying Production Deployment Status
 To verify whether production is running the latest deployment carrying the #151 features (or an older build), send unauthenticated HTTP requests:
@@ -237,10 +239,22 @@ Login Widget**. A staff member's Telegram account is linked to their BIS NOC log
 from then on one tap on the Telegram button signs them in — the widget payload is
 HMAC-signed by the school bot, so it cannot be forged.
 
-**Linking is self-service.** A staff member signs in with their password, opens
-**Settings → Telegram Sign-in**, and taps the Telegram button; the verified account is
-attached to them automatically. Admins keep a fallback on the **Staff** page (the link
-icon) that shows the bot link to share and still accepts a numeric user id directly.
+**Linking is self-service and one-time.** A signed-in staff member opens
+**Settings → Telegram** and taps **Create link**. The server mints a random
+32-byte token, stores only its SHA-256 hash with a 10-minute TTL, and returns
+`https://t.me/<bot>?start=link_<token>`; opening it in the bot binds that
+Telegram account to their existing staff login. The token is single-use and
+one link is live per account (creating a new one invalidates the old).
+
+Expired, reused, unknown, and already-linked identities are refused: a
+Telegram account bound to another staff member cannot be claimed, and an
+account already bound to a different Telegram account must be unlinked first.
+Consumption is an atomic conditional `UPDATE`, so two simultaneous `/start`
+presses cannot both win, and the only secrets that ever leave the server are
+the public bot username and the one-time link itself.
+
+Admins keep a fallback on the **Staff** page (the link icon) that shows the
+bot link to share and still accepts a numeric user id directly.
 
 To enable it:
 
@@ -260,6 +274,8 @@ To enable it:
 | `POST /api/auth/telegram` | Sign in with a verified widget payload |
 | `POST /api/auth/link-telegram` | Authenticated. Link the verified account to *my* login |
 | `DELETE /api/auth/link-telegram` | Authenticated. Unlink *my* Telegram account |
+| `POST /api/auth/telegram-link` | Authenticated. Mint a one-time linking deep link for *my* login |
+| `GET /api/auth/telegram-link/:token` | Authenticated. Poll my link: `pending`, `used`, `expired`, `invalid` |
 
 ### Telegram Mini App (`tma/`)
 
