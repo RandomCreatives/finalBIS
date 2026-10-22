@@ -10,6 +10,7 @@ const {
     TELEGRAM_INIT_DATA_MAX_LENGTH,
 } = require('../utils/telegram');
 const { isLinkStorageReady } = require('../services/telegramLink');
+const { deploymentInfo, deploymentLabel } = require('../utils/deployment');
 const { isFixtureSubject } = require('../utils/subjects');
 
 const BCRYPT_ROUNDS = 12;
@@ -146,15 +147,29 @@ const telegramNotLinkedError = (identity) => {
         ? `@${identity.username} · id ${identity.telegramId}`
         : `id ${identity.telegramId}`;
 
-    console.warn(`[auth] Telegram sign-in: no staff account is linked to telegram ${label}`);
+    // The deployment fingerprint is part of the answer, not just the log: if
+    // the bot's "✅ Linked" message names a different host or database, the
+    // link was written by another deployment and no amount of re-linking on
+    // this one will help. Nothing secret is included.
+    const where = deploymentInfo();
+    console.warn(
+        `[auth] Telegram sign-in: no staff account is linked to telegram ${label} — answered by ${deploymentLabel(where)}`
+    );
 
     const err = new UnauthorizedError(
         `This Telegram account (${label}) is not linked to a BIS NOC staff login. ` +
         'Sign in with your email and password, open Settings → Telegram → Create link, ' +
-        'then open that link in this same Telegram account.'
+        'then open that link in this same Telegram account. ' +
+        `(Checked by ${where.host || 'this server'}${where.commit ? `@${where.commit}` : ''}` +
+        `${where.database ? `, database ${where.database}` : ''}. ` +
+        'If the bot\'s "Linked" reply named a different host or database, the bot is posting to another deployment.)'
     );
     err.code = 'TELEGRAM_NOT_LINKED';
-    err.details = { telegramId: identity.telegramId, username: identity.username || null };
+    err.details = {
+        telegramId: identity.telegramId,
+        username: identity.username || null,
+        deployment: where,
+    };
     return err;
 };
 

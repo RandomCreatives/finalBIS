@@ -26,13 +26,19 @@ const supabasePath = path.join(__dirname, '..', 'config', 'supabase.js');
  * production, so code that forgets to page is caught here.
  */
 const SUPABASE_MAX_ROWS = 1000;
-/** `errors` lets a test make one table behave like it is missing/broken. */
-const db = { tables: {}, maxRows: SUPABASE_MAX_ROWS, errors: {} };
+/**
+ * `errors` makes one table behave like it is missing/broken — a fixed error
+ * object, or a function ({mode}) => error|null for per-operation failures.
+ * `overrides` replaces one operation's whole result, e.g. a lost race where
+ * an UPDATE legitimately matches no rows: {'telegram_link_tokens:update': () => ({data: null, error: null})}.
+ */
+const db = { tables: {}, maxRows: SUPABASE_MAX_ROWS, errors: {}, overrides: {} };
 
-const reset = (tables = {}, { maxRows = SUPABASE_MAX_ROWS, errors = {} } = {}) => {
+const reset = (tables = {}, { maxRows = SUPABASE_MAX_ROWS, errors = {}, overrides = {} } = {}) => {
     db.tables = tables;
     db.maxRows = maxRows;
     db.errors = errors;
+    db.overrides = overrides;
 };
 
 /** PostgREST's answer when a table is missing from its schema cache. */
@@ -155,8 +161,17 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
             return Promise.resolve(builder._run()).then(resolve, reject);
         },
         _run() {
-            // Simulated database failure (e.g. a migration that has not run).
-            if (db.errors[table]) return { data: null, error: db.errors[table] };
+            // Whole-operation override (e.g. a lost race: matched no rows).
+            const override = db.overrides[`${table}:${mode}`];
+            if (override) return override({ table, mode, payload, filters });
+
+            // Simulated database failure (e.g. a migration that has not run),
+            // either constant or per operation.
+            const failure = db.errors[table];
+            if (failure) {
+                const error = typeof failure === 'function' ? failure({ mode }) : failure;
+                if (error) return { data: null, error };
+            }
 
             const all = rowsOf(table);
             let result;

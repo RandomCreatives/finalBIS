@@ -9,6 +9,7 @@ const schoolTime = require('../utils/schoolTime');
 const { resolveAttendanceReminder } = require('./attendanceReminders');
 const { consumeLinkToken, LINK_PAYLOAD_PREFIX } = require('./telegramLink');
 const menus = require('./telegramMenus');
+const { deploymentInfo, deploymentLabel } = require('../utils/deployment');
 
 const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
 
@@ -412,6 +413,8 @@ const LINK_REPLIES = {
         '❌ This Telegram account is already linked to another staff member. Unlink it there first, or use a different Telegram account.',
     not_ready:
         '🔒 Telegram linking is not set up on this server yet. Ask the school office to finish the setup.',
+    error:
+        '⚠️ Something went wrong saving the link, so nothing was changed. Try opening the link once more — if it keeps failing, ask the office to check the bot logs.',
 };
 
 /** `https://t.me/<bot>?start=link_<token>` — bind the sender to the staff account. */
@@ -450,9 +453,15 @@ async function handleLinkStart(msg, chatId, payload) {
         ? `${staff.name}${staff.email ? ` (${staff.email})` : ''}`
         : 'your staff account';
 
+    // The deployment line is the tie-breaker for "linked, but sign-in says not
+    // linked": compare this host + database with the one in the error.
+    const where = deploymentInfo();
+
     await sendTelegramMessage(
         chatId,
-        `${LINK_REPLIES.linked}\n\n👤 Staff account: ${account}\n📱 Telegram: ${who}\n\nSend /start to open your menu.`
+        `${LINK_REPLIES.linked}\n\n👤 Staff account: ${account}\n📱 Telegram: ${who}\n` +
+        `🖥 Linked on: ${where.host || 'this server'}${where.commit ? `@${where.commit}` : ''}` +
+        `${where.database ? ` · database ${where.database}` : ''}\n\nSend /start to open your menu.`
     );
 
     const menu = buildMainMenu(staff);

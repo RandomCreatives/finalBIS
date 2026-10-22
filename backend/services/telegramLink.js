@@ -241,13 +241,61 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
     if (ownerError) throw ownerError;
     if (owner) return { ok: false, code: 'telegram_already_linked' };
 
+    // ------------------------------------------------------------------
+    // Write order matters.
+    //
+    // Binding the staff account happens FIRST and the token is burnt LAST.
+    // The other order had a silent failure mode: if the users update failed
+    // for any reason the token was already marked used, nothing was bound,
+    // and the staff member was left with a burnt link and no explanation.
+    // This way a failed bind leaves the token intact, so the same link can
+    // simply be opened again.
+    // ------------------------------------------------------------------
+    const username_value = normalizeUsername(username);
+    const alreadyOurs = alreadyBound; // bind was verified above (same id)
+
+    if (!alreadyOurs) {
+        // Conditional update: only bind if the account is still unbound, so a
+        // concurrent link cannot be silently overwritten.
+        const { data: bound, error: bindError } = await supabase
+            .from('users')
+            .update({ telegram_id: telegramIdString, telegram_username: username_value })
+            .eq('id', user.id)
+            .is('telegram_id', null)
+            .select()
+            .maybeSingle();
+
+        if (bindError) {
+            // The unique index on users.telegram_id is the final backstop when
+            // two staff consume different links with the same Telegram account
+            // at once. The token stays usable.
+            if (bindError.code === '23505') return { ok: false, code: 'telegram_already_linked' };
+            if (isMissingStorage(bindError)) return { ok: false, code: 'not_ready' };
+            console.error('[telegram-link] binding failed:', bindError.message);
+            return { ok: false, code: 'error' };
+        }
+
+        if (!bound) {
+            // Lost a race: the account was bound (or unbound) under us.
+            const { data: latestUser } = await supabase
+                .from('users')
+                .select('id, telegram_id')
+                .eq('id', user.id)
+                .maybeSingle();
+            return {
+                ok: false,
+                code: String(latestUser?.telegram_id) === telegramIdString ? 'used' : 'account_already_linked',
+            };
+        }
+    }
+
     // Atomic single-use claim: only one caller can flip used_at from NULL.
     const claimed = await supabase
         .from('telegram_link_tokens')
         .update({
             used_at: now.toISOString(),
             telegram_id: telegramIdString,
-            telegram_username: normalizeUsername(username),
+            telegram_username: username_value,
         })
         .eq('id', row.id)
         .is('used_at', null)
@@ -259,8 +307,22 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
         if (isMissingStorage(claimed.error)) return { ok: false, code: 'not_ready' };
         throw claimed.error;
     }
+
     if (!claimed.data) {
-        // Lost the race (or the row expired in between): report accurately.
+        // Lost the race, or the row expired in between. If we did the binding
+        // in this call, undo it: an unconsumed token must not leave an
+        // account bound, otherwise the link could be replayed.
+        if (!alreadyOurs) {
+            await supabase
+                .from('users')
+                .update({ telegram_id: null, telegram_username: null })
+                .eq('id', user.id)
+                .eq('telegram_id', telegramIdString)
+                .then(({ error }) => {
+                    if (error) console.error('[telegram-link] could not release binding:', error.message);
+                });
+        }
+
         const { data: latest } = await supabase
             .from('telegram_link_tokens')
             .select('used_at')
@@ -269,22 +331,13 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
         return { ok: false, code: latest?.used_at ? 'used' : 'expired' };
     }
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: readError } = await supabase
         .from('users')
-        .update({
-            telegram_id: telegramIdString,
-            telegram_username: normalizeUsername(username),
-        })
-        .eq('id', user.id)
         .select()
+        .eq('id', user.id)
         .single();
 
-    if (updateError) {
-        // The unique index on users.telegram_id is the final backstop when two
-        // staff consume different links with the same Telegram account at once.
-        if (updateError.code === '23505') return { ok: false, code: 'telegram_already_linked' };
-        throw updateError;
-    }
+    if (readError) throw readError;
 
     return { ok: true, code: 'linked', user: updated };
 };
@@ -314,6 +367,36 @@ const isLinkStorageReady = async ({ now = Date.now(), force = false } = {}) => {
     return ready;
 };
 
+/**
+ * What does THIS deployment see for one staff member? Used by the
+ * diagnostics endpoint: if the bot said "linked" but this shows no used
+ * token and no binding, the bot wrote to another database.
+ *
+ * @returns {Promise<{total:number, unused:number, lastUsedAt:string|null, lastCreatedAt:string|null}>}
+ */
+const countTokensForUser = async ({ userId }) => {
+    const { data: rows, error } = await supabase
+        .from('telegram_link_tokens')
+        .select('used_at, created_at')
+        .eq('user_id', userId);
+
+    if (error) {
+        if (isMissingStorage(error)) return { total: 0, unused: 0, lastUsedAt: null, lastCreatedAt: null };
+        throw error;
+    }
+
+    const list = rows || [];
+    const used = list.filter((r) => r.used_at).map((r) => r.used_at).sort();
+    const created = list.map((r) => r.created_at).filter(Boolean).sort();
+
+    return {
+        total: list.length,
+        unused: list.filter((r) => !r.used_at).length,
+        lastUsedAt: used.length ? used[used.length - 1] : null,
+        lastCreatedAt: created.length ? created[created.length - 1] : null,
+    };
+};
+
 /** Forget the memoised probe (after a migration, or in tests). */
 const resetReadinessCache = () => {
     readiness = { at: 0, ready: false };
@@ -323,6 +406,7 @@ module.exports = {
     LINK_TOKEN_TTL_MS,
     isMissingStorage,
     isLinkStorageReady,
+    countTokensForUser,
     resetReadinessCache,
     LINK_TOKEN_BYTES,
     LINK_TOKEN_PATTERN,
