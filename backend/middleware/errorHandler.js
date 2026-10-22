@@ -25,8 +25,13 @@ const errorHandler = (err, req, res, next) => {
         console.error('[error]', err);
     }
 
+    // `code` and `details` are only ever set explicitly by a controller, so
+    // operational errors can tell the client what to do next (e.g. the
+    // TELEGRAM_NOT_LINKED hint) without ever leaking internals.
     res.status(status).json({
         message: isOperational ? err.message : 'Internal server error',
+        ...(isOperational && err.code ? { code: err.code } : {}),
+        ...(isOperational && err.details ? { details: err.details } : {}),
         ...(env.isProduction ? {} : { stack: err.stack }),
     });
 };

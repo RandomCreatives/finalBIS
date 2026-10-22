@@ -277,6 +277,26 @@ To enable it:
 | `POST /api/auth/telegram-link` | Authenticated. Mint a one-time linking deep link for *my* login |
 | `GET /api/auth/telegram-link/:token` | Authenticated. Poll my link: `pending`, `used`, `expired`, `invalid`, `unavailable` |
 
+#### "This Telegram account is not linked to a BIS NOC staff login"
+
+Telegram signed the identity successfully, but no staff row carries that
+Telegram id yet. The message names the account that was used
+(`@username · id 123456789`), and the same id is shown on
+**Settings → Telegram** and in the bot's "✅ Linked" confirmation, so the
+three can be compared directly:
+
+| What you see | What it means | Fix |
+|---|---|---|
+| Different `id` at sign-in than the bot's "✅ Linked … Telegram: id …" | You linked one Telegram account but are signing in with another (e.g. the office PC's Telegram) | Sign in with email + password, open **Settings → Telegram → Create link**, and open that link **in the account you sign in with** |
+| The bot says "✅ Linked … <a name/email you don't expect>" | The link was created while signed in as a different staff account | Same: create a new link from the right account (this rotates the old one) |
+| Settings shows nothing linked, although the bot confirmed the link | The bot and the website are pointed at **different deployments/databases** (typically a webhook registered on a preview URL) | Re-register the webhook on the production domain: `node backend/scripts/set-telegram-webhook.js https://<prod-domain>/api/telegram/webhook` |
+| Sign-in worked before and stopped | The account was unlinked (self-service, or by an admin on the Staff page) | Link again as above |
+
+The API returns `401` with `code: "TELEGRAM_NOT_LINKED"` and
+`details: { telegramId, username }` for this case, so clients can offer the
+right next step instead of showing a dead end. The failure is also logged
+server-side (`[auth] Telegram sign-in: no staff account is linked to telegram …`).
+
 #### "Telegram linking is not set up on this server yet"
 
 The linking endpoints need the `telegram_link_tokens` table. If the code is deployed before

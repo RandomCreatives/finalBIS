@@ -275,6 +275,9 @@ export function TelegramCard() {
                         sx={{ textTransform: 'none', fontWeight: 600 }}>
                         Unlink
                     </Button>
+                    <Typography variant="caption" color="text.secondary">
+                        id {linked.telegramId}
+                    </Typography>
                 </Stack>
             ) : (
                 <>

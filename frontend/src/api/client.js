@@ -45,7 +45,13 @@ client.interceptors.response.use(
             error.message ||
             'Something went wrong. Please try again.';
 
-        return Promise.reject(Object.assign(new Error(message), { status: error.response?.status }));
+        // `code`/`details` let a screen react to a specific outcome (e.g.
+        // TELEGRAM_NOT_LINKED) instead of pattern-matching the message.
+        return Promise.reject(Object.assign(new Error(message), {
+            status: error.response?.status,
+            code: error.response?.data?.code,
+            details: error.response?.data?.details,
+        }));
     }
 );
 

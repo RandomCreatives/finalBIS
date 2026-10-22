@@ -371,7 +371,7 @@ async function editNoticesWithData(chatId, messageId, user) {
  * someone else read the same.
  */
 const LINK_REPLIES = {
-    linked: '✅ Linked! This Telegram account is now connected to your BIS NOC staff account.\n\nSend /start to open your menu.',
+    linked: '✅ Linked! This Telegram account is now connected to your BIS NOC staff account.',
     invalid:
         '❌ This link is not valid. Open the web app → Settings → Telegram and create a new link.',
     expired:
@@ -409,12 +409,28 @@ async function handleLinkStart(msg, chatId, payload) {
         username: from.username || null,
     });
 
-    await sendTelegramMessage(chatId, LINK_REPLIES[result.code] || LINK_REPLIES.invalid);
-
-    if (result.ok) {
-        const menu = buildMainMenu(result.user);
-        await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
+    if (!result.ok) {
+        await sendTelegramMessage(chatId, LINK_REPLIES[result.code] || LINK_REPLIES.invalid);
+        return;
     }
+
+    // Name the staff account and the Telegram id that was bound. It is the
+    // fastest way to spot a mix-up (the wrong Telegram account, or a link
+    // requested while signed in as somebody else) — and the same id is shown
+    // on Settings → Telegram, so the two can be compared at a glance.
+    const who = `id ${from.id}${from.username ? ` · @${from.username}` : ''}`;
+    const staff = result.user || {};
+    const account = staff.name
+        ? `${staff.name}${staff.email ? ` (${staff.email})` : ''}`
+        : 'your staff account';
+
+    await sendTelegramMessage(
+        chatId,
+        `${LINK_REPLIES.linked}\n\n👤 Staff account: ${account}\n📱 Telegram: ${who}\n\nSend /start to open your menu.`
+    );
+
+    const menu = buildMainMenu(staff);
+    await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
 }
 
 // ---------------------------------------------------------------------------
