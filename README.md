@@ -43,6 +43,9 @@ Migrations in `supabase/migrations/` are applied **manually in order using the S
 - Latest applied migration: `030_timetable_update_2026_10.sql` (applied).
 - **Pending:** `031_telegram_link_tokens.sql` — creates the one-time linking
   table and must be applied before **Settings → Telegram → Create link** works.
+- **Pending:** `032_magenta_main_teacher_bethelhem.sql` — Year 4 - Magenta's main
+  teacher becomes Ms. Bethelhem Girma (account created or reused; her
+  Mathematics/Science/Global Citizenship seats and lessons follow her).
 
 ### Verifying Production Deployment Status
 To verify whether production is running the latest deployment carrying the #151 features (or an older build), send unauthenticated HTTP requests:

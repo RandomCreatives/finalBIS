@@ -36,7 +36,7 @@ const MAIN_TEACHERS = [
     { className: 'Year 4 - Crimson', teacher: 'Ms. Simegn Y.' },
     { className: 'Year 4 - Green',   teacher: 'Ms. Samrawit E.' },
     { className: 'Year 4 - Yellow',  teacher: 'Ms. Mariamawait B.' },
-    { className: 'Year 4 - Magenta', teacher: 'Ms. Abigail A.' },
+    { className: 'Year 4 - Magenta', teacher: 'Ms. Bethelhem G.' },
     { className: 'Year 4 - Red',     teacher: 'Ms. Denebe A.' },
     { className: 'Year 4 - Violet',  teacher: 'Ms. Abigiya T.' },
     { className: 'Year 4 - Orange',  teacher: 'Ms. Mekdelawit N.' },
