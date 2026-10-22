@@ -351,23 +351,57 @@ describe('school time (GMT+3) in the reports', () => {
 });
 
 describe('Telegram "Mark all present"', () => {
-    const tap = (telegramId, classId) => handleUpdate({
+    /**
+     * The bulk write takes two taps: the first opens a confirm screen that
+     * names the class, the day and the exact number of pupils, the second
+     * writes. `ap:<id>` never writes anything by itself.
+     */
+    const press = (telegramId, data) => handleUpdate({
         callback_query: {
-            id: 'cb-1', from: { id: telegramId }, data: `ap:${classId}`,
+            id: 'cb-1', from: { id: telegramId }, data,
             message: { chat: { id: telegramId }, message_id: 7 },
         },
     });
-    const answer = () => telegram.find((c) => c.method === 'answerCallbackQuery')?.body;
+    const tap = (telegramId, classId) => press(telegramId, `ap:${classId}`);
+    const confirm = (telegramId, classId) => press(telegramId, `ap:${classId}:y`);
+    const cancel = (telegramId, classId) => press(telegramId, `ap:${classId}:n`);
+    const answer = () => telegram.filter((c) => c.method === 'answerCallbackQuery').pop()?.body;
+    const lastEdit = () => telegram.filter((c) => c.method === 'editMessageText').pop()?.body;
 
-    test("saves today's register on the school's date and clears the reminder", async () => {
+    test('the first tap asks, naming the class, the day and the pupil count', async () => {
+        await tap(111, BLUE);
+
+        assert.equal(rpcCalls.length, 0, 'no write before the confirmation');
+        const shown = lastEdit();
+        assert.match(shown.text, /Mark all present/);
+        assert.match(shown.text, /2 pupils/);
+        assert.match(shown.text, /Thu/, 'names the day it will record');
+        const buttons = shown.reply_markup.inline_keyboard.flat();
+        assert.ok(buttons.some((b) => b.callback_data === `ap:${BLUE}:y`));
+        assert.ok(buttons.some((b) => b.callback_data === `ap:${BLUE}:n`));
+    });
+
+    test("confirming saves today's register on the school's date and clears the reminder", async () => {
         await reminders.runAttendanceReminders();
         schoolTime.clock.now = schoolAt(DAY, '01:30'); // still Wednesday in UTC
+
         await tap(111, BLUE);
+        await confirm(111, BLUE);
+
         assert.equal(rpcCalls.length, 1);
         assert.equal(rpcCalls[0].p_date, DAY, 'Thursday in Addis, not UTC Wednesday');
         assert.equal(rpcCalls[0].p_class_id, BLUE);
-        assert.equal(answer().text, '✅ All present saved');
+        assert.equal(answer().text, '✅ 2 marked present');
         assert.ok(nudges('attendance_reminder').find((n) => n.user_id === MAHILET.id).read_at);
+    });
+
+    test('cancelling writes nothing and returns to the attendance screen', async () => {
+        await tap(111, BLUE);
+        await cancel(111, BLUE);
+
+        assert.equal(rpcCalls.length, 0);
+        assert.match(answer().text, /Cancelled/);
+        assert.match(lastEdit().text, /Attendance — Year 3 - Blue/);
     });
 
     test('only teaching staff can use it, and a submitted month stays locked', async () => {
@@ -375,11 +409,23 @@ describe('Telegram "Mark all present"', () => {
         assert.equal(rpcCalls.length, 0);
         assert.equal(answer().text, 'Only teachers can record attendance');
 
+        // The guard runs on the first tap, so a locked month is refused
+        // before the confirm screen is even shown.
         telegram = [];
         rowsOf('attendance_submissions').push({ id: 's1', school_id: SCHOOL, class_id: BLUE, month: DAY.slice(0, 7), status: 'submitted' });
         await tap(111, BLUE);
         assert.equal(rpcCalls.length, 0);
         assert.match(answer().text, /locked/);
         assert.equal(answer().show_alert, true);
+    });
+
+    test('a confirm tap on a locked month still writes nothing', async () => {
+        // The month may be submitted while the confirm screen is open; the
+        // write re-checks rather than trusting the earlier screen.
+        rowsOf('attendance_submissions').push({ id: 's1', school_id: SCHOOL, class_id: BLUE, month: DAY.slice(0, 7), status: 'submitted' });
+        await confirm(111, BLUE);
+
+        assert.equal(rpcCalls.length, 0);
+        assert.match(answer().text, /locked/);
     });
 });

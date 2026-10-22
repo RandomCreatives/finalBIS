@@ -315,6 +315,14 @@ Settings page a minute later. No redeploy is needed.
 If Supabase answers `PGRST205` ("Could not find the table … in the schema cache") right after
 the migration, the schema cache has not refreshed yet — wait a moment and retry.
 
+### Bot buttons
+
+The inline keyboards are designed as one system — two buttons per row, a fixed
+emoji lexicon, Back/Menu on every sub-screen, confirm screens for bulk writes,
+and paginated lists. The full map (with screens) is in
+[`docs/telegram-buttons.md`](docs/telegram-buttons.md); the rules are enforced by
+`backend/tests/telegramMenus.test.js`.
+
 ### Telegram Mini App (`tma/`)
 
 The staff Mini App is a separate React + Vite app served at **`/tma/`** by the
