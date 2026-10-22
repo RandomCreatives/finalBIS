@@ -36,6 +36,7 @@ const push = require('../controllers/push.controller');
 const conductReports = require('../controllers/conductReports.controller');
 const files = require('../controllers/files.controller');
 const telegramLink = require('../controllers/telegramLink.controller');
+const telegramDiagnostics = require('../controllers/telegramDiagnostics.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
 
@@ -205,6 +206,17 @@ router.post(
     authenticate,
     telegramLinkLimiter,
     telegramLink.requestLink
+);
+
+// Admin-only: where does this deployment think Telegram delivers updates,
+// and which database answered? One call that shows whether the bot and the
+// site agree. Registered before the :token route so it is not read as one.
+router.get(
+    '/auth/telegram-link/diagnostics',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    telegramLinkLimiter,
+    telegramDiagnostics.diagnostics
 );
 
 // Polling is intentionally NOT on the mint limiter: the Settings card checks
