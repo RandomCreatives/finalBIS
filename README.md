@@ -43,6 +43,9 @@ Migrations in `supabase/migrations/` are applied **manually in order using the S
 - Latest applied migration: `030_timetable_update_2026_10.sql` (applied).
 - **Pending:** `031_telegram_link_tokens.sql` — creates the one-time linking
   table and must be applied before **Settings → Telegram → Create link** works.
+- **Pending:** `032_magenta_main_teacher_bethelhem.sql` — Year 4 - Magenta's main
+  teacher becomes Ms. Bethelhem Girma (account created or reused; her
+  Mathematics/Science/Global Citizenship seats and lessons follow her).
 
 ### Verifying Production Deployment Status
 To verify whether production is running the latest deployment carrying the #151 features (or an older build), send unauthenticated HTTP requests:
@@ -277,6 +280,26 @@ To enable it:
 | `POST /api/auth/telegram-link` | Authenticated. Mint a one-time linking deep link for *my* login |
 | `GET /api/auth/telegram-link/:token` | Authenticated. Poll my link: `pending`, `used`, `expired`, `invalid`, `unavailable` |
 
+#### "This Telegram account is not linked to a BIS NOC staff login"
+
+Telegram signed the identity successfully, but no staff row carries that
+Telegram id yet. The message names the account that was used
+(`@username · id 123456789`), and the same id is shown on
+**Settings → Telegram** and in the bot's "✅ Linked" confirmation, so the
+three can be compared directly:
+
+| What you see | What it means | Fix |
+|---|---|---|
+| Different `id` at sign-in than the bot's "✅ Linked … Telegram: id …" | You linked one Telegram account but are signing in with another (e.g. the office PC's Telegram) | Sign in with email + password, open **Settings → Telegram → Create link**, and open that link **in the account you sign in with** |
+| The bot says "✅ Linked … <a name/email you don't expect>" | The link was created while signed in as a different staff account | Same: create a new link from the right account (this rotates the old one) |
+| Settings shows nothing linked, although the bot confirmed the link | The bot and the website are pointed at **different deployments/databases** (typically a webhook registered on a preview URL) | Re-register the webhook on the production domain: `node backend/scripts/set-telegram-webhook.js https://<prod-domain>/api/telegram/webhook` |
+| Sign-in worked before and stopped | The account was unlinked (self-service, or by an admin on the Staff page) | Link again as above |
+
+The API returns `401` with `code: "TELEGRAM_NOT_LINKED"` and
+`details: { telegramId, username }` for this case, so clients can offer the
+right next step instead of showing a dead end. The failure is also logged
+server-side (`[auth] Telegram sign-in: no staff account is linked to telegram …`).
+
 #### "Telegram linking is not set up on this server yet"
 
 The linking endpoints need the `telegram_link_tokens` table. If the code is deployed before
@@ -291,6 +314,14 @@ Settings page a minute later. No redeploy is needed.
 
 If Supabase answers `PGRST205` ("Could not find the table … in the schema cache") right after
 the migration, the schema cache has not refreshed yet — wait a moment and retry.
+
+### Bot buttons
+
+The inline keyboards are designed as one system — two buttons per row, a fixed
+emoji lexicon, Back/Menu on every sub-screen, confirm screens for bulk writes,
+and paginated lists. The full map (with screens) is in
+[`docs/telegram-buttons.md`](docs/telegram-buttons.md); the rules are enforced by
+`backend/tests/telegramMenus.test.js`.
 
 ### Telegram Mini App (`tma/`)
 

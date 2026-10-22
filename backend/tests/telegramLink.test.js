@@ -521,3 +521,132 @@ describe('when the linking table has not been created yet', () => {
         assert.equal(res.body.message, 'Internal server error');
     });
 });
+
+
+/* ── signing in after linking ───────────────────────────────────────────── */
+
+/**
+ * The whole point of linking is the sign-in that follows. These cases walk
+ * the exact production sequence — link through the bot, then exchange the
+ * signed payload — for both Telegram schemes, and pin down what happens when
+ * the identity genuinely is not linked.
+ */
+describe('Telegram sign-in after linking', () => {
+    const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+    /** Mini App payload signed the WebAppData way (Telegram's own scheme). */
+    const signedInitData = (id = TG_ID, username = 'test_staff') => {
+        const payload = {
+            auth_date: String(Math.floor(Date.now() / 1000)),
+            user: JSON.stringify({ id: Number(id), first_name: 'Test', username }),
+        };
+        const check = Object.entries(payload).map(([k, v]) => `${k}=${v}`).sort().join('\n');
+        const secret = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
+        const hash = crypto.createHmac('sha256', secret).update(check).digest('hex');
+        return new URLSearchParams({ ...payload, hash }).toString();
+    };
+
+    /** Login Widget payload signed the widget way (SHA-256 of the token). */
+    const signedWidgetPayload = (id = TG_ID, username = 'test_staff') => {
+        const payload = {
+            id: Number(id),
+            first_name: 'Test',
+            username,
+            auth_date: Math.floor(Date.now() / 1000),
+        };
+        const check = Object.entries(payload).map(([k, v]) => `${k}=${v}`).sort().join('\n');
+        const secret = crypto.createHash('sha256').update(BOT_TOKEN).digest();
+        const hash = crypto.createHmac('sha256', secret).update(check).digest('hex');
+        return { ...payload, hash };
+    };
+
+    const linkThroughBot = async (id = TG_ID) => {
+        const minted = await request(app)
+            .post('/api/auth/telegram-link')
+            .auth(signToken({ id: ADMIN, role: 'admin' }));
+        await openInBot(minted.body.token, { from: id });
+        assert.match(botSaid(), /Linked/i);
+    };
+
+    test('the Mini App session works immediately after linking', async () => {
+        seed();
+        await linkThroughBot();
+
+        const res = await request(app)
+            .post('/api/auth/telegram-webapp')
+            .send({ init_data: signedInitData() });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.user.id, ADMIN);
+        assert.equal(res.body.user.telegramId, TG_ID);
+    });
+
+    test('the link confirmation names the staff account and the Telegram id', async () => {
+        seed();
+        await linkThroughBot();
+
+        // Both are on screen so a wrong account is obvious at a glance, and
+        // the id matches the one Settings shows.
+        assert.match(botSaid(), /Test Admin \(admin@school\.et\)/);
+        assert.match(botSaid(), new RegExp(`id ${TG_ID}`));
+    });
+
+    test('an unlinked Telegram account gets an actionable 401, not "ask an admin"', async () => {
+        seed();
+
+        const res = await request(app)
+            .post('/api/auth/telegram-webapp')
+            .send({ init_data: signedInitData(TG_OTHER) });
+
+        assert.equal(res.status, 401);
+        assert.equal(res.body.code, 'TELEGRAM_NOT_LINKED');
+        assert.equal(res.body.details.telegramId, TG_OTHER);
+        assert.equal(res.body.details.username, 'test_staff');
+        // It says who is signed in on Telegram and how to fix it themselves.
+        assert.match(res.body.message, new RegExp(`id ${TG_OTHER}`));
+        assert.match(res.body.message, /Settings → Telegram/);
+        assert.doesNotMatch(res.body.message, /administrator/i);
+        // No internals, no bot token. (A stack is attached outside
+        // production by design; the message itself must stay clean.)
+        assert.ok(!JSON.stringify(res.body).includes(BOT_TOKEN));
+        assert.doesNotMatch(res.body.message, /\bat \/|\.js:\d+/);
+    });
+
+    test('the Login Widget path reports the same machine-readable code', async () => {
+        seed();
+        process.env.TELEGRAM_LOGIN_ENABLED = 'true';
+
+        try {
+            const res = await request(app)
+                .post('/api/auth/telegram')
+                .send(signedWidgetPayload(TG_OTHER));
+
+            assert.equal(res.status, 401);
+            assert.equal(res.body.code, 'TELEGRAM_NOT_LINKED');
+            assert.equal(res.body.details.telegramId, TG_OTHER);
+        } finally {
+            delete process.env.TELEGRAM_LOGIN_ENABLED;
+        }
+    });
+
+    test('unlinking immediately stops Telegram sign-in again', async () => {
+        seed();
+        await linkThroughBot();
+
+        const ok = await request(app)
+            .post('/api/auth/telegram-webapp')
+            .send({ init_data: signedInitData() });
+        assert.equal(ok.status, 200);
+
+        await request(app)
+            .delete('/api/auth/link-telegram')
+            .auth(signToken({ id: ADMIN, role: 'admin' }));
+
+        const after = await request(app)
+            .post('/api/auth/telegram-webapp')
+            .send({ init_data: signedInitData() });
+
+        assert.equal(after.status, 401);
+        assert.equal(after.body.code, 'TELEGRAM_NOT_LINKED');
+    });
+});

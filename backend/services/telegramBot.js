@@ -8,6 +8,7 @@ const {
 const schoolTime = require('../utils/schoolTime');
 const { resolveAttendanceReminder } = require('./attendanceReminders');
 const { consumeLinkToken, LINK_PAYLOAD_PREFIX } = require('./telegramLink');
+const menus = require('./telegramMenus');
 
 const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
 
@@ -18,10 +19,8 @@ const btn = (text, callback_data) => ({ text, callback_data });
 const urlBtn = (text, url) => ({ text, url });
 const kb = (rows) => ({ inline_keyboard: rows });
 
-// Short text so callback_data stays well under Telegram's 64-byte limit.
-const trunc = (s, n) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s);
-const fmtTime = (t) => (t || '').slice(0, 5);
 // Dates and weekdays on the school's clock (Addis Ababa, GMT+3), not the server's UTC.
+// (Label shortening and callback encoding live in services/telegramMenus.js.)
 const todayStr = () =>
     schoolTime.formatDay(schoolTime.todayIso(), { weekday: 'long', day: 'numeric', month: 'short' });
 
@@ -75,16 +74,37 @@ async function getTodayTimetable(user, yearId) {
     return data || [];
 }
 
+/**
+ * Today's tasks: everything still open, plus anything completed earlier
+ * today. Keeping today's completed tasks on the screen is what makes the
+ * ✅/☐ toggle honest — a mis-tap can be undone in the same place instead of
+ * the task silently disappearing until it is found in the web app.
+ */
 async function getMyTasks(user) {
-    const { data, error } = await supabase
+    const select = 'id, title, status, due_on, priority, completed_at';
+
+    const { data: open, error } = await supabase
         .from('tasks')
-        .select('id, title, status, due_on, priority')
+        .select(select)
         .eq('school_id', user.school_id)
         .eq('assigned_to', user.id)
         .in('status', ['pending', 'in_progress'])
         .order('due_on', { ascending: true, nullsFirst: false });
     if (error) throw error;
-    return data || [];
+
+    const since = new Date(`${schoolTime.todayIso()}T00:00:00+03:00`).toISOString();
+    const { data: doneToday, error: doneError } = await supabase
+        .from('tasks')
+        .select(select)
+        .eq('school_id', user.school_id)
+        .eq('assigned_to', user.id)
+        .eq('status', 'done')
+        .gte('completed_at', since)
+        .order('completed_at', { ascending: false })
+        .limit(5);
+    if (doneError) throw doneError;
+
+    return [...(open || []), ...(doneToday || [])];
 }
 
 async function toggleTask(user, taskId) {
@@ -188,11 +208,15 @@ async function acknowledgeNotice(user, noticeId) {
 }
 
 /**
- * "Mark all present" for today's homeroom register — held to the same rules
- * as the website: staff roles only, the class must be in the user's school,
- * and a submitted (locked) month stays locked for everyone but admins.
+ * Guards for "mark all present", shared by the confirm screen and the write.
+ *
+ * Held to the same rules as the website: staff roles only, the class must be
+ * in the user's school, and a submitted (locked) month stays locked for
+ * everyone but admins. Returning the roster lets the confirm screen name the
+ * exact number of pupils before anything is written — and lets the write
+ * reuse the same rows it counted.
  */
-async function markAllPresent(classId, user) {
+async function checkMarkAllPresent(classId, user) {
     if (!ATTENDANCE_ROLES.has(user.role)) return { ok: false, reason: 'Only teachers can record attendance' };
 
     const klass = await getKlass(classId, user.school_id);
@@ -214,12 +238,23 @@ async function markAllPresent(classId, user) {
     const students = await getStudents(classId);
     if (!students.length) return { ok: false, reason: 'No students in this class' };
 
-    const records = students.map((s) => ({ studentId: s.id, status: 'present', note: '' }));
+    return { ok: true, klass, students, date };
+}
+
+/**
+ * Write the register. Re-checks everything first: the confirm screen may have
+ * been open for a while, and a month can be submitted in between.
+ */
+async function markAllPresent(classId, user) {
+    const check = await checkMarkAllPresent(classId, user);
+    if (!check.ok) return check;
+
+    const records = check.students.map((s) => ({ studentId: s.id, status: 'present', note: '' }));
     const { error } = await supabase.rpc('mark_attendance', {
         p_school_id: user.school_id,
         p_class_id: classId,
         p_subject_id: null,
-        p_date: date,
+        p_date: check.date,
         p_marked_by: user.id,
         p_records: records,
     });
@@ -229,112 +264,73 @@ async function markAllPresent(classId, user) {
         return { ok: false, reason: 'Failed to save' };
     }
 
-    await resolveAttendanceReminder({ schoolId: user.school_id, classId, date });
-    return { ok: true };
+    await resolveAttendanceReminder({ schoolId: user.school_id, classId, date: check.date });
+    return { ok: true, klass: check.klass, students: check.students };
 }
 
 // ---------------------------------------------------------------------------
 // Message + keyboard builders
+//
+// Every button lives in services/telegramMenus.js — this layer only supplies
+// the environment-dependent bits (web URLs, the school's date) and the data.
 // ---------------------------------------------------------------------------
+const WEB_APP_URL = `${WEB_APP}/app`;
+const registerUrl = (classId) =>
+    `${WEB_APP}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`;
+
+/** Role gate shared by the menu (whether to show Attendance) and the action. */
+const canRecordAttendance = (user) => ATTENDANCE_ROLES.has(user.role);
+
 function buildMainMenu(user) {
     const firstName = (user.name || 'there').split(' ')[0];
-    const text = `👋 Hello ${firstName}!\nChoose an option:`;
-    const replyMarkup = kb([
-        [btn('📅 Today', 'today')],
-        [btn('🏫 My Classes', 'cls')],
-        [btn('📢 Notices', 'nt')],
-        [urlBtn('🌐 Open Web App', `${WEB_APP}/app`)],
-    ]);
-    return { text, replyMarkup };
+    return menus.buildMainMenu({
+        firstName,
+        isTeacher: canRecordAttendance(user),
+        webAppUrl: WEB_APP_URL,
+    });
 }
 
 function buildToday(user, yearId, slots, tasks) {
-    let text = `📅 Today — ${todayStr()}\n\n`;
-    if (slots.length) {
-        text += '🕒 Schedule\n';
-        slots.forEach((s) => {
-            const subject = s.assignment?.subject?.name || 'Lesson';
-            const className = s.class?.name || '';
-            text += `• ${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}  ${subject}`;
-            if (className) text += ` (${className})`;
-            if (s.room) text += ` · ${s.room}`;
-            text += '\n';
-        });
-    } else {
-        text += '🕒 No lessons scheduled today.\n';
-    }
-
-    text += '\n✅ Your tasks\n';
-    if (tasks.length) {
-        tasks.slice(0, 8).forEach((t) => {
-            text += `• ${t.title}${t.due_on ? ` (due ${t.due_on})` : ''}\n`;
-        });
-    } else {
-        text += '• Nothing pending. 🎉\n';
-    }
-
-    const rows = tasks.slice(0, 8).map((t) => [btn(`✅ ${trunc(t.title, 28)}`, `task:done:${t.id}`)]);
-    rows.push([btn('🔄 Refresh', 'today'), btn('⬅️ Menu', 'menu')]);
-    return { text, replyMarkup: kb(rows) };
+    return menus.buildToday({ dayLabel: todayStr(), slots, tasks });
 }
 
-function buildClasses(classes) {
-    let text = '🏫 Your classes (main teacher)\n\n';
-    if (classes.length) classes.forEach((c) => (text += `• ${c.name}\n`));
-    else text += 'You are not a main teacher for any class this year.\n';
-
-    const rows = classes.slice(0, 10).map((c) => [btn(`🏫 ${c.name}`, `c:${c.id}`)]);
-    rows.push([btn('⬅️ Menu', 'menu')]);
-    return { text, replyMarkup: kb(rows) };
+/** Class list. `rowPrefix: 'ca'` turns it into an attendance picker. */
+function buildClasses(classes, { title, rowPrefix, pageBase, icon } = {}) {
+    return menus.buildClassPicker({ classes, back: 'menu', title, rowPrefix, pageBase, icon });
 }
 
 function buildClassDetail(klass, studentCount) {
-    const text = `🏫 ${klass?.name || 'Class'}\n👥 ${studentCount} student(s)\n`;
-    const replyMarkup = kb([
-        [btn('👥 Students', `cs:${klass.id}`)],
-        [btn('✅ Take Attendance', `ca:${klass.id}`)],
-        [btn('⬅️ Back', 'cls')],
-    ]);
-    return { text, replyMarkup };
+    return menus.buildClassDetail({ klass, studentCount, webAppUrl: WEB_APP_URL });
 }
 
-function buildStudents(students, classId) {
-    let text = `👥 Students (${students.length})\n\n`;
-    students.slice(0, 30).forEach((s, i) => {
-        text += `${i + 1}. ${s.name}${s.admission_no ? ` (${s.admission_no})` : ''}\n`;
+function buildStudents(students, klass, page = 1) {
+    return menus.buildRoster({
+        students,
+        klassName: klass?.name || 'Class',
+        classId: klass?.id || '',
+        page,
+        back: `c:${klass?.id || ''}`,
     });
-    if (students.length > 30) text += `…and ${students.length - 30} more\n`;
-    const replyMarkup = kb([[btn('⬅️ Back', `c:${classId}`)]]);
-    return { text, replyMarkup };
 }
 
-function buildAttendanceOptions(klass, classId) {
-    const text = `✅ Attendance — ${klass?.name || 'class'}\nQuick action, or open the full register.`;
-    const replyMarkup = kb([
-        [btn('✅ Mark all present', `ap:${classId}`)],
-        [urlBtn('🌐 Detailed register', `${WEB_APP}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`)],
-        [btn('⬅️ Back', `c:${classId}`)],
-    ]);
-    return { text, replyMarkup };
+function buildAttendanceOptions(klass) {
+    return menus.buildAttendanceOptions({
+        klass,
+        dayLabel: todayStr(),
+        registerUrl: registerUrl(klass.id),
+    });
 }
 
-function buildNotices(notices, acked) {
-    let text = '📢 Recent notices\n\n';
-    if (notices.length) {
-        notices.forEach((n) => {
-            const flag = n.requires_ack && !acked.has(n.id) ? '  [needs ack]' : '';
-            text += `• ${n.title}${flag}\n`;
-        });
-    } else {
-        text += 'No notices.\n';
-    }
+function buildAttendanceConfirm(klass, count) {
+    return menus.buildAttendanceConfirm({ klass, dayLabel: todayStr(), count });
+}
 
-    const rows = notices
-        .filter((n) => n.requires_ack && !acked.has(n.id))
-        .slice(0, 8)
-        .map((n) => [btn(`✅ Ack: ${trunc(n.title, 22)}`, `na:${n.id}`)]);
-    rows.push([btn('⬅️ Menu', 'menu')]);
-    return { text, replyMarkup: kb(rows) };
+function buildNotices(notices, acked, page = 1) {
+    return menus.buildNotices({ notices, acked, page });
+}
+
+function buildNoticeConfirm(notice) {
+    return menus.buildNoticeConfirm({ notice });
 }
 
 // ---------------------------------------------------------------------------
@@ -357,9 +353,39 @@ async function editClassesWithData(chatId, messageId, user) {
     const classes = yearId ? await getMyClasses(user, yearId) : [];
     return editMessage(chatId, messageId, buildClasses(classes));
 }
-async function editNoticesWithData(chatId, messageId, user) {
+async function editNoticesWithData(chatId, messageId, user, page = 1) {
     const { notices, acked } = await getNotices(user);
-    return editMessage(chatId, messageId, buildNotices(notices, acked));
+    return editMessage(chatId, messageId, buildNotices(notices, acked, page));
+}
+/** "✅ Attendance" from the menu: straight in when there is one class. */
+async function editAttendanceShortcut(chatId, messageId, user) {
+    const yearId = await getCurrentYearId(user);
+    const classes = yearId ? await getMyClasses(user, yearId) : [];
+
+    if (classes.length === 1) {
+        return editMessage(chatId, messageId, buildAttendanceOptions(classes[0]));
+    }
+    if (classes.length === 0) {
+        return editMessage(
+            chatId,
+            messageId,
+            menus.buildInfo({
+                text: '✅ Attendance\n\nYou are not a main teacher of any class this year, so there is ' +
+                    'no homeroom register for you to take. Subject registers are on the web app.',
+                rows: [[menus.urlBtn('🌐 Open the web app', WEB_APP_URL)]],
+            })
+        );
+    }
+    return editMessage(
+        chatId,
+        messageId,
+        buildClasses(classes, {
+            title: '✅ Attendance — which class?',
+            rowPrefix: 'ca',
+            pageBase: 'at',
+            icon: '✅',
+        })
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +397,7 @@ async function editNoticesWithData(chatId, messageId, user) {
  * someone else read the same.
  */
 const LINK_REPLIES = {
-    linked: '✅ Linked! This Telegram account is now connected to your BIS NOC staff account.\n\nSend /start to open your menu.',
+    linked: '✅ Linked! This Telegram account is now connected to your BIS NOC staff account.',
     invalid:
         '❌ This link is not valid. Open the web app → Settings → Telegram and create a new link.',
     expired:
@@ -409,12 +435,28 @@ async function handleLinkStart(msg, chatId, payload) {
         username: from.username || null,
     });
 
-    await sendTelegramMessage(chatId, LINK_REPLIES[result.code] || LINK_REPLIES.invalid);
-
-    if (result.ok) {
-        const menu = buildMainMenu(result.user);
-        await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
+    if (!result.ok) {
+        await sendTelegramMessage(chatId, LINK_REPLIES[result.code] || LINK_REPLIES.invalid);
+        return;
     }
+
+    // Name the staff account and the Telegram id that was bound. It is the
+    // fastest way to spot a mix-up (the wrong Telegram account, or a link
+    // requested while signed in as somebody else) — and the same id is shown
+    // on Settings → Telegram, so the two can be compared at a glance.
+    const who = `id ${from.id}${from.username ? ` · @${from.username}` : ''}`;
+    const staff = result.user || {};
+    const account = staff.name
+        ? `${staff.name}${staff.email ? ` (${staff.email})` : ''}`
+        : 'your staff account';
+
+    await sendTelegramMessage(
+        chatId,
+        `${LINK_REPLIES.linked}\n\n👤 Staff account: ${account}\n📱 Telegram: ${who}\n\nSend /start to open your menu.`
+    );
+
+    const menu = buildMainMenu(staff);
+    await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
 }
 
 // ---------------------------------------------------------------------------
@@ -477,49 +519,136 @@ async function handleCallback(query) {
         return;
     }
 
-    // Builders that need DB data are resolved per-branch.
+    // Builders that need DB data are resolved per-branch. Every branch ends
+    // by editing the same message, so the chat stays a single, tidy screen
+    // instead of a growing pile of keyboards. Older keyboards (sent before
+    // this design) keep working: their callbacks are still understood.
     if (data === 'menu') {
         await editMenu(chatId, messageId, user);
     } else if (data === 'today') {
         await editTodayWithData(chatId, messageId, user);
+
+    // ── tasks ────────────────────────────────────────────────────────────
     } else if (data.startsWith('task:done:')) {
         const taskId = data.slice('task:done:'.length);
         const ok = await toggleTask(user, taskId);
-        await answerCallbackQuery(cbId, { text: ok ? 'Updated ✓' : 'Could not update' });
+        await answerCallbackQuery(cbId, { text: ok ? 'Updated ✓' : 'Could not update', showAlert: !ok });
         if (ok) await editTodayWithData(chatId, messageId, user);
-    } else if (data === 'cls') {
+
+    // ── classes ──────────────────────────────────────────────────────────
+    } else if (data === 'cls' || /^cls:\d+$/.test(data)) {
         await editClassesWithData(chatId, messageId, user);
     } else if (data.startsWith('c:')) {
         const classId = data.slice(2);
         const klass = await getKlass(classId, user.school_id);
+        if (!klass) {
+            await answerCallbackQuery(cbId, { text: 'That class is no longer available', showAlert: true });
+            await editClassesWithData(chatId, messageId, user);
+            return;
+        }
         const students = await getStudents(classId);
         await editMessage(chatId, messageId, buildClassDetail(klass, students.length));
+
+    // ── roster (paginated) ───────────────────────────────────────────────
     } else if (data.startsWith('cs:')) {
-        const classId = data.slice(3);
+        const [, classId, page] = data.split(':');
+        const klass = await getKlass(classId, user.school_id);
+        if (!klass) {
+            await answerCallbackQuery(cbId, { text: 'That class is no longer available', showAlert: true });
+            await editClassesWithData(chatId, messageId, user);
+            return;
+        }
         const students = await getStudents(classId);
-        await editMessage(chatId, messageId, buildStudents(students, classId));
+        await editMessage(chatId, messageId, buildStudents(students, klass, Number(page) || 1));
+
+    // ── attendance ───────────────────────────────────────────────────────
+    } else if (data === 'at' || /^at:\d+$/.test(data)) {
+        await editAttendanceShortcut(chatId, messageId, user);
     } else if (data.startsWith('ca:')) {
         const classId = data.slice(3);
         const klass = await getKlass(classId, user.school_id);
-        await editMessage(chatId, messageId, buildAttendanceOptions(klass, classId));
-    } else if (data.startsWith('ap:')) {
-        const classId = data.slice(3);
-        const { ok, reason } = await markAllPresent(classId, user);
-        await answerCallbackQuery(cbId, { text: ok ? '✅ All present saved' : reason, showAlert: !ok });
-        if (ok) {
-            const klass = await getKlass(classId, user.school_id);
-            const students = await getStudents(classId);
-            await editMessage(chatId, messageId, buildClassDetail(klass, students.length));
+        if (!klass) {
+            await answerCallbackQuery(cbId, { text: 'That class is no longer available', showAlert: true });
+            await editClassesWithData(chatId, messageId, user);
+            return;
         }
-    } else if (data === 'nt') {
-        await editNoticesWithData(chatId, messageId, user);
+        await editMessage(chatId, messageId, buildAttendanceOptions(klass));
+
+    // Mark all present is a bulk write: ap:<id> asks, ap:<id>:y writes,
+    // ap:<id>:n goes back. Nothing is written without the extra tap.
+    } else if (data.startsWith('ap:')) {
+        const [, classId, action] = data.split(':');
+
+        if (action === 'n') {
+            const klass = await getKlass(classId, user.school_id);
+            await answerCallbackQuery(cbId, { text: 'Cancelled — nothing was saved' });
+            if (klass) await editMessage(chatId, messageId, buildAttendanceOptions(klass));
+            return;
+        }
+
+        const check = await checkMarkAllPresent(classId, user);
+        if (!check.ok) {
+            await answerCallbackQuery(cbId, { text: check.reason, showAlert: true });
+            return;
+        }
+
+        if (action !== 'y') {
+            await answerCallbackQuery(cbId);
+            await editMessage(chatId, messageId, buildAttendanceConfirm(check.klass, check.students.length));
+            return;
+        }
+
+        const result = await markAllPresent(classId, user);
+        await answerCallbackQuery(cbId, {
+            text: result.ok
+                ? `✅ ${check.students.length} marked present`
+                : result.reason,
+            showAlert: !result.ok,
+        });
+        if (result.ok) {
+            await editMessage(chatId, messageId, buildClassDetail(result.klass, result.students.length));
+        }
+
+    // ── notices (paginated) ──────────────────────────────────────────────
+    } else if (data === 'nt' || /^nt:\d+$/.test(data)) {
+        await editNoticesWithData(chatId, messageId, user, Number(data.split(':')[1]) || 1);
+
+    // Acknowledging is a permanent record: na:<id> asks, na:<id>:y confirms.
     } else if (data.startsWith('na:')) {
-        const noticeId = data.slice(3);
-        await acknowledgeNotice(user, noticeId);
+        const [, noticeId, action] = data.split(':');
+        const { notices, acked } = await getNotices(user);
+        const notice = notices.find((n) => String(n.id) === noticeId);
+
+        if (!notice) {
+            await answerCallbackQuery(cbId, { text: 'That notice is no longer available', showAlert: true });
+            await editNoticesWithData(chatId, messageId, user);
+            return;
+        }
+
+        if (action === 'n') {
+            await answerCallbackQuery(cbId, { text: 'Cancelled' });
+            await editNoticesWithData(chatId, messageId, user);
+            return;
+        }
+
+        if (action !== 'y') {
+            // Already acknowledged? Then there is nothing to confirm.
+            if (acked.has(notice.id)) {
+                await answerCallbackQuery(cbId, { text: 'Already acknowledged ✓' });
+                return;
+            }
+            await answerCallbackQuery(cbId);
+            await editMessage(chatId, messageId, buildNoticeConfirm(notice));
+            return;
+        }
+
+        await acknowledgeNotice(user, notice.id);
         await answerCallbackQuery(cbId, { text: 'Acknowledged ✓' });
         await editNoticesWithData(chatId, messageId, user);
+
     } else {
-        await answerCallbackQuery(cbId, { text: 'Unknown action' });
+        await answerCallbackQuery(cbId, { text: 'That button is out of date — opening the menu' });
+        await editMenu(chatId, messageId, user);
     }
 }
 

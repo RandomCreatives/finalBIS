@@ -100,6 +100,64 @@ const me = asyncHandler(async (req, res) => {
 const telegramLoginEnabled = () =>
     String(process.env.TELEGRAM_LOGIN_ENABLED || '').toLowerCase() === 'true';
 
+/**
+ * Find the staff account bound to a Telegram user id.
+ *
+ * `users.telegram_id` is BIGINT in schema.sql, but hand-edited databases have
+ * been seen with TEXT, and the two compare differently. Try the value exactly
+ * as Telegram sent it (a string, so no precision is ever lost) and then its
+ * numeric form, so a link written by any code path — the one-time link, the
+ * Login Widget, or the Staff page — is always found here. Returns null when
+ * no account is linked to that id.
+ */
+const findStaffByTelegramId = async (telegramId) => {
+    const attempts = [String(telegramId)];
+
+    const numeric = Number(telegramId);
+    if (Number.isSafeInteger(numeric) && String(numeric) !== attempts[0]) attempts.push(numeric);
+
+    for (const value of attempts) {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('telegram_id', value)
+            .maybeSingle();
+
+        // 22P02 = "invalid input syntax for type bigint" — the column wants a
+        // number and this attempt was not one. Try the next representation.
+        if (error?.code === '22P02') continue;
+        if (error) throw error;
+        if (data) return data;
+    }
+    return null;
+};
+
+/**
+ * 401 for a verified Telegram identity with no staff account behind it.
+ *
+ * The identity is genuine (Telegram signed it), so the id and @username are
+ * safe to echo back — and useful: linking is self-service, and seeing which
+ * Telegram account was used is what tells a staff member that they are
+ * signed in to Telegram as somebody else, or that the link was made on a
+ * different account. `code` lets the clients offer the right next step.
+ */
+const telegramNotLinkedError = (identity) => {
+    const label = identity.username
+        ? `@${identity.username} · id ${identity.telegramId}`
+        : `id ${identity.telegramId}`;
+
+    console.warn(`[auth] Telegram sign-in: no staff account is linked to telegram ${label}`);
+
+    const err = new UnauthorizedError(
+        `This Telegram account (${label}) is not linked to a BIS NOC staff login. ` +
+        'Sign in with your email and password, open Settings → Telegram → Create link, ' +
+        'then open that link in this same Telegram account.'
+    );
+    err.code = 'TELEGRAM_NOT_LINKED';
+    err.details = { telegramId: identity.telegramId, username: identity.username || null };
+    return err;
+};
+
 /** PATCH /api/auth/password */
 const changePassword = asyncHandler(async (req, res) => {
     const { currentPassword, newPassword } = req.body;
@@ -455,18 +513,10 @@ const telegramLogin = asyncHandler(async (req, res) => {
         throw new UnauthorizedError('Telegram login could not be verified. Please try again');
     }
 
-    const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('telegram_id', identity.telegramId)
-        .maybeSingle();
-
-    if (error) throw error;
+    const user = await findStaffByTelegramId(identity.telegramId);
 
     if (!user) {
-        throw new UnauthorizedError(
-            'This Telegram account is not linked to any BIS NOC login. Ask an administrator to link it from the Staff page.'
-        );
+        throw telegramNotLinkedError(identity);
     }
     if (!user.is_active) {
         throw new UnauthorizedError('Account has been deactivated');
@@ -563,16 +613,9 @@ const telegramWebApp = asyncHandler(async (req, res) => {
         );
     }
 
-    const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('telegram_id', identity.telegramId)
-        .maybeSingle();
-    if (error) throw error;
+    const user = await findStaffByTelegramId(identity.telegramId);
     if (!user) {
-        throw new UnauthorizedError(
-            'This Telegram account is not linked to any BIS NOC login. Ask an administrator to link it from the Staff page.',
-        );
+        throw telegramNotLinkedError(identity);
     }
     if (!user.is_active) {
         throw new UnauthorizedError('Account has been deactivated');

@@ -9,11 +9,16 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export class ApiError extends Error {
     status: number;
+    /** Machine-readable outcome from the API (e.g. TELEGRAM_NOT_LINKED). */
+    code?: string;
+    details?: unknown;
 
-    constructor(message: string, status: number) {
+    constructor(message: string, status: number, code?: string, details?: unknown) {
         super(message);
         this.name = 'ApiError';
         this.status = status;
+        this.code = code;
+        this.details = details;
     }
 }
 
@@ -30,13 +35,17 @@ async function request(path: string, method: Method = 'GET', body?: unknown) {
 
     if (!res.ok) {
         let message = `Request failed (${res.status})`;
+        let code: string | undefined;
+        let details: unknown;
         try {
             const payload = await res.json();
             if (payload?.message) message = payload.message;
+            code = payload?.code;
+            details = payload?.details;
         } catch {
             /* keep the status-based message */
         }
-        throw new ApiError(message, res.status);
+        throw new ApiError(message, res.status, code, details);
     }
 
     if (res.status === 204) return null;
