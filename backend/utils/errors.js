@@ -45,6 +45,18 @@ class ConflictError extends AppError {
 }
 
 /**
+ * A feature this server knows about cannot run yet — typically a database
+ * migration that has not been applied. Distinct from 500: the request was
+ * valid, the deployment is incomplete, and the message should tell whoever
+ * reads it what to do.
+ */
+class ServiceUnavailableError extends AppError {
+    constructor(message = 'This feature is not available yet') {
+        super(message, 503);
+    }
+}
+
+/**
  * Wraps an async route handler so rejected promises reach Express's
  * error handler instead of hanging the request.
  */
@@ -58,5 +70,6 @@ module.exports = {
     ForbiddenError,
     NotFoundError,
     ConflictError,
+    ServiceUnavailableError,
     asyncHandler,
 };

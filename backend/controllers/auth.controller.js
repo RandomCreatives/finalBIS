@@ -9,6 +9,7 @@ const {
     verifyTelegramInitData,
     TELEGRAM_INIT_DATA_MAX_LENGTH,
 } = require('../utils/telegram');
+const { isLinkStorageReady } = require('../services/telegramLink');
 const { isFixtureSubject } = require('../utils/subjects');
 
 const BCRYPT_ROUNDS = 12;
@@ -496,9 +497,25 @@ const telegramLogin = asyncHandler(async (req, res) => {
  */
 const telegramConfig = asyncHandler(async (req, res) => {
     const enabled = Boolean(env.telegram.botUsername && env.telegram.botToken);
+
+    // Whether the one-time linking table exists yet. A deployment that ships
+    // the code before the migration reports linkEnabled: false so Settings
+    // can explain the pending database update instead of offering a button
+    // that fails.
+    let linkEnabled = false;
+    if (enabled) {
+        try {
+            linkEnabled = await isLinkStorageReady();
+        } catch (err) {
+            console.error('[auth] Telegram link readiness probe failed:', err.message);
+        }
+    }
     res.json({
         enabled,
         botUsername: enabled ? env.telegram.botUsername : null,
+        // Account linking via a one-time link needs only the bot plus the
+        // linking table; it does not depend on the (paused) widget sign-in.
+        linkEnabled,
         // The widget login is grayed out until the bot function is finished;
         // account linking from the profile page remains available.
         loginEnabled: enabled && telegramLoginEnabled(),

@@ -275,7 +275,22 @@ To enable it:
 | `POST /api/auth/link-telegram` | Authenticated. Link the verified account to *my* login |
 | `DELETE /api/auth/link-telegram` | Authenticated. Unlink *my* Telegram account |
 | `POST /api/auth/telegram-link` | Authenticated. Mint a one-time linking deep link for *my* login |
-| `GET /api/auth/telegram-link/:token` | Authenticated. Poll my link: `pending`, `used`, `expired`, `invalid` |
+| `GET /api/auth/telegram-link/:token` | Authenticated. Poll my link: `pending`, `used`, `expired`, `invalid`, `unavailable` |
+
+#### "Telegram linking is not set up on this server yet"
+
+The linking endpoints need the `telegram_link_tokens` table. If the code is deployed before
+`supabase/migrations/031_telegram_link_tokens.sql` is applied, `POST /api/auth/telegram-link`
+answers **503** with that message, `GET /api/auth/telegram-config` reports
+`linkEnabled: false`, and **Settings → Telegram** shows an explanatory notice instead of a
+button that fails.
+
+Fix it by pasting `supabase/migrations/031_telegram_link_tokens.sql` into the Supabase
+**SQL Editor** and running it. The readiness check is cached for 60 seconds, so reload the
+Settings page a minute later. No redeploy is needed.
+
+If Supabase answers `PGRST205` ("Could not find the table … in the schema cache") right after
+the migration, the schema cache has not refreshed yet — wait a moment and retry.
 
 ### Telegram Mini App (`tma/`)
 

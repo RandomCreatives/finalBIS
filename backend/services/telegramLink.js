@@ -35,6 +35,22 @@ const LINK_PAYLOAD_PREFIX = 'link_';
 /** Telegram user ids are positive integers; keep them as strings end to end. */
 const TELEGRAM_ID_PATTERN = /^[1-9]\d{0,18}$/;
 
+/**
+ * Is this error simply "the table isn't there yet"?
+ *
+ * Supabase answers PGRST205 ("Could not find the table ... in the schema
+ * cache") when a migration has not been applied; a direct Postgres
+ * connection answers 42P01. Both mean the deployment is incomplete rather
+ * than the request being wrong, so they get an explanatory message instead
+ * of a generic 500. Same convention as utils/nudges.js and the other
+ * optional-table callers in this codebase.
+ */
+const isMissingStorage = (error) =>
+    error?.code === 'PGRST205' ||
+    error?.code === 'PGRST204' ||
+    error?.code === '42P01' ||
+    /relation .*does not exist|could not find the table|schema cache/i.test(error?.message || '');
+
 /** Cryptographically random, URL-safe link token. */
 const generateLinkToken = () => {
     const token = crypto.randomBytes(LINK_TOKEN_BYTES).toString('base64url');
@@ -109,7 +125,13 @@ const createLinkToken = async ({ userId, now = new Date() }) => {
         .delete()
         .eq('user_id', userId)
         .is('used_at', null);
-    if (purgeError) throw purgeError;
+    if (purgeError) {
+        if (isMissingStorage(purgeError)) {
+            console.error('[telegram-link] telegram_link_tokens is missing — apply supabase/migrations/031_telegram_link_tokens.sql');
+            return { ok: false, code: 'not_ready' };
+        }
+        throw purgeError;
+    }
 
     const { token, tokenHash } = generateLinkToken();
     const expiresAt = new Date(now.getTime() + LINK_TOKEN_TTL_MS);
@@ -120,7 +142,13 @@ const createLinkToken = async ({ userId, now = new Date() }) => {
         expires_at: expiresAt.toISOString(),
         created_at: now.toISOString(),
     });
-    if (insertError) throw insertError;
+    if (insertError) {
+        if (isMissingStorage(insertError)) {
+            console.error('[telegram-link] telegram_link_tokens is missing — apply supabase/migrations/031_telegram_link_tokens.sql');
+            return { ok: false, code: 'not_ready' };
+        }
+        throw insertError;
+    }
 
     return { ok: true, token, expiresAt };
 };
@@ -142,7 +170,10 @@ const getLinkStatus = async ({ userId, token, now = new Date() }) => {
         .eq('user_id', userId)
         .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+        if (isMissingStorage(error)) return { status: 'unavailable' };
+        throw error;
+    }
     if (!row) return { status: 'invalid' };
     if (row.used_at) return { status: 'used' };
     if (new Date(row.expires_at).getTime() <= now.getTime()) return { status: 'expired' };
@@ -175,7 +206,10 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
         .eq('token_hash', tokenHash)
         .maybeSingle();
 
-    if (lookupError) throw lookupError;
+    if (lookupError) {
+        if (isMissingStorage(lookupError)) return { ok: false, code: 'not_ready' };
+        throw lookupError;
+    }
     if (!row) return { ok: false, code: 'invalid' };
     if (row.used_at) return { ok: false, code: 'used' };
     if (new Date(row.expires_at).getTime() <= now.getTime()) return { ok: false, code: 'expired' };
@@ -221,7 +255,10 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
         .select('id')
         .maybeSingle();
 
-    if (claimed.error) throw claimed.error;
+    if (claimed.error) {
+        if (isMissingStorage(claimed.error)) return { ok: false, code: 'not_ready' };
+        throw claimed.error;
+    }
     if (!claimed.data) {
         // Lost the race (or the row expired in between): report accurately.
         const { data: latest } = await supabase
@@ -252,8 +289,41 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
     return { ok: true, code: 'linked', user: updated };
 };
 
+/** How long a readiness probe is trusted before asking the database again. */
+const READINESS_TTL_MS = 60 * 1000;
+let readiness = { at: 0, ready: false };
+
+/**
+ * Is the linking table provisioned? Cheap `head` probe, memoised for a
+ * minute so the public config endpoint can report the state without a
+ * database round-trip on every page load.
+ *
+ * @returns {Promise<boolean>}
+ */
+const isLinkStorageReady = async ({ now = Date.now(), force = false } = {}) => {
+    if (!force && readiness.at && now - readiness.at < READINESS_TTL_MS) return readiness.ready;
+
+    const { error } = await supabase
+        .from('telegram_link_tokens')
+        .select('id', { count: 'exact', head: true })
+        .limit(1);
+
+    const ready = !error;
+    if (error && !isMissingStorage(error)) throw error;
+    readiness = { at: now, ready };
+    return ready;
+};
+
+/** Forget the memoised probe (after a migration, or in tests). */
+const resetReadinessCache = () => {
+    readiness = { at: 0, ready: false };
+};
+
 module.exports = {
     LINK_TOKEN_TTL_MS,
+    isMissingStorage,
+    isLinkStorageReady,
+    resetReadinessCache,
     LINK_TOKEN_BYTES,
     LINK_TOKEN_PATTERN,
     LINK_PAYLOAD_PREFIX,

@@ -18,8 +18,19 @@ const {
     ConflictError,
     ForbiddenError,
     NotFoundError,
+    ServiceUnavailableError,
     asyncHandler,
 } = require('../utils/errors');
+
+/**
+ * Shown when the linking table has not been created yet. Deliberately
+ * actionable: whoever taps the button should be able to tell an
+ * administrator exactly what to run, instead of reading "Internal server
+ * error" and guessing.
+ */
+const NOT_PROVISIONED_MESSAGE =
+    'Telegram linking is not set up on this server yet. An administrator needs to apply ' +
+    'the database update supabase/migrations/031_telegram_link_tokens.sql, then try again.';
 
 const requireTelegramConfigured = () => {
     if (!env.telegram.botToken || !env.telegram.botUsername) {
@@ -52,6 +63,7 @@ const requestLink = asyncHandler(async (req, res) => {
                 'This account is already linked to a Telegram account. Unlink it first to link a different one.'
             );
         }
+        if (result.code === 'not_ready') throw new ServiceUnavailableError(NOT_PROVISIONED_MESSAGE);
         throw new BadRequestError('Could not create a Telegram link. Please try again.');
     }
 

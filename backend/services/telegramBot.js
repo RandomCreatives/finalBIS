@@ -384,6 +384,8 @@ const LINK_REPLIES = {
         '❌ Your staff account is already linked to a different Telegram account. Unlink it in the web app → Settings → Telegram first.',
     telegram_already_linked:
         '❌ This Telegram account is already linked to another staff member. Unlink it there first, or use a different Telegram account.',
+    not_ready:
+        '🔒 Telegram linking is not set up on this server yet. Ask the school office to finish the setup.',
 };
 
 /** `https://t.me/<bot>?start=link_<token>` — bind the sender to the staff account. */

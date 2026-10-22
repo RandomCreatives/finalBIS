@@ -11,13 +11,14 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
-const { reset, rowsOf, db } = require('./helpers');
+const { reset, rowsOf, db, missingTableError } = require('./helpers');
 const request = require('./request');
 const app = require('../app');
 const { signToken } = require('../middleware/auth');
 const { telegramLinkLimiter } = require('../middleware/security');
 const { handleUpdate } = require('../services/telegramBot');
 const {
+    resetReadinessCache,
     LINK_TOKEN_TTL_MS,
     LINK_TOKEN_PATTERN,
     hashLinkToken,
@@ -48,7 +49,7 @@ const user = (overrides = {}) => ({
     ...overrides,
 });
 
-const seed = ({ users: overrides = [], tokens = [] } = {}) => {
+const seed = ({ users: overrides = [], tokens = [], errors = {} } = {}) => {
     const base = [
         user(),
         user({ id: TEACHER, name: 'Test Teacher', email: 'teacher@school.et', role: 'main_teacher' }),
@@ -57,7 +58,7 @@ const seed = ({ users: overrides = [], tokens = [] } = {}) => {
     const byId = new Map(base.map((u) => [u.id, u]));
     overrides.forEach((u) => byId.set(u.id, { ...(byId.get(u.id) || {}), ...u }));
 
-    reset({ users: [...byId.values()], telegram_link_tokens: tokens });
+    reset({ users: [...byId.values()], telegram_link_tokens: tokens }, { errors });
 };
 
 const tokenFor = (id) => rowsOf('telegram_link_tokens').find((t) => t.user_id === id);
@@ -85,6 +86,7 @@ const botSaid = () =>
 
 beforeEach(() => {
     telegram = [];
+    resetReadinessCache();
     // Each case starts with a clean per-account budget: the limiter's store
     // outlives a single test run, exactly as it does in production.
     [ADMIN, TEACHER, OTHER].forEach((id) => telegramLinkLimiter.resetKey(`user:${id}`));
@@ -426,5 +428,96 @@ describe('opening the link in the bot', () => {
 
         assert.match(botSaid(), /create a one-time link/i);
         assert.equal(rowsOf('users').find((u) => u.id === ADMIN).telegram_id, null);
+    });
+});
+
+
+/* ── an un-migrated deployment ──────────────────────────────────────────── */
+
+/**
+ * The deployment can ship before `031_telegram_link_tokens.sql` is applied
+ * by hand in the Supabase SQL Editor. That used to surface as a bare
+ * "Internal server error" on the Create link button; it must instead say
+ * what is missing, and Settings must not offer the button at all.
+ */
+describe('when the linking table has not been created yet', () => {
+    const seeded = () => seed({ errors: { telegram_link_tokens: missingTableError('telegram_link_tokens') } });
+
+    test('POST /api/auth/telegram-link explains the pending database update (503, not 500)', async () => {
+        seeded();
+
+        const res = await request(app)
+            .post('/api/auth/telegram-link')
+            .auth(signToken({ id: ADMIN, role: 'admin' }));
+
+        assert.equal(res.status, 503);
+        assert.match(res.body.message, /not set up on this server yet/i);
+        assert.match(res.body.message, /031_telegram_link_tokens\.sql/);
+        assert.doesNotMatch(res.body.message, /internal server error/i);
+    });
+
+    test('GET /api/auth/telegram-config reports linkEnabled: false', async () => {
+        seeded();
+
+        const res = await request(app).get('/api/auth/telegram-config');
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.enabled, true, 'the bot itself is configured');
+        assert.equal(res.body.linkEnabled, false);
+    });
+
+    test('the status endpoint reports "unavailable" instead of failing', async () => {
+        seeded();
+        const auth = signToken({ id: ADMIN, role: 'admin' });
+
+        const res = await request(app)
+            .get(`/api/auth/telegram-link/${'A'.repeat(43)}`)
+            .auth(auth);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.status, 'unavailable');
+    });
+
+    test('the bot tells the member the server is not set up, and links nothing', async () => {
+        seeded();
+
+        await openInBot('A'.repeat(43));
+
+        assert.match(botSaid(), /not set up on this server yet/i);
+        assert.equal(rowsOf('users').find((u) => u.id === ADMIN).telegram_id, null);
+    });
+
+    test('works again as soon as the migration is applied', async () => {
+        seeded();
+
+        const before = await request(app)
+            .post('/api/auth/telegram-link')
+            .auth(signToken({ id: ADMIN, role: 'admin' }));
+        assert.equal(before.status, 503);
+
+        // Apply the migration: the table now exists.
+        delete db.errors.telegram_link_tokens;
+        resetReadinessCache();
+
+        const after = await request(app)
+            .post('/api/auth/telegram-link')
+            .auth(signToken({ id: ADMIN, role: 'admin' }));
+
+        assert.equal(after.status, 201);
+        assert.match(after.body.deepLink, /^https:\/\/t\.me\//);
+
+        const config = await request(app).get('/api/auth/telegram-config');
+        assert.equal(config.body.linkEnabled, true);
+    });
+
+    test('other database failures are still reported as 500, not disguised', async () => {
+        seed({ errors: { telegram_link_tokens: { code: '57014', message: 'canceling statement due to statement timeout' } } });
+
+        const res = await request(app)
+            .post('/api/auth/telegram-link')
+            .auth(signToken({ id: ADMIN, role: 'admin' }));
+
+        assert.equal(res.status, 500);
+        assert.equal(res.body.message, 'Internal server error');
     });
 });
