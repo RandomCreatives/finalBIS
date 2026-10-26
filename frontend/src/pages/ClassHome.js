@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { lessonLabel } from '../utils/periods';
 import { PaymentChip } from '../utils/payments';
@@ -33,6 +33,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import PersonIcon from '@mui/icons-material/Person';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import {
@@ -109,22 +110,30 @@ const ATTENDANCE_STATUSES = [
 ];
 
 /**
- * The Admin Communications sections (store, permission requests, conduct
+ * Staged rollout sections (report cards, store, permission requests, conduct
  * reports) are introduced to teachers one at a time, on purpose: they stay
  * visible on the sidebar but greyed out with a "soon" chip until launch.
  * Flip a flag here the day that section goes live (decision: Mike,
  * 2026-09-22).
  */
-const COMING_SOON = { store: true, request: true, conduct: true };
+const COMING_SOON = { reportCards: true, store: true, request: true, conduct: true };
 
 const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: DashboardIcon },
+    { id: 'students', label: 'Students', icon: GroupsIcon },
     { id: 'attendance', label: 'Attendance', icon: FactCheckIcon },
     { id: 'marks', label: 'Marksheets', icon: GradeIcon },
+    { id: 'timetable', label: 'Timetable', icon: EventIcon, dividerAfter: true },
     { id: 'plans', label: 'Planning', icon: MenuBookOutlinedIcon },
     { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
-    { id: 'students', label: 'Students', icon: GroupsIcon },
-    { id: 'timetable', label: 'Timetable', icon: EventIcon },
+    {
+        id: 'reportCards',
+        label: 'Report Cards',
+        icon: SummarizeOutlinedIcon,
+        soon: COMING_SOON.reportCards,
+        dividerBefore: true,
+        dividerAfter: true,
+    },
     { id: 'store', label: 'Store', icon: StorefrontIcon, soon: COMING_SOON.store },
     { id: 'request', label: 'Request', icon: VerifiedUserOutlinedIcon, soon: COMING_SOON.request },
     { id: 'conduct', label: 'Conduct report', icon: ReportOutlinedIcon, soon: COMING_SOON.conduct },
@@ -139,7 +148,7 @@ const SECTIONS = [
 const SECTION_GROUPS = [
     {
         label: 'Class Room Management',
-        ids: ['overview', 'attendance', 'marks', 'plans', 'calendar', 'students', 'timetable'],
+        ids: ['overview', 'students', 'attendance', 'marks', 'timetable', 'plans', 'calendar', 'reportCards'],
     },
     { label: 'Admin Communications', ids: ['store', 'request', 'conduct'] },
 ];
@@ -1646,39 +1655,58 @@ export default function ClassHome() {
 
     // Sidebar nav button — Profile is rendered separately, pinned to the
     // bottom of the full-length sidebar (see below).
+    const renderNavDivider = (testId) => (
+        <Fragment key={testId}>
+            <Divider
+                data-testid={testId}
+                sx={{ display: { xs: 'none', md: 'block' }, mx: 0.5, my: 0.35 }}
+            />
+            <Divider
+                orientation="vertical"
+                flexItem
+                sx={{ display: { xs: 'block', md: 'none' }, mx: 0.25, my: 0.75 }}
+            />
+        </Fragment>
+    );
+
     const renderNavButton = (s) => {
         const Icon = s.icon;
         const active = section === s.id;
         return (
-            <Tooltip key={s.id} title={s.soon ? 'This section is coming soon.' : {
-                overview: 'See your class snapshot and today’s priorities.',
-                attendance: 'Mark and submit the daily register.',
-                marks: 'Enter the subjects you teach for the term.',
-                plans: 'Keep your weekly schemes and lesson plans current.',
-                calendar: 'Check school events and term dates.',
-                students: 'Search students, request additions and open ID cards.',
-                timetable: 'View your class week and lessons.',
-                profile: 'Review your profile and account settings.',
-            }[s.id] || s.label} placement="right" arrow>
-            <span>
-            <Button disabled={s.soon}
-                onClick={() => !s.soon && setSection(s.id)}
-                data-testid={s.id === 'profile' ? 'side-nav-profile' : undefined}
-                startIcon={<Icon sx={{ fontSize: 18 }} />}
-                sx={{ justifyContent: 'flex-start', textTransform: 'none',
-                    fontWeight: active ? 800 : 600, borderRadius: 1, px: 1.5, py: 1,
-                    whiteSpace: 'nowrap', minWidth: { xs: 'auto', md: 0 },
-                    color: active ? '#fff' : s.soon ? 'text.disabled' : 'text.primary',
-                    bgcolor: active ? 'primary.main' : 'transparent',
-                    '&:hover': active ? { bgcolor: 'primary.dark' } : { bgcolor: alpha(theme.palette.primary.main, 0.06) } }}>
-                {s.label}
-                {s.soon && (
-                    <Chip label="soon" size="small" sx={{ ml: 1, height: 16, fontSize: 9,
-                        fontWeight: 800, bgcolor: 'rgba(100,116,139,.12)', color: 'text.secondary' }} />
-                )}
-            </Button>
-            </span>
-            </Tooltip>
+            <Fragment key={s.id}>
+                {s.dividerBefore && renderNavDivider(`side-nav-divider-before-${s.id}`)}
+                <Tooltip title={s.soon ? 'This section is coming soon.' : {
+                    overview: 'See your class snapshot and today’s priorities.',
+                    students: 'Search students, request additions and open ID cards.',
+                    attendance: 'Mark and submit the daily register.',
+                    marks: 'Enter the subjects you teach for the term.',
+                    timetable: 'View your class week and lessons.',
+                    plans: 'Keep your weekly schemes and lesson plans current.',
+                    calendar: 'Check school events and term dates.',
+                    reportCards: 'Build and print termly student report cards.',
+                    profile: 'Review your profile and account settings.',
+                }[s.id] || s.label} placement="right" arrow>
+                    <Box component="span" sx={{ display: 'flex', width: { md: '100%' } }}>
+                        <Button disabled={s.soon}
+                            onClick={() => !s.soon && setSection(s.id)}
+                            data-testid={s.id === 'profile' ? 'side-nav-profile' : undefined}
+                            startIcon={<Icon sx={{ fontSize: 18 }} />}
+                            sx={{ width: { md: '100%' }, justifyContent: 'flex-start', textTransform: 'none',
+                                fontWeight: active ? 800 : 600, borderRadius: 1, px: 1.5, py: 1, gap: 0.5,
+                                whiteSpace: 'nowrap', minWidth: { xs: 'auto', md: 0 },
+                                color: active ? '#fff' : s.soon ? 'text.disabled' : 'text.primary',
+                                bgcolor: active ? 'primary.main' : 'transparent',
+                                '&:hover': active ? { bgcolor: 'primary.dark' } : { bgcolor: alpha(theme.palette.primary.main, 0.06) } }}>
+                            {s.label}
+                            {s.soon && (
+                                <Chip label="soon" size="small" sx={{ ml: { xs: 0.75, md: 'auto' }, height: 16, fontSize: 9,
+                                    fontWeight: 800, bgcolor: 'rgba(100,116,139,.12)', color: 'text.secondary' }} />
+                            )}
+                        </Button>
+                    </Box>
+                </Tooltip>
+                {s.dividerAfter && renderNavDivider(`side-nav-divider-after-${s.id}`)}
+            </Fragment>
         );
     };
 

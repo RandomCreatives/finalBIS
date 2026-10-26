@@ -1,25 +1,62 @@
+const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase');
 const { NotFoundError, ConflictError, BadRequestError } = require('../utils/errors');
 
 /**
- * Year 4 - Magenta main-teacher reconciliation (Ms. Bethelhem Girma) and
- * shared class-teacher subject handover helpers.
+ * Year 4 - Magenta main-teacher reconciliation (Ms. Bethelhem Girma),
+ * school-wide main-teacher class-password rollout, and shared class-teacher
+ * subject handover helpers.
  *
- * Mirrors supabase/migrations/032_magenta_main_teacher_bethelhem.sql using
- * the backend's service-role Supabase client so deployments create/activate
- * Ms. Bethelhem Girma's account and hand over Year 4 - Magenta automatically
- * without needing a manual run in the Supabase SQL Editor.
+ * Every main teacher's basic credential is their class card password
+ * (e.g. "Year 4 - Magenta" -> "year 4 magenta", "Year 3 - Blue" -> "year 3 blue"),
+ * matching resetUserPassword and the class-card / PWA sign-in screens.
  */
 
-// bcrypt hash of BisNoc2026! — standard initial credential matching migrations 012, 030 and 032.
+// Legacy placeholder hash (BisNoc2026!) used by older provisioning scripts.
 const BASIC_PASSWORD_HASH = '$2a$12$jVvHpVG5qszwKEk8k0suCea/J50mLYP071GLFkw9/NmQwOl.9ppQe';
+
+// Precomputed cost-12 bcrypt hashes for the 14 homeroom class passwords so
+// deployment reconciliation runs in O(1) without blocking serverless cold starts.
+const CLASS_CARD_PASSWORD_HASHES = Object.freeze({
+    'year 3 blue': '$2a$12$buxlkbo673ZpUWkqcsJjPuBh2hpUSUVzTx3HPe/z08aMvMrGFLI9a',
+    'year 3 yellow': '$2a$12$sHkwhj6J/Rypb8MdYlvgb.05lcBYOO4UETVsrW2FxgkFKwVZqF0iK',
+    'year 3 red': '$2a$12$O//lepp3wrg4tu83QV4XrusgEsmEV24PU9MxMHm3naiKIGapU1hmy',
+    'year 3 green': '$2a$12$YXUrIEdZZnyhpjctJPJ6TuZnvvOZIaqhecT6V6zRcRPmZzMzD9Op2',
+    'year 4 blue': '$2a$12$X40sN3lJNNM7CIiN2Ri6mOdU2rbIK4So6/pio4tT3urPyWOO1IWnG',
+    'year 4 purple': '$2a$12$pkT1GiJOl9RmQ7yECtTVyOz9scJcULJQXiQF9VhsHsB6stO4IBbWK',
+    'year 4 lavender': '$2a$12$JK/UH0apYGCQ87MlyxliOe0skQm8q0yV05g1EwvYtPjg9hC6.1/WC',
+    'year 4 crimson': '$2a$12$LRh.tt6fWqzA4FEu6Z9UYen2tFkbkFglf5qK/lgNW/0jAlHgDeNNq',
+    'year 4 green': '$2a$12$EF523UoZLgXlfy4DEHYGJODascdp/RPqs5bPJiu479/VZlbROqgKi',
+    'year 4 yellow': '$2a$12$Z0nzpo8x1UyZNt1nPEwCFOgyRGJaIlyjCH1ySw/WzzKJ0013PEn4S',
+    'year 4 magenta': '$2a$12$.gPYAFdP7YCuzg4dnVPfqeBQHmmzDaHemVfUdQ6SEeESqP10mFO9u',
+    'year 4 red': '$2a$12$70tQen8ber4.KECfPx7vguWtKtgQsmFfj9YYy2mqxEXvpmjRC/zA2',
+    'year 4 violet': '$2a$12$gviAb99MixXSVsPZuSALVu5D2vFlnYWZm/jgHgDMKgsZltGE64/JW',
+    'year 4 orange': '$2a$12$Sk/z85dVFBgOG1KeIj3Utu/4.VU7lpK.7irRxyzGXrV3cyjqdveAe',
+});
+
 const MAGENTA_CLASS_NAME = 'Year 4 - Magenta';
+const MAGENTA_PASSWORD_HASH = CLASS_CARD_PASSWORD_HASHES['year 4 magenta'];
 const BETHELHEM_NAME = 'Bethelhem Girma';
 const BETHELHEM_EMAIL = 'bethelhem.girma@bisnoc.local';
 const TARGET_ACADEMIC_YEAR = '2026/2027';
 
 const PROMOTABLE_ROLES = new Set(['subject_teacher', 'assistant_teacher']);
 const ELIGIBLE_CLASS_ROLES = new Set(['main_teacher', 'admin']);
+
+/** 'Year 4 - Magenta' -> 'year 4 magenta' */
+const classCardPasswordFor = (className) =>
+    String(className || '')
+        .toLowerCase()
+        .replace(/\s*-\s*/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const classCardPasswordHashFor = async (className) => {
+    const basic = classCardPasswordFor(className);
+    if (!basic) return null;
+    if (CLASS_CARD_PASSWORD_HASHES[basic]) return CLASS_CARD_PASSWORD_HASHES[basic];
+    return bcrypt.hash(basic, 12);
+};
 
 const normalizePersonName = (value) =>
     String(value || '')
@@ -45,6 +82,72 @@ const timesOverlap = (startA, endA, startB, endB) => {
     if (sA === null || eA === null || sB === null || eB === null) return false;
     return sA < eB && sB < eA;
 };
+
+/**
+ * Sets seated `main_teacher` accounts' passwords to their class card password
+ * (e.g. `year 3 blue`, `year 4 magenta`).
+ *
+ * - When `forceAll` is true (during the one-time rollout when Ms. Bethelhem's
+ *   account transitions off the legacy placeholder or on explicit admin request),
+ *   every seated `main_teacher` gets their class card password hash.
+ * - When `forceAll` is false (subsequent cold starts), only `main_teacher`s
+ *   still carrying the legacy `BisNoc2026!` placeholder hash are upgraded, so
+ *   personal passwords changed later under Settings are never overwritten.
+ */
+async function syncMainTeacherClassPasswords({
+    client = supabase,
+    schoolId,
+    yearId,
+    forceAll = false,
+}) {
+    const [{ data: seats, error: seatErr }, { data: classes, error: classErr }, { data: teachers, error: userErr }] =
+        await Promise.all([
+            client
+                .from('class_staff')
+                .select('class_id, user_id')
+                .eq('school_id', schoolId)
+                .eq('academic_year_id', yearId)
+                .eq('position', 'main'),
+            client
+                .from('classes')
+                .select('id, name')
+                .eq('school_id', schoolId),
+            client
+                .from('users')
+                .select('id, name, role, password_hash')
+                .eq('school_id', schoolId)
+                .eq('role', 'main_teacher'),
+        ]);
+
+    if (seatErr) throw seatErr;
+    if (classErr) throw classErr;
+    if (userErr) throw userErr;
+
+    const classById = new Map((classes || []).map((c) => [c.id, c]));
+    const teacherById = new Map((teachers || []).map((u) => [u.id, u]));
+
+    let passwordsUpdated = 0;
+    for (const seat of seats || []) {
+        const klass = classById.get(seat.class_id);
+        const teacher = teacherById.get(seat.user_id);
+        if (!klass || !teacher || teacher.role !== 'main_teacher') continue;
+
+        const targetHash = await classCardPasswordHashFor(klass.name);
+        if (!targetHash || teacher.password_hash === targetHash) continue;
+
+        const needsUpdate = forceAll || teacher.password_hash === BASIC_PASSWORD_HASH;
+        if (!needsUpdate) continue;
+
+        const { error: updErr } = await client
+            .from('users')
+            .update({ password_hash: targetHash })
+            .eq('id', teacher.id);
+        if (updErr) throw updErr;
+        passwordsUpdated += 1;
+    }
+
+    return { passwordsUpdated };
+}
 
 /**
  * Inspects a class's `main_teacher` subject seats before a main-teacher change
@@ -207,19 +310,9 @@ async function applyMainTeacherSeatHandover({
 }
 
 /**
- * Ensures Ms. Bethelhem Girma has an active `main_teacher` staff account and
- * holds Year 4 - Magenta's main-teacher seat + class-teacher subjects.
- *
- * @param {object} [options]
- * @param {object} [options.client] - Supabase-compatible client
- * @param {'auto'|'explicit'} [options.mode='auto']
- *   - 'auto': runs safely on startup/request for 2026/2027 when Magenta is
- *     unassigned, still held by the pre-032 teacher (Abigia), or already held
- *     by Bethelhem; skips quietly if the schema/class/year isn't present or
- *     Magenta was later reassigned to a different teacher.
- *   - 'explicit': admin-triggered; applies on the current academic year even
- *     if Magenta is held by another teacher, throwing descriptive 4xx errors
- *     if any safety invariant fails.
+ * Ensures Ms. Bethelhem Girma has an active `main_teacher` staff account with
+ * password `year 4 magenta`, holds Year 4 - Magenta's main-teacher seat +
+ * class-teacher subjects, and reconciles seated main-teacher class passwords.
  */
 async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {}) {
     const isExplicit = mode === 'explicit';
@@ -293,7 +386,7 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
     // 3. Locate Ms. Bethelhem Girma's staff account (if one already exists)
     const { data: schoolUsers, error: usersErr } = await client
         .from('users')
-        .select('id, name, email, role, is_active, school_id')
+        .select('id, name, email, role, is_active, school_id, password_hash')
         .eq('school_id', schoolId);
     if (usersErr) throw usersErr;
 
@@ -314,7 +407,7 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
     if (!bethelhem) {
         const { data: emailMatch, error: emailErr } = await client
             .from('users')
-            .select('id, name, email, role, is_active, school_id')
+            .select('id, name, email, role, is_active, school_id, password_hash')
             .ilike('email', BETHELHEM_EMAIL)
             .maybeSingle();
         if (emailErr) throw emailErr;
@@ -335,6 +428,13 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
 
     const alreadySeated = Boolean(
         bethelhem && currentMainSeat && currentMainSeat.user_id === bethelhem.id
+    );
+
+    // Trigger the one-time school-wide main-teacher class-password rollout when
+    // Ms. Bethelhem is created or upgraded off the legacy BisNoc2026! hash, or
+    // when an admin invokes explicit reconciliation.
+    const shouldForceSyncAllPasswords = Boolean(
+        isExplicit || !bethelhem || bethelhem.password_hash === BASIC_PASSWORD_HASH
     );
 
     // In 'auto' mode, never clobber a later assignment to a different teacher.
@@ -398,7 +498,7 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
         oldTeacherId: alreadySeated ? null : (outgoingUser?.id || null),
     });
 
-    // 5. Create or activate & promote Ms. Bethelhem Girma's account
+    // 5. Create or activate, promote & set class password on Ms. Bethelhem's account
     let accountAction = 'unchanged';
     if (!bethelhem) {
         const { data: created, error: createErr } = await client
@@ -407,7 +507,7 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
                 school_id: schoolId,
                 name: BETHELHEM_NAME,
                 email: BETHELHEM_EMAIL,
-                password_hash: BASIC_PASSWORD_HASH,
+                password_hash: MAGENTA_PASSWORD_HASH,
                 role: 'main_teacher',
                 is_active: true,
             })
@@ -420,6 +520,12 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
         const patch = {};
         if (!bethelhem.is_active) patch.is_active = true;
         if (PROMOTABLE_ROLES.has(bethelhem.role)) patch.role = 'main_teacher';
+        if (
+            bethelhem.password_hash !== MAGENTA_PASSWORD_HASH &&
+            (isExplicit || bethelhem.password_hash === BASIC_PASSWORD_HASH)
+        ) {
+            patch.password_hash = MAGENTA_PASSWORD_HASH;
+        }
 
         if (Object.keys(patch).length > 0) {
             const { data: updated, error: updateErr } = await client
@@ -430,14 +536,17 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
                 .single();
             if (updateErr) throw updateErr;
             bethelhem = updated;
-            accountAction = patch.is_active ? 'activated' : 'promoted';
+            accountAction = patch.is_active
+                ? 'activated'
+                : patch.role
+                    ? 'promoted'
+                    : 'password_updated';
         }
     }
 
     // 6. Seat her as Year 4 - Magenta's main teacher (if not already)
     let homeroomChanged = false;
     if (!alreadySeated) {
-        // Clear any assistant seat on Magenta so UNIQUE(class_id, user_id, academic_year_id) holds.
         const { error: delAsstErr } = await client
             .from('class_staff')
             .delete()
@@ -478,12 +587,25 @@ async function ensureMagentaMainTeacher({ client = supabase, mode = 'auto' } = {
         seatsToMove: handoverPlan.seatsToMove,
     });
 
-    const changed = accountAction !== 'unchanged' || homeroomChanged || seatsTransferred > 0;
+    // 8. Align all seated main teachers' passwords with their class card password
+    const { passwordsUpdated } = await syncMainTeacherClassPasswords({
+        client,
+        schoolId,
+        yearId: year.id,
+        forceAll: shouldForceSyncAllPasswords,
+    });
+
+    const changed =
+        accountAction !== 'unchanged' ||
+        homeroomChanged ||
+        seatsTransferred > 0 ||
+        passwordsUpdated > 0;
 
     return {
         status: changed ? 'applied' : 'already_applied',
         accountAction,
         homeroomChanged,
+        passwordsUpdated,
         previousMainTeacher: alreadySeated ? null : (outgoingUser?.name || null),
         user: {
             id: bethelhem.id,
@@ -511,7 +633,8 @@ function ensureMagentaMainTeacherOnce({ client = supabase } = {}) {
                 if (result.status === 'applied') {
                     console.log(
                         `[staffing] ${MAGENTA_CLASS_NAME} main teacher -> ${BETHELHEM_NAME} ` +
-                        `(account: ${result.accountAction}, seats: ${result.seatsTransferred}, lessons: ${result.lessonsPlaced})`
+                        `(account: ${result.accountAction}, seats: ${result.seatsTransferred}, ` +
+                        `lessons: ${result.lessonsPlaced}, main passwords synced: ${result.passwordsUpdated})`
                     );
                 }
                 return result;
@@ -539,10 +662,15 @@ function markMagentaEnsureSettled() {
 
 module.exports = {
     BASIC_PASSWORD_HASH,
+    MAGENTA_PASSWORD_HASH,
+    CLASS_CARD_PASSWORD_HASHES,
     MAGENTA_CLASS_NAME,
     BETHELHEM_NAME,
     BETHELHEM_EMAIL,
     TARGET_ACADEMIC_YEAR,
+    classCardPasswordFor,
+    classCardPasswordHashFor,
+    syncMainTeacherClassPasswords,
     prepareMainTeacherSeatHandover,
     applyMainTeacherSeatHandover,
     ensureMagentaMainTeacher,

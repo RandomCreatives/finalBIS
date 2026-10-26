@@ -12,6 +12,7 @@ const { test, describe, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const bcrypt = require('bcryptjs');
 
 const { createTestDb } = require('./harness');
 
@@ -215,6 +216,7 @@ describe('032 — Year 4 Magenta: main teacher becomes Bethelhem Girma', () => {
         assert.equal(bethelhem.role, 'main_teacher');
         assert.equal(bethelhem.is_active, true);
         assert.match(bethelhem.password_hash, /^\$2[aby]\$12\$/, 'bcrypt hash, never plaintext');
+        assert.ok(bcrypt.compareSync('year 4 magenta', bethelhem.password_hash));
     });
 
     test('reuses an existing account instead of creating a second one', async () => {

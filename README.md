@@ -45,12 +45,14 @@ Migrations in `supabase/migrations/` are applied **manually in order using the S
   table and must be applied before **Settings → Telegram → Create link** works.
 - **Auto-reconciled on deploy (`032_magenta_main_teacher_bethelhem.sql`):**
   `backend/services/magentaMainTeacher.js` automatically creates/activates
-  Ms. Bethelhem Girma (`bethelhem.girma@bisnoc.local`, `main_teacher`) and
-  hands over Year 4 - Magenta's homeroom, class-teacher subject seats
-  (Mathematics, Science, Global Citizenship, Registration), and timetable
-  lessons on the first `/api/*` request (or via admin
-  `POST /api/assignments/magenta-bethelhem`). The SQL file remains in
-  `supabase/migrations/` if you want to run it directly in the SQL Editor.
+  Ms. Bethelhem Girma (`bethelhem.girma@bisnoc.local`, `main_teacher`), aligns
+  every seated main teacher's account password with their class card password
+  (`year 3 blue` … `year 4 magenta` … `year 4 orange`), and hands over
+  Year 4 - Magenta's homeroom, class-teacher subject seats (Mathematics,
+  Science, Global Citizenship, Registration), and timetable lessons on the
+  first `/api/*` request (or via admin `POST /api/assignments/magenta-bethelhem`).
+  The SQL file remains in `supabase/migrations/` if you want to run it directly
+  in the SQL Editor.
 
 ### Verifying Production Deployment Status
 To verify whether production is running the latest deployment carrying the #151 features (or an older build), send unauthenticated HTTP requests:

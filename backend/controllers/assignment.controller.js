@@ -3,6 +3,8 @@ const { resolveYearId } = require('./academicYear.controller');
 const { isFixtureSubject } = require('../utils/subjects');
 const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 const {
+    BASIC_PASSWORD_HASH,
+    classCardPasswordHashFor,
     prepareMainTeacherSeatHandover,
     applyMainTeacherSeatHandover,
     ensureMagentaMainTeacher,
@@ -64,6 +66,8 @@ const assignClassStaff = asyncHandler(async (req, res) => {
     const schoolId = req.user.school_id;
 
     let handoverPlan = null;
+    let targetClass = null;
+    let incomingUser = null;
     if (position === 'main') {
         const [{ data: prevMain, error: prevErr }, { data: klass, error: classErr }, { data: incoming, error: userErr }] =
             await Promise.all([
@@ -83,7 +87,7 @@ const assignClassStaff = asyncHandler(async (req, res) => {
                     .maybeSingle(),
                 supabase
                     .from('users')
-                    .select('id, name, is_active')
+                    .select('id, name, role, is_active, password_hash')
                     .eq('school_id', schoolId)
                     .eq('id', userId)
                     .maybeSingle(),
@@ -92,6 +96,9 @@ const assignClassStaff = asyncHandler(async (req, res) => {
         if (prevErr) throw prevErr;
         if (classErr) throw classErr;
         if (userErr) throw userErr;
+
+        targetClass = klass;
+        incomingUser = incoming;
 
         if (klass && incoming && incoming.is_active) {
             handoverPlan = await prepareMainTeacherSeatHandover({
@@ -133,6 +140,24 @@ const assignClassStaff = asyncHandler(async (req, res) => {
         });
         seatsTransferred = handover.seatsTransferred;
         lessonsPlaced = handover.lessonsPlaced;
+    }
+
+    // If a newly seated main_teacher still holds the legacy placeholder hash,
+    // align their email-login password with their class card password.
+    if (
+        position === 'main' &&
+        targetClass &&
+        incomingUser?.role === 'main_teacher' &&
+        incomingUser.password_hash === BASIC_PASSWORD_HASH
+    ) {
+        const hash = await classCardPasswordHashFor(targetClass.name);
+        if (hash) {
+            const { error: pwErr } = await supabase
+                .from('users')
+                .update({ password_hash: hash })
+                .eq('id', userId);
+            if (pwErr) throw pwErr;
+        }
     }
 
     res.json({
