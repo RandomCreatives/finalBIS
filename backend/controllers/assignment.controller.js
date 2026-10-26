@@ -2,6 +2,12 @@ const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
 const { isFixtureSubject } = require('../utils/subjects');
 const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
+const {
+    prepareMainTeacherSeatHandover,
+    applyMainTeacherSeatHandover,
+    ensureMagentaMainTeacher,
+    markMagentaEnsureSettled,
+} = require('../services/magentaMainTeacher');
 
 /**
  * Staffing and teaching assignments.
@@ -46,17 +52,66 @@ const listClassStaff = asyncHandler(async (req, res) => {
 /**
  * PUT /api/assignments/class-staff
  * Assign a teacher as a class's main or assistant.
+ *
+ * Seating a main teacher also hands over the class's `main_teacher` subject
+ * seats (Mathematics, Science, Global Citizenship, Registration) that were
+ * held by the outgoing main teacher or still unassigned, after checking that
+ * moving their lessons will not double-book the incoming teacher.
  */
 const assignClassStaff = asyncHandler(async (req, res) => {
     const { classId, userId, position } = req.body;
     const yearId = await resolveYearId(req);
+    const schoolId = req.user.school_id;
+
+    let handoverPlan = null;
+    if (position === 'main') {
+        const [{ data: prevMain, error: prevErr }, { data: klass, error: classErr }, { data: incoming, error: userErr }] =
+            await Promise.all([
+                supabase
+                    .from('class_staff')
+                    .select('user_id')
+                    .eq('school_id', schoolId)
+                    .eq('academic_year_id', yearId)
+                    .eq('class_id', classId)
+                    .eq('position', 'main')
+                    .maybeSingle(),
+                supabase
+                    .from('classes')
+                    .select('id, name')
+                    .eq('school_id', schoolId)
+                    .eq('id', classId)
+                    .maybeSingle(),
+                supabase
+                    .from('users')
+                    .select('id, name, is_active')
+                    .eq('school_id', schoolId)
+                    .eq('id', userId)
+                    .maybeSingle(),
+            ]);
+
+        if (prevErr) throw prevErr;
+        if (classErr) throw classErr;
+        if (userErr) throw userErr;
+
+        if (klass && incoming && incoming.is_active) {
+            handoverPlan = await prepareMainTeacherSeatHandover({
+                schoolId,
+                yearId,
+                classId,
+                className: klass.name,
+                newTeacherId: userId,
+                newTeacherName: incoming.name,
+                oldTeacherId: prevMain?.user_id || null,
+            });
+        }
+    }
 
     const { data, error } = await supabase.rpc('assign_class_staff', {
         p_class_id: classId,
         p_user_id: userId,
         p_position: position,
         p_year_id: yearId,
-        p_school_id: req.user.school_id,
+        p_school_id: schoolId,
     });
 
     if (error) {
@@ -66,7 +121,24 @@ const assignClassStaff = asyncHandler(async (req, res) => {
         throw error;
     }
 
-    res.json({ assignment: data });
+    let seatsTransferred = 0;
+    let lessonsPlaced = 0;
+    if (handoverPlan) {
+        const handover = await applyMainTeacherSeatHandover({
+            yearId,
+            classId,
+            newTeacherId: userId,
+            mainSubjectIds: handoverPlan.mainSubjectIds,
+            seatsToMove: handoverPlan.seatsToMove,
+        });
+        seatsTransferred = handover.seatsTransferred;
+        lessonsPlaced = handover.lessonsPlaced;
+    }
+
+    res.json({
+        assignment: data,
+        ...(position === 'main' ? { seatsTransferred, lessonsPlaced } : {}),
+    });
 });
 
 /**
@@ -247,15 +319,18 @@ const autoAssignMainTeacherSubjects = asyncHandler(async (req, res) => {
     const yearId = await resolveYearId(req);
     const schoolId = req.user.school_id;
 
-    const [{ data: subjects, error: subjectError }, { data: seats, error: seatError }] =
+    const [{ data: subjects, error: subjectError }, { data: seats, error: seatError }, { data: existingSeats, error: existingError }] =
         await Promise.all([
             supabase.from('subjects').select('id, code').eq('school_id', schoolId).eq('taught_by', 'main_teacher'),
             supabase.from('class_staff').select('class_id, user_id')
                 .eq('school_id', schoolId).eq('academic_year_id', yearId).eq('position', 'main'),
+            supabase.from('class_subjects').select('class_id, subject_id, sessions_per_week')
+                .eq('school_id', schoolId).eq('academic_year_id', yearId),
         ]);
 
     if (subjectError) throw subjectError;
     if (seatError) throw seatError;
+    if (existingError) throw existingError;
 
     // Registration rows are created and owned by the timetable setup; they
     // are fixtures, not teaching assignments to hand out.
@@ -268,16 +343,22 @@ const autoAssignMainTeacherSubjects = asyncHandler(async (req, res) => {
         throw new BadRequestError('No classes have a main teacher assigned yet');
     }
 
+    const existingSessions = new Map(
+        (existingSeats || []).map((row) => [`${row.class_id}:${row.subject_id}`, row.sessions_per_week || 0])
+    );
+    const requestedSessions = Number(req.body.sessionsPerWeek) || 0;
+
     const rows = [];
     for (const seat of seats) {
         for (const subject of teachable) {
+            const preserved = existingSessions.get(`${seat.class_id}:${subject.id}`) || 0;
             rows.push({
                 school_id: schoolId,
                 academic_year_id: yearId,
                 class_id: seat.class_id,
                 subject_id: subject.id,
                 teacher_id: seat.user_id,
-                sessions_per_week: req.body.sessionsPerWeek ?? 0,
+                sessions_per_week: requestedSessions > 0 ? requestedSessions : preserved,
             });
         }
     }
@@ -420,9 +501,28 @@ const getWorkload = asyncHandler(async (req, res) => {
     });
 });
 
+/**
+ * POST /api/assignments/magenta-bethelhem  (admin only)
+ *
+ * Explicitly ensures Ms. Bethelhem Girma's staff account is created/active as
+ * `main_teacher` and assigned as Year 4 - Magenta's main teacher (along with
+ * Magenta's class-teacher subject seats and placed timetable lessons).
+ */
+const assignMagentaBethelhem = asyncHandler(async (req, res) => {
+    const result = await ensureMagentaMainTeacher({ mode: 'explicit' });
+    markMagentaEnsureSettled();
+    res.json({
+        ...result,
+        message:
+            result.status === 'already_applied'
+                ? `${result.user.name} is already active and assigned as ${result.class.name}'s main teacher.`
+                : `${result.user.name} is now active and assigned as ${result.class.name}'s main teacher.`,
+    });
+});
+
 module.exports = {
     listClassStaff, assignClassStaff, rotateClassStaff, removeClassStaff,
     listSubjectAssignments, upsertSubjectAssignment, bulkAssignSubject,
     autoAssignMainTeacherSubjects, removeSubjectAssignment,
-    getWorkload,
+    getWorkload, assignMagentaBethelhem,
 };
