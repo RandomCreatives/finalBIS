@@ -275,6 +275,7 @@ async function markAllPresent(classId, user) {
 // the environment-dependent bits (web URLs, the school's date) and the data.
 // ---------------------------------------------------------------------------
 const WEB_APP_URL = `${WEB_APP}/app`;
+const MINI_APP_URL = `${WEB_APP}/tma/`;
 const registerUrl = (classId) =>
     `${WEB_APP}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`;
 
@@ -287,6 +288,7 @@ function buildMainMenu(user) {
         firstName,
         isTeacher: canRecordAttendance(user),
         webAppUrl: WEB_APP_URL,
+        miniAppUrl: MINI_APP_URL,
     });
 }
 
@@ -482,8 +484,13 @@ async function handleMessage(msg) {
         await sendTelegramMessage(
             chatId,
             '👋 Welcome to the BIS NOC staff bot.\n\n' +
-                'Your Telegram account is not linked yet. Open the web app → Settings → Telegram, ' +
-                'create a one-time link, and open it here.'
+                'Your Telegram account is not linked yet. Tap "Open Mini App" below to sign in and link right here, ' +
+                'or open the web app → Settings → Telegram to create a one-time link.',
+            {
+                replyMarkup: menus.kb([
+                    [menus.webAppBtn('🌐 Open Mini App', MINI_APP_URL)],
+                ]),
+            }
         );
         return;
     }

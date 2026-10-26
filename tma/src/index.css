@@ -8,6 +8,12 @@ html {
     -webkit-user-select: none;
     user-select: none;
 }
+input,
+textarea,
+select {
+    -webkit-user-select: text;
+    user-select: text;
+}
 body {
     background-color: #ffffff;
     color: #1e3a8a;

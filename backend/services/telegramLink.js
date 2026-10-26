@@ -241,13 +241,59 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
     if (ownerError) throw ownerError;
     if (owner) return { ok: false, code: 'telegram_already_linked' };
 
+    // Bind the staff row BEFORE burning the token so a transient DB write
+    // error never leaves the one-time token consumed without linking.
+    const cleanUsername = normalizeUsername(username);
+    let updated = user;
+    if (!alreadyBound) {
+        const bindRes = await supabase
+            .from('users')
+            .update({
+                telegram_id: telegramIdString,
+                telegram_username: cleanUsername,
+            })
+            .eq('id', user.id)
+            .is('telegram_id', null)
+            .select()
+            .maybeSingle();
+
+        if (bindRes.error) {
+            if (bindRes.error.code === '23505') {
+                return { ok: false, code: 'telegram_already_linked' };
+            }
+            throw bindRes.error;
+        }
+        if (!bindRes.data) {
+            const { data: current } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .maybeSingle();
+            if (!current) return { ok: false, code: 'invalid' };
+            if (String(current.telegram_id) !== telegramIdString) {
+                return { ok: false, code: 'account_already_linked' };
+            }
+            updated = current;
+        } else {
+            updated = bindRes.data;
+        }
+    } else if (cleanUsername && cleanUsername !== user.telegram_username) {
+        const refreshRes = await supabase
+            .from('users')
+            .update({ telegram_username: cleanUsername })
+            .eq('id', user.id)
+            .select()
+            .single();
+        if (!refreshRes.error && refreshRes.data) updated = refreshRes.data;
+    }
+
     // Atomic single-use claim: only one caller can flip used_at from NULL.
     const claimed = await supabase
         .from('telegram_link_tokens')
         .update({
             used_at: now.toISOString(),
             telegram_id: telegramIdString,
-            telegram_username: normalizeUsername(username),
+            telegram_username: cleanUsername,
         })
         .eq('id', row.id)
         .is('used_at', null)
@@ -256,34 +302,31 @@ const consumeLinkToken = async ({ token, telegramId, username = null, now = new 
         .maybeSingle();
 
     if (claimed.error) {
+        if (!alreadyBound) {
+            await supabase
+                .from('users')
+                .update({ telegram_id: null, telegram_username: null })
+                .eq('id', user.id)
+                .eq('telegram_id', telegramIdString);
+        }
         if (isMissingStorage(claimed.error)) return { ok: false, code: 'not_ready' };
         throw claimed.error;
     }
     if (!claimed.data) {
-        // Lost the race (or the row expired in between): report accurately.
+        // Lost the race (or the row expired in between): release the binding and report accurately.
+        if (!alreadyBound) {
+            await supabase
+                .from('users')
+                .update({ telegram_id: null, telegram_username: null })
+                .eq('id', user.id)
+                .eq('telegram_id', telegramIdString);
+        }
         const { data: latest } = await supabase
             .from('telegram_link_tokens')
             .select('used_at')
             .eq('id', row.id)
             .maybeSingle();
         return { ok: false, code: latest?.used_at ? 'used' : 'expired' };
-    }
-
-    const { data: updated, error: updateError } = await supabase
-        .from('users')
-        .update({
-            telegram_id: telegramIdString,
-            telegram_username: normalizeUsername(username),
-        })
-        .eq('id', user.id)
-        .select()
-        .single();
-
-    if (updateError) {
-        // The unique index on users.telegram_id is the final backstop when two
-        // staff consume different links with the same Telegram account at once.
-        if (updateError.code === '23505') return { ok: false, code: 'telegram_already_linked' };
-        throw updateError;
     }
 
     return { ok: true, code: 'linked', user: updated };

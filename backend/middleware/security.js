@@ -69,8 +69,21 @@ const telegramLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
+    requestWasSuccessful: (_req, res) =>
+        res.statusCode < 400 || res.locals?.telegramVerified === true,
     keyGenerator: (req) => req.ip,
     message: { message: 'Too many Telegram sign-in attempts, please try again in 15 minutes.' },
+});
+
+const telegramWebAppLinkLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) =>
+        `${req.ip}:${String(req.body?.email || req.body?.teacherId || 'class').toLowerCase()}`,
+    message: { message: 'Too many link attempts, please try again in 15 minutes.' },
 });
 
 /**
@@ -120,6 +133,7 @@ module.exports = {
     apiLimiter,
     authLimiter,
     telegramLimiter,
+    telegramWebAppLinkLimiter,
     telegramLinkLimiter,
     validate,
     isAllowedOrigin,
