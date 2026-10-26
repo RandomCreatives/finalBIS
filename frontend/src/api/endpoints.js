@@ -115,6 +115,7 @@ export const assignmentApi = {
         client.post('/assignments/auto-assign-main', { sessionsPerWeek }).then((r) => r.data),
 
     workload: () => client.get('/assignments/workload').then((r) => r.data),
+    ensureMagentaBethelhem: () => client.post('/assignments/magenta-bethelhem').then((r) => r.data),
 };
 
 export const timetableApi = {

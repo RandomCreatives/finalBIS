@@ -394,6 +394,7 @@ router.post(
 );
 
 router.get('/assignments/workload', authenticate, authorize(ROLES.ADMIN), assignments.getWorkload);
+router.post('/assignments/magenta-bethelhem', authenticate, authorize(ROLES.ADMIN), assignments.assignMagentaBethelhem);
 
 // =============================================================================
 // STUDENTS

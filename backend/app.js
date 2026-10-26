@@ -7,6 +7,7 @@ const routes = require('./routes');
 const { apiLimiter, isAllowedOrigin } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const telegramBot = require('./services/telegramBot');
+const { ensureMagentaMainTeacherOnce } = require('./services/magentaMainTeacher');
 
 const app = express();
 
@@ -82,6 +83,20 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', env: env.nodeEnv, timestamp: new Date().toISOString() });
 });
+
+// Reconcile pending 2026/2027 Year 4 - Magenta main-teacher staffing
+// (Ms. Bethelhem Girma + active account + class-teacher subjects) once per
+// server instance so deployments do not depend on a manual SQL Editor run.
+if (env.nodeEnv !== 'test') {
+    app.use('/api', async (req, res, next) => {
+        try {
+            await ensureMagentaMainTeacherOnce();
+        } catch (err) {
+            console.error('[staffing] Magenta main-teacher ensure failed:', err.message);
+        }
+        next();
+    });
+}
 
 /**
  * Keep-alive endpoint for Supabase free tier.
