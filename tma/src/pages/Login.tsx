@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Link2, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, Link2, Moon, RefreshCw, ShieldCheck, Sun } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
     TelegramAuthError,
     fetchSubjectTeachers,
     initData,
-    isDarkColorScheme,
     isTelegramEnvironment,
     linkAndSignInWithTelegram,
     signInWithTelegram,
     telegramUser,
 } from '../auth/auth';
 import type { SubjectTeacherOption } from '../auth/auth';
+import { useTheme } from '../theme/ThemeContext';
 
 type LinkMode = 'staff' | 'class' | 'subject';
 
@@ -21,6 +21,7 @@ export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login, user } = useAuth();
+    const { isDark, toggleTheme } = useTheme();
 
     const [checkingSession, setCheckingSession] = useState(() => Boolean(initData()));
     const [loading, setLoading] = useState(false);
@@ -45,7 +46,7 @@ export default function Login() {
 
     const tgUser = telegramUser();
     const insideTelegram = isTelegramEnvironment();
-    const dark = isDarkColorScheme();
+    const iconUrl = `${import.meta.env.BASE_URL}favicon.svg`;
 
     const finishLogin = useCallback(
         (token: string, nextUser: Parameters<typeof login>[1]) => {
@@ -76,22 +77,21 @@ export default function Login() {
         }
     }, [finishLogin]);
 
-    // Inside Telegram the signed initData is already available, so sign in
-    // automatically on launch.
     useEffect(() => {
         if (user || attempted.current) return;
         attempted.current = true;
         if (!initData()) {
             setCheckingSession(false);
-            setError(
-                'This staff portal opens inside Telegram. Launch it from @bisnocbot to sign in.',
-            );
+            if (!import.meta.env.DEV) {
+                setError(
+                    'This staff portal opens inside Telegram. Launch it from @bisnocbot to sign in.',
+                );
+            }
             return;
         }
         void handleTelegramSignIn();
     }, [user, handleTelegramSignIn]);
 
-    // Lazy-load Subject Teacher options only if the Subject Teacher tab is opened.
     useEffect(() => {
         if (mode !== 'subject' || subjectTeachers.length > 0 || loadingTeachers) return;
         setLoadingTeachers(true);
@@ -148,43 +148,44 @@ export default function Login() {
         ? String(tgUser.id)
         : unlinkedDetails?.telegramId || null;
 
-    const pageBg = dark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900';
-    const cardCls = dark
-        ? 'bg-slate-900/95 border border-slate-800 text-slate-100 shadow-2xl'
-        : 'bg-white border border-slate-200 text-slate-900 shadow-xl';
-    const subCardCls = dark
-        ? 'bg-slate-800/80 border border-slate-700/80'
-        : 'bg-slate-50 border border-slate-200';
-    const tabBarCls = dark ? 'bg-slate-800/90 p-1' : 'bg-slate-100 p-1';
-    const activeTabCls = dark
-        ? 'bg-blue-600 text-white shadow-sm'
-        : 'bg-white text-blue-700 shadow-sm';
-    const inactiveTabCls = dark
-        ? 'text-slate-300 hover:text-white'
-        : 'text-slate-600 hover:text-slate-900';
-    const inputCls = dark
-        ? 'w-full rounded-xl px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-        : 'w-full rounded-xl px-3.5 py-2.5 text-sm bg-white border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent';
-    const mutedCls = dark ? 'text-slate-400' : 'text-slate-500';
-
     return (
-        <div className={`min-h-screen flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom ${pageBg}`}>
-            <div className={`w-full max-w-md rounded-2xl p-6 ${cardCls}`}>
-                {/* Header */}
-                <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-base shadow-md">
-                        BIS
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 safe-area-top">
+            <div className="w-full max-w-md glass-panel p-6">
+                {/* Brand Header + Theme Toggle */}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <img
+                            src={iconUrl}
+                            alt="BIS NOC"
+                            className="w-12 h-12 rounded-2xl shadow-md shrink-0"
+                        />
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                                <h1 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white truncate">
+                                    BIS NOC Gerji
+                                </h1>
+                                <span className="inline-block w-2 h-2 rounded-full bg-[#95c11f] shrink-0" />
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                British International School · Staff Mini App
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="text-lg font-extrabold tracking-tight">BIS NOC</h1>
-                        <p className={`text-xs ${mutedCls}`}>Staff Mini App · Gerji Campus</p>
-                    </div>
+
+                    <button
+                        type="button"
+                        onClick={toggleTheme}
+                        aria-label={isDark ? 'Switch to light glass theme' : 'Switch to dark glass theme'}
+                        className="w-9 h-9 rounded-xl glass-subcard flex items-center justify-center text-slate-600 dark:text-slate-200 shrink-0 active:scale-95 transition-transform"
+                    >
+                        {isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-blue-700" />}
+                    </button>
                 </div>
 
                 {/* Verified Telegram identity badge */}
                 {tgUser && (
-                    <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 ${subCardCls}`}>
-                        <div className="w-10 h-10 rounded-full overflow-hidden bg-blue-600/15 text-blue-500 flex items-center justify-center font-bold shrink-0">
+                    <div className="mt-4 p-3 glass-subcard flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-blue-600/15 text-blue-600 dark:text-blue-300 flex items-center justify-center font-bold shrink-0">
                             {tgUser.photo_url ? (
                                 <img src={tgUser.photo_url} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -192,43 +193,40 @@ export default function Login() {
                             )}
                         </div>
                         <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold truncate">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                                 {tgUser.first_name} {tgUser.last_name || ''}
                             </p>
-                            <p className={`text-xs truncate ${mutedCls}`}>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                                 {tgUser.username ? `@${tgUser.username}` : 'Telegram account'}
                                 {tgIdLabel ? ` · id ${tgIdLabel}` : ''}
                             </p>
                         </div>
+                        <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
                     </div>
                 )}
 
-                {/* Initial auto-sign-in spinner */}
                 {checkingSession ? (
                     <div className="py-10 flex flex-col items-center justify-center gap-3">
                         <div className="h-8 w-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
-                        <p className={`text-xs font-medium ${mutedCls}`}>Signing in with Telegram…</p>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Signing in with Telegram…
+                        </p>
                     </div>
                 ) : needsLinking ? (
-                    /* One-step in-Mini-App BIS account linking */
                     <div className="mt-4">
-                        <div className={`p-3 rounded-xl flex items-start gap-2.5 ${
-                            dark
-                                ? 'bg-blue-950/60 border border-blue-800/70 text-blue-200'
-                                : 'bg-blue-50 border border-blue-200 text-blue-900'
-                        }`}>
-                            <Link2 className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" />
+                        <div className="p-3 rounded-xl flex items-start gap-2.5 bg-blue-500/10 dark:bg-blue-500/15 border border-blue-500/25 text-slate-800 dark:text-blue-100">
+                            <Link2 className="w-4 h-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
                             <div className="text-xs leading-relaxed">
                                 <p className="font-semibold">Connect your BIS NOC account (one-time)</p>
                                 <p className="opacity-85 mt-0.5">
                                     Sign in once below to link <span className="font-semibold">{tgHandle}</span>.
-                                    Next time you open the Mini App, you&apos;ll be signed in automatically.
+                                    Next time you open the Mini App, you&apos;ll sign in automatically.
                                 </p>
                             </div>
                         </div>
 
                         {/* Role switcher */}
-                        <div className={`mt-4 grid grid-cols-3 gap-1 rounded-xl text-xs font-semibold ${tabBarCls}`}>
+                        <div className="mt-4 grid grid-cols-3 gap-1 p-1 rounded-xl glass-subcard text-xs font-semibold">
                             {(
                                 [
                                     ['staff', 'Admin / Staff'],
@@ -243,8 +241,10 @@ export default function Login() {
                                         setMode(key);
                                         setError('');
                                     }}
-                                    className={`py-2 px-2 rounded-lg transition-colors text-center ${
-                                        mode === key ? activeTabCls : inactiveTabCls
+                                    className={`py-2 px-2 rounded-lg transition-all text-center ${
+                                        mode === key
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                                 >
                                     {label}
@@ -256,7 +256,7 @@ export default function Login() {
                             {mode === 'staff' && (
                                 <>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${mutedCls}`}>
+                                        <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-300">
                                             School email
                                         </label>
                                         <input
@@ -266,11 +266,11 @@ export default function Login() {
                                             placeholder="mike@bisnoc.local"
                                             autoComplete="username"
                                             required
-                                            className={inputCls}
+                                            className="glass-input"
                                         />
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${mutedCls}`}>
+                                        <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-300">
                                             Password
                                         </label>
                                         <div className="relative">
@@ -281,13 +281,13 @@ export default function Login() {
                                                 placeholder="Enter your password"
                                                 autoComplete="current-password"
                                                 required
-                                                className={`${inputCls} pr-10`}
+                                                className="glass-input pr-10"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowSecret((v) => !v)}
                                                 aria-label={showSecret ? 'Hide password' : 'Show password'}
-                                                className={`absolute inset-y-0 right-0 px-3 flex items-center ${mutedCls}`}
+                                                className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400"
                                             >
                                                 {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
@@ -298,7 +298,7 @@ export default function Login() {
 
                             {mode === 'class' && (
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${mutedCls}`}>
+                                    <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-300">
                                         Class password
                                     </label>
                                     <div className="relative">
@@ -309,18 +309,18 @@ export default function Login() {
                                             placeholder="e.g. year 4 magenta"
                                             autoComplete="current-password"
                                             required
-                                            className={`${inputCls} pr-10`}
+                                            className="glass-input pr-10"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => setShowSecret((v) => !v)}
                                             aria-label={showSecret ? 'Hide class password' : 'Show class password'}
-                                            className={`absolute inset-y-0 right-0 px-3 flex items-center ${mutedCls}`}
+                                            className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400"
                                         >
                                             {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                         </button>
                                     </div>
-                                    <p className={`mt-1.5 text-[11px] ${mutedCls}`}>
+                                    <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                                         Your class card password identifies your homeroom automatically.
                                     </p>
                                 </div>
@@ -329,14 +329,14 @@ export default function Login() {
                             {mode === 'subject' && (
                                 <>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${mutedCls}`}>
+                                        <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-300">
                                             Your name
                                         </label>
                                         <select
                                             value={teacherId}
                                             onChange={(e) => setTeacherId(e.target.value)}
                                             disabled={loadingTeachers || subjectTeachers.length === 0}
-                                            className={inputCls}
+                                            className="glass-input"
                                         >
                                             {loadingTeachers ? (
                                                 <option value="">Loading teachers…</option>
@@ -355,7 +355,7 @@ export default function Login() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${mutedCls}`}>
+                                        <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-300">
                                             Password
                                         </label>
                                         <div className="relative">
@@ -366,13 +366,13 @@ export default function Login() {
                                                 placeholder="Enter your password"
                                                 autoComplete="current-password"
                                                 required
-                                                className={`${inputCls} pr-10`}
+                                                className="glass-input pr-10"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowSecret((v) => !v)}
                                                 aria-label={showSecret ? 'Hide password' : 'Show password'}
-                                                className={`absolute inset-y-0 right-0 px-3 flex items-center ${mutedCls}`}
+                                                className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400"
                                             >
                                                 {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
@@ -382,11 +382,7 @@ export default function Login() {
                             )}
 
                             {error && (
-                                <div className={`p-2.5 rounded-xl text-xs font-medium ${
-                                    dark
-                                        ? 'bg-rose-950/70 border border-rose-800/70 text-rose-200'
-                                        : 'bg-rose-50 border border-rose-200 text-rose-700'
-                                }`}>
+                                <div className="p-2.5 rounded-xl text-xs font-medium bg-rose-500/12 dark:bg-rose-500/20 border border-rose-500/30 text-rose-700 dark:text-rose-200">
                                     {error}
                                 </div>
                             )}
@@ -401,14 +397,9 @@ export default function Login() {
                         </form>
                     </div>
                 ) : (
-                    /* Fallback when opened outside Telegram or when verification needs a retry */
                     <div className="mt-5">
                         {error && (
-                            <div className={`p-3 rounded-xl text-xs leading-relaxed mb-4 ${
-                                dark
-                                    ? 'bg-rose-950/70 border border-rose-800/70 text-rose-200'
-                                    : 'bg-rose-50 border border-rose-200 text-rose-700'
-                            }`}>
+                            <div className="p-3 rounded-xl text-xs leading-relaxed mb-4 bg-rose-500/12 dark:bg-rose-500/20 border border-rose-500/30 text-rose-700 dark:text-rose-200">
                                 {error}
                             </div>
                         )}
@@ -416,11 +407,40 @@ export default function Login() {
                             type="button"
                             onClick={handleTelegramSignIn}
                             disabled={loading || !insideTelegram}
-                            className={`btn-primary w-full gap-2 ${loading || !insideTelegram ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            className="btn-primary w-full"
                         >
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                             {loading ? 'Signing in…' : 'Sign in with Telegram'}
                         </button>
+
+                        {import.meta.env.DEV && !insideTelegram && (
+                            <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-white/10 space-y-2">
+                                <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
+                                    Browser preview outside Telegram — explore the new glass UI &amp; 5-tab layout:
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setNeedsLinking(true)}
+                                        className="btn-glass w-full !py-2.5"
+                                    >
+                                        Preview Link Card
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const { DEV_PREVIEW_TOKEN, DEV_PREVIEW_USER } = await import(
+                                                '../dev/previewMock'
+                                            );
+                                            finishLogin(DEV_PREVIEW_TOKEN, DEV_PREVIEW_USER);
+                                        }}
+                                        className="btn-primary w-full !py-2.5 !text-xs"
+                                    >
+                                        Open 5-Tab App
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

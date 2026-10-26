@@ -80,6 +80,8 @@ interface TelegramWebApp {
     disableVerticalSwipes?: () => void;
     setHeaderColor?: (color: string) => void;
     setBackgroundColor?: (color: string) => void;
+    onEvent?: (eventType: string, handler: () => void) => void;
+    offEvent?: (eventType: string, handler: () => void) => void;
 }
 
 declare global {
@@ -101,10 +103,11 @@ export function isTelegramEnvironment(): boolean {
     return Boolean(getWebApp()?.initData);
 }
 
-/** Whether Telegram is currently rendering in dark mode. */
+/** Whether Telegram (or system browser outside Telegram) is rendering in dark mode. */
 export function isDarkColorScheme(): boolean {
     const webApp = getWebApp();
     if (webApp?.colorScheme === 'dark') return true;
+    if (webApp?.colorScheme === 'light' && webApp.initData) return false;
     const bg = webApp?.themeParams?.bg_color;
     if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
         const r = parseInt(bg.slice(1, 3), 16);
@@ -112,6 +115,9 @@ export function isDarkColorScheme(): boolean {
         const b = parseInt(bg.slice(5, 7), 16);
         // Perceived luminance < 128 indicates a dark surface.
         return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+    }
+    if (typeof window !== 'undefined' && window.matchMedia) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
 }

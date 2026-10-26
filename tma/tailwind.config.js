@@ -1,8 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+    darkMode: 'class',
     content: [
-        "./index.html",
-        "./src/**/*.{js,ts,jsx,tsx}",
+        './index.html',
+        './src/**/*.{js,ts,jsx,tsx}',
     ],
     theme: {
         extend: {
@@ -12,30 +13,21 @@ export default {
                     100: '#dbeafe',
                     500: '#3b82f6',
                     600: '#2563eb',
+                    700: '#1d4ed8',
+                    800: '#1e40af',
                     900: '#1e3a8a',
+                    950: '#081642',
+                    lime: '#95c11f',
                 },
-                glass: {
-                    bg: 'rgba(255, 255, 255, 0.65)',
-                    border: 'rgba(255, 255, 255, 0.5)',
-                }
-            },
-            backdropBlur: {
-                xs: '2px',
             },
             fontFamily: {
-                sans: ['Inter', 'system-ui', 'sans-serif'],
+                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
             },
             boxShadow: {
-                'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.12)',
+                glass: '0 12px 32px -8px rgba(15, 41, 122, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.90)',
+                'glass-dark': '0 16px 40px -10px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14)',
             },
         },
     },
-    safelist: [
-        'bg-blue-600', 'text-blue-600', 'bg-blue-100', 'bg-blue-50', 'text-blue-900',
-        'text-blue-400', 'bg-blue-500', 'ring-blue-500',
-        'bg-white/40', 'bg-white/50', 'bg-white/60', 'bg-white/80',
-        'border-white/40', 'border-white/50',
-        'text-white', 'bg-black/50', 'bg-transparent',
-    ],
     plugins: [],
-}
+};

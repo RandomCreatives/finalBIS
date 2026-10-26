@@ -173,3 +173,25 @@ describe('student transfer scoping', () => {
         assert.equal(res.status, 403);
     });
 });
+
+describe('GET /api/classes?mine=true', () => {
+    test('narrows a main teacher or subject teacher to assigned classes while admin sees all', async () => {
+        const mainRes = await request(app)
+            .get('/api/classes?mine=true')
+            .auth(tokenFor(MAIN_A));
+        assert.equal(mainRes.status, 200);
+        assert.deepEqual(mainRes.body.classes.map((c) => c.id), [CLASS_A]);
+
+        const subjRes = await request(app)
+            .get('/api/classes?mine=true')
+            .auth(tokenFor(ENG_T));
+        assert.equal(subjRes.status, 200);
+        assert.deepEqual(subjRes.body.classes.map((c) => c.id), [CLASS_A]);
+
+        const adminRes = await request(app)
+            .get('/api/classes?mine=true')
+            .auth(tokenFor(ADMIN));
+        assert.equal(adminRes.status, 200);
+        assert.equal(adminRes.body.classes.length, 2);
+    });
+});

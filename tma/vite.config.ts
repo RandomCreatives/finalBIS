@@ -7,6 +7,22 @@ export default defineConfig(({ mode }) => {
 
     return {
         base: '/tma/',
+        plugins: [
+            {
+                name: 'redirect-root-to-tma',
+                configureServer(server) {
+                    server.middlewares.use((req, res, next) => {
+                        if (req.url === '/' || req.url === '') {
+                            res.statusCode = 302;
+                            res.setHeader('Location', '/tma/');
+                            res.end();
+                            return;
+                        }
+                        next();
+                    });
+                },
+            },
+        ],
         build: {
             outDir: 'dist',
             emptyOutDir: true,
