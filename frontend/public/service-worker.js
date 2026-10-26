@@ -1,8 +1,9 @@
-const CACHE_NAME = 'bis-gerji-shell-v5';
+const CACHE_NAME = 'bis-gerji-shell-v6';
 const APP_SHELL = [
     '/',
     '/index.html',
     '/manifest.json',
+    '/favicon.svg',
     '/favicon.ico',
     '/bis-logo.png',
     '/pwa-icon-192.png',

@@ -2,6 +2,7 @@ const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
 const { NotFoundError, ConflictError, asyncHandler } = require('../utils/errors');
 const { isFixtureSubject } = require('../utils/subjects');
+const { teacherClassIds } = require('../utils/classAccess');
 
 const shapeClass = (c, staff = [], studentCount = 0) => ({
     id: c.id,
@@ -38,11 +39,25 @@ const listClasses = asyncHandler(async (req, res) => {
         // No year configured yet — classes still list, just without staffing.
     }
 
-    const { data: classes, error } = await supabase
+    let allowedIds = null;
+    if (req.query.mine === 'true' && req.user.role !== 'admin') {
+        allowedIds = await teacherClassIds(req);
+        if (allowedIds.length === 0) {
+            return res.json({ academicYearId: yearId, classes: [] });
+        }
+    }
+
+    let query = supabase
         .from('classes')
         .select('id, name, year_level, capacity')
         .eq('school_id', req.user.school_id)
         .order('name');
+
+    if (allowedIds) {
+        query = query.in('id', allowedIds);
+    }
+
+    const { data: classes, error } = await query;
 
     if (error) throw error;
 
