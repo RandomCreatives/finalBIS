@@ -612,6 +612,9 @@ const telegramWebApp = asyncHandler(async (req, res) => {
             'Telegram sign-in data could not be verified. Reopen the Mini App and try again.',
         );
     }
+    // Signature + timestamp verified: do not burn the shared school Wi-Fi IP
+    // rate-limit budget when an unlinked staff member opens the Mini App.
+    res.locals.telegramVerified = true;
 
     const user = await findStaffByTelegramId(identity.telegramId);
     if (!user) {
@@ -630,6 +633,209 @@ const telegramWebApp = asyncHandler(async (req, res) => {
         .then(({ error }) => { if (error) console.error('[auth] Failed to update telegram login:', error.message); });
 
     res.json({ token: signToken(user), user: publicUser(user) });
+});
+
+/**
+ * POST /api/auth/telegram-webapp/link
+ *
+ * One-step sign-in + Telegram binding directly inside the Mini App.
+ *
+ * When an unlinked staff member opens `/tma/`, Telegram has already supplied a
+ * cryptographically signed `initData` payload proving which Telegram account
+ * opened the Mini App. Instead of bouncing them out to a desktop browser and
+ * back through a bot deep-link, they authenticate once right inside the Mini
+ * App using any of the school's three credential paths:
+ *   1. Staff / Admin email + password (`email` + `password`)
+ *   2. Main Teacher class card password (`classPassword`, e.g. "year 4 magenta")
+ *   3. Subject Teacher card (`teacherId` + `password`)
+ *
+ * On success we bind `users.telegram_id` + `users.telegram_username` and
+ * immediately issue a JWT session so every subsequent Mini App launch signs in
+ * automatically with zero taps.
+ */
+const DUMMY_PASSWORD_HASH = '$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidin';
+
+const telegramWebAppLink = asyncHandler(async (req, res) => {
+    if (!env.telegram.botToken) {
+        throw new BadRequestError('Telegram is not configured on this server.');
+    }
+
+    const { init_data, email, password, classPassword, teacherId } = req.body || {};
+    if (typeof init_data !== 'string' || init_data.trim() === '') {
+        throw new BadRequestError('init_data is required');
+    }
+    if (init_data.length > TELEGRAM_INIT_DATA_MAX_LENGTH) {
+        throw new BadRequestError('init_data is too large');
+    }
+
+    const identity = verifyTelegramInitData(init_data, env.telegram.botToken);
+    if (!identity) {
+        throw new UnauthorizedError(
+            'Telegram sign-in data could not be verified. Reopen the Mini App and try again.'
+        );
+    }
+
+    let user = null;
+
+    if (typeof classPassword === 'string' && classPassword.trim() !== '') {
+        const { data: school, error: schoolError } = await supabase
+            .from('schools')
+            .select('id')
+            .maybeSingle();
+        if (schoolError) throw schoolError;
+        if (!school) throw new NotFoundError('School not found');
+
+        const { data: classes, error: classesError } = await supabase
+            .from('classes')
+            .select('id, name')
+            .eq('school_id', school.id);
+        if (classesError) throw classesError;
+
+        const normalized = normalizeClassPassword(classPassword);
+        const matched = (classes || []).find(
+            (klass) => normalizeClassPassword(klass.name) === normalized
+        );
+        if (!matched) {
+            throw new UnauthorizedError('Incorrect class password');
+        }
+
+        const { data: year, error: yearError } = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('school_id', school.id)
+            .eq('is_current', true)
+            .maybeSingle();
+        if (yearError) throw yearError;
+        if (!year) throw new NotFoundError('No current academic year is set');
+
+        const { data: seat, error: seatError } = await supabase
+            .from('class_staff')
+            .select('user_id')
+            .eq('academic_year_id', year.id)
+            .eq('class_id', matched.id)
+            .eq('position', 'main')
+            .maybeSingle();
+        if (seatError) throw seatError;
+        if (!seat) {
+            throw new UnauthorizedError('This class has no main teacher assigned yet');
+        }
+
+        const { data: mainUser, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', seat.user_id)
+            .maybeSingle();
+        if (userError) throw userError;
+        if (!mainUser) throw new UnauthorizedError('Teacher account not found');
+        user = mainUser;
+    } else if (typeof teacherId === 'string' && teacherId.trim() !== '') {
+        if (typeof password !== 'string' || password === '') {
+            throw new BadRequestError('Password is required');
+        }
+
+        const { data: school, error: schoolError } = await supabase
+            .from('schools')
+            .select('id')
+            .maybeSingle();
+        if (schoolError) throw schoolError;
+        if (!school) throw new NotFoundError('School not found');
+
+        const { data: subjUser, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('school_id', school.id)
+            .eq('id', teacherId.trim())
+            .maybeSingle();
+        if (userError) throw userError;
+
+        const passwordOk = await bcrypt.compare(
+            password,
+            subjUser?.password_hash || DUMMY_PASSWORD_HASH
+        );
+        if (!subjUser || !passwordOk) {
+            throw new UnauthorizedError('Incorrect password for that teacher');
+        }
+        if (subjUser.role !== 'subject_teacher') {
+            throw new UnauthorizedError('That card is not a subject-teacher account');
+        }
+        user = subjUser;
+    } else if (typeof email === 'string' && email.trim() !== '') {
+        if (typeof password !== 'string' || password === '') {
+            throw new BadRequestError('Password is required');
+        }
+
+        const cleanEmail = email.trim().toLowerCase();
+        const { data: emailUser, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .ilike('email', cleanEmail)
+            .maybeSingle();
+        if (userError) throw userError;
+
+        const passwordOk = await bcrypt.compare(
+            password,
+            emailUser?.password_hash || DUMMY_PASSWORD_HASH
+        );
+        if (!emailUser || !passwordOk) {
+            throw new UnauthorizedError('Invalid email or password');
+        }
+        user = emailUser;
+    } else {
+        throw new BadRequestError(
+            'Enter your email and password, class password, or select your teacher card.'
+        );
+    }
+
+    if (!user.is_active) {
+        throw new UnauthorizedError('Account has been deactivated');
+    }
+
+    // Ensure this Telegram account is not already bound to a different staff member.
+    const existingOwner = await findStaffByTelegramId(identity.telegramId);
+    if (existingOwner && existingOwner.id !== user.id) {
+        throw new ConflictError(
+            'This Telegram account is already linked to another staff member. Unlink it there first.'
+        );
+    }
+
+    // Ensure the target BIS NOC account is not already bound to a different Telegram account.
+    if (
+        user.telegram_id !== null &&
+        user.telegram_id !== undefined &&
+        String(user.telegram_id) !== String(identity.telegramId)
+    ) {
+        throw new ConflictError(
+            'This staff account is already linked to a different Telegram account. Unlink it in Profile / Settings → Telegram first.'
+        );
+    }
+
+    const patch = {
+        telegram_id: identity.telegramId,
+        telegram_username: identity.username || null,
+        last_login_at: new Date().toISOString(),
+    };
+
+    const { data: updated, error: updateError } = await supabase
+        .from('users')
+        .update(patch)
+        .eq('id', user.id)
+        .select('*')
+        .single();
+
+    if (updateError) {
+        if (updateError.code === '23505') {
+            throw new ConflictError(
+                'This Telegram account is already linked to another staff member.'
+            );
+        }
+        throw updateError;
+    }
+
+    res.json({
+        token: signToken(updated),
+        user: publicUser(updated),
+        linked: true,
+    });
 });
 
 /**
@@ -952,6 +1158,7 @@ module.exports = {
     gmailVerifyCode,
     telegramLogin,
     telegramWebApp,
+    telegramWebAppLink,
     telegramConfig,
     linkTelegram,
     unlinkTelegram,

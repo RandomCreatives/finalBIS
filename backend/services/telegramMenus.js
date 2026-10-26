@@ -33,6 +33,7 @@ const MAX_MESSAGE_CHARS = 4096;
 
 const btn = (text, callback_data) => ({ text, callback_data });
 const urlBtn = (text, url) => ({ text, url });
+const webAppBtn = (text, url) => ({ text, web_app: { url } });
 const kb = (rows) => ({ inline_keyboard: rows.filter((row) => row.length > 0) });
 
 /** Shorten a label without splitting a word awkwardly. */
@@ -111,7 +112,7 @@ const rangeLabel = (p) => (p.pages > 1 ? `showing ${p.from}–${p.to} of ${p.tot
  * Top-level menu. Two rows of two keeps every destination one tap away
  * without the vertical scroll the old one-per-row menu caused.
  */
-function buildMainMenu({ firstName = 'there', isTeacher = true, webAppUrl } = {}) {
+function buildMainMenu({ firstName = 'there', isTeacher = true, webAppUrl, miniAppUrl } = {}) {
     const text = `👋 Hello ${firstName}!\n\nWhat would you like to do?`;
 
     const rows = [
@@ -119,7 +120,13 @@ function buildMainMenu({ firstName = 'there', isTeacher = true, webAppUrl } = {}
     ];
     if (isTeacher) rows.push([btn('✅ Attendance', 'at'), btn('📢 Notices', 'nt')]);
     else rows.push([btn('📢 Notices', 'nt')]);
-    if (webAppUrl) rows.push([urlBtn('🌐 Open the web app', webAppUrl)]);
+    if (webAppUrl && miniAppUrl) {
+        rows.push([urlBtn('🌐 Open the web app', webAppUrl), webAppBtn('🌐 Mini App', miniAppUrl)]);
+    } else if (webAppUrl) {
+        rows.push([urlBtn('🌐 Open the web app', webAppUrl)]);
+    } else if (miniAppUrl) {
+        rows.push([webAppBtn('🌐 Open Mini App', miniAppUrl)]);
+    }
 
     return { text, replyMarkup: kb(rows) };
 }
@@ -310,6 +317,7 @@ module.exports = {
     MAX_MESSAGE_CHARS,
     btn,
     urlBtn,
+    webAppBtn,
     kb,
     trunc,
     callbackBytes,

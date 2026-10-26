@@ -13,8 +13,9 @@
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const bcrypt = require('bcryptjs');
 
-const { reset } = require('./helpers');
+const { reset, rowsOf } = require('./helpers');
 const request = require('./request');
 const app = require('../app');
 const {
@@ -342,3 +343,189 @@ describe('GET /api/auth/telegram-config', () => {
         assert.equal(serialized.includes(BOT_TOKEN.split(':')[1]), false);
     });
 });
+
+describe('POST /api/auth/telegram-webapp/link (one-step in-Mini-App sign-in & link)', () => {
+    const YEAR = '9a6ff1d0-6d70-4a38-b6e7-c1f4f3dc63aa';
+    const CLASS_MAGENTA = '938efd5f-c75a-45e2-bcb5-c08dd0252cd1';
+    const MAIN_TEACHER_ID = '82e61fbc-9942-415c-909c-f408360a2ef4';
+    const SUBJ_TEACHER_ID = '343d1a63-716b-492c-88ca-f466c50aea97';
+    const MIKE_TG_ID = 5141729620;
+    const STAFF_PW_HASH = bcrypt.hashSync('CorrectHorse10!', 4);
+
+    const seedUnlinkedSchool = (userOverrides = {}) =>
+        reset({
+            schools: [{ id: SCHOOL, name: 'BIS NOC Gerji' }],
+            academic_years: [{ id: YEAR, school_id: SCHOOL, name: '2026/2027', is_current: true }],
+            classes: [{ id: CLASS_MAGENTA, school_id: SCHOOL, name: 'Year 4 - Magenta', year_level: 4, capacity: 30 }],
+            class_staff: [
+                {
+                    id: 'cs-mag',
+                    school_id: SCHOOL,
+                    academic_year_id: YEAR,
+                    class_id: CLASS_MAGENTA,
+                    user_id: MAIN_TEACHER_ID,
+                    position: 'main',
+                },
+            ],
+            users: [
+                {
+                    id: ADMIN,
+                    school_id: SCHOOL,
+                    name: 'Mr. Mike (Coordinator)',
+                    email: 'mike@bisnoc.local',
+                    password_hash: STAFF_PW_HASH,
+                    role: 'admin',
+                    is_active: true,
+                    telegram_id: null,
+                    telegram_username: null,
+                    ...userOverrides.admin,
+                },
+                {
+                    id: MAIN_TEACHER_ID,
+                    school_id: SCHOOL,
+                    name: 'Bethelhem Girma',
+                    email: 'bethelhem.girma@bisnoc.local',
+                    password_hash: STAFF_PW_HASH,
+                    role: 'main_teacher',
+                    is_active: true,
+                    telegram_id: null,
+                    telegram_username: null,
+                    ...userOverrides.main,
+                },
+                {
+                    id: SUBJ_TEACHER_ID,
+                    school_id: SCHOOL,
+                    name: 'Michael Okwara',
+                    email: 'michael.okwara@bisnoc.local',
+                    password_hash: STAFF_PW_HASH,
+                    role: 'subject_teacher',
+                    is_active: true,
+                    telegram_id: null,
+                    telegram_username: null,
+                    ...userOverrides.subject,
+                },
+            ],
+        });
+
+    test('links an unlinked admin via email + password and enables zero-tap Mini App sign-in afterward', async () => {
+        seedUnlinkedSchool();
+        const mikeInitData = signInitData({
+            user: JSON.stringify({ id: MIKE_TG_ID, first_name: 'Mike', username: 'Mike_Fikadu' }),
+        });
+
+        // Before linking, /telegram-webapp returns 401 TELEGRAM_NOT_LINKED.
+        const initial = await request(app)
+            .post('/api/auth/telegram-webapp')
+            .send({ init_data: mikeInitData });
+        assert.equal(initial.status, 401);
+        assert.equal(initial.body.code, 'TELEGRAM_NOT_LINKED');
+
+        // Link right inside the Mini App with email + password.
+        const linked = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({
+                init_data: mikeInitData,
+                email: 'Mike@bisnoc.local',
+                password: 'CorrectHorse10!',
+            });
+
+        assert.equal(linked.status, 200);
+        assert.equal(linked.body.linked, true);
+        assert.ok(linked.body.token);
+        assert.equal(linked.body.user.email, 'mike@bisnoc.local');
+        assert.equal(String(linked.body.user.telegramId), String(MIKE_TG_ID));
+        assert.equal(linked.body.user.telegramUsername, 'Mike_Fikadu');
+
+        // Subsequent Mini App launches sign in automatically with zero credentials.
+        const subsequent = await request(app)
+            .post('/api/auth/telegram-webapp')
+            .send({ init_data: mikeInitData });
+        assert.equal(subsequent.status, 200);
+        assert.equal(subsequent.body.user.id, ADMIN);
+    });
+
+    test('links a Main Teacher via classPassword ("year 4 magenta")', async () => {
+        seedUnlinkedSchool();
+        const tgInit = signInitData({
+            user: JSON.stringify({ id: 777888999, first_name: 'Bethelhem', username: 'bethelhem_g' }),
+        });
+
+        const res = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({ init_data: tgInit, classPassword: 'year 4 magenta' });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.user.id, MAIN_TEACHER_ID);
+        assert.equal(String(rowsOf('users').find((u) => u.id === MAIN_TEACHER_ID).telegram_id), '777888999');
+    });
+
+    test('links a Subject Teacher via teacherId + password', async () => {
+        seedUnlinkedSchool();
+        const tgInit = signInitData({
+            user: JSON.stringify({ id: 444555666, first_name: 'Michael', username: 'mike_eng' }),
+        });
+
+        const res = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({
+                init_data: tgInit,
+                teacherId: SUBJ_TEACHER_ID,
+                password: 'CorrectHorse10!',
+            });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.user.id, SUBJ_TEACHER_ID);
+        assert.equal(String(rowsOf('users').find((u) => u.id === SUBJ_TEACHER_ID).telegram_id), '444555666');
+    });
+
+    test('rejects invalid credentials, forged initData, and cross-account binding conflicts', async () => {
+        seedUnlinkedSchool({ subject: { telegram_id: String(TELEGRAM_ID) } });
+
+        // Wrong password does not bind anything.
+        const badPw = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({
+                init_data: signInitData({ user: JSON.stringify({ id: 123123123, first_name: 'A' }) }),
+                email: 'mike@bisnoc.local',
+                password: 'WrongPassword!',
+            });
+        assert.equal(badPw.status, 401);
+        assert.equal(rowsOf('users').find((u) => u.id === ADMIN).telegram_id, null);
+
+        // Forged initData is rejected even with valid credentials.
+        const params = new URLSearchParams(signInitData());
+        params.set('hash', '0'.repeat(64));
+        const forged = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({
+                init_data: params.toString(),
+                email: 'mike@bisnoc.local',
+                password: 'CorrectHorse10!',
+            });
+        assert.equal(forged.status, 401);
+
+        // Telegram ID already bound to another staff member -> 409 Conflict.
+        const takenTg = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({
+                init_data: signInitData(), // uses TELEGRAM_ID, owned by SUBJ_TEACHER_ID
+                email: 'mike@bisnoc.local',
+                password: 'CorrectHorse10!',
+            });
+        assert.equal(takenTg.status, 409);
+        assert.match(takenTg.body.message, /already linked to another staff member/i);
+
+        // Staff account already bound to a different Telegram ID -> 409 Conflict.
+        seedUnlinkedSchool({ admin: { telegram_id: '999000111' } });
+        const takenAccount = await request(app)
+            .post('/api/auth/telegram-webapp/link')
+            .send({
+                init_data: signInitData(),
+                email: 'mike@bisnoc.local',
+                password: 'CorrectHorse10!',
+            });
+        assert.equal(takenAccount.status, 409);
+        assert.match(takenAccount.body.message, /different Telegram account/i);
+    });
+});
+

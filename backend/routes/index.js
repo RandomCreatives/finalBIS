@@ -3,7 +3,14 @@ const multer = require('multer');
 const { body, param, query } = require('express-validator');
 
 const { authenticate, authorize, ROLES, TEACHER_ROLES } = require('../middleware/auth');
-const { authLimiter, telegramLimiter, telegramLinkLimiter, validate, uploadSingle } = require('../middleware/security');
+const {
+    authLimiter,
+    telegramLimiter,
+    telegramWebAppLinkLimiter,
+    telegramLinkLimiter,
+    validate,
+    uploadSingle,
+} = require('../middleware/security');
 
 const auth = require('../controllers/auth.controller');
 const pub = require('../controllers/public.controller');
@@ -141,6 +148,22 @@ router.post(
         .withMessage('init_data must be a non-empty string of at most 8192 characters'),
     validate,
     auth.telegramWebApp,
+);
+
+router.post(
+    '/auth/telegram-webapp/link',
+    telegramWebAppLinkLimiter,
+    body('init_data')
+        .isString()
+        .withMessage('init_data is required')
+        .isLength({ min: 1, max: 8192 })
+        .withMessage('init_data must be a non-empty string of at most 8192 characters'),
+    body('email').optional({ values: 'falsy' }).isEmail().withMessage('A valid email is required'),
+    body('password').optional({ values: 'falsy' }).isString(),
+    body('classPassword').optional({ values: 'falsy' }).isString(),
+    body('teacherId').optional({ values: 'falsy' }).isUUID().withMessage('teacherId must be a valid id'),
+    validate,
+    auth.telegramWebAppLink,
 );
 
 // Public on purpose: the login page reads it to render the widget. It only
