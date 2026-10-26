@@ -11,9 +11,8 @@
 --        email bethelhem.girma@bisnoc.local   (same first.last pattern the
 --              staff import uses)
 --        role  main_teacher, active
---        first password BisNoc2026! — the standard basic credential (bcrypt
---        hash identical to migrations 012 and 030). She should change it
---        under Settings after signing in.
+--        first password "year 4 magenta" — the class card password every main
+--        teacher starts (and resets) to. She can change it under Settings.
 --   2. Makes her the class's single main teacher in class_staff.
 --   3. Hands her the class-teacher subject seats in Magenta (Mathematics,
 --      Science, Global Citizenship, Registration — every seat whose subject
@@ -63,9 +62,10 @@
 
 DO $migration$
 DECLARE
-    -- bcrypt hash of BisNoc2026!, the basic credential every class-teacher
-    -- account starts (and resets) to — same hash as migrations 012 and 030.
-    c_basic_hash CONSTANT TEXT := '$2a$12$jVvHpVG5qszwKEk8k0suCea/J50mLYP071GLFkw9/NmQwOl.9ppQe';
+    -- bcrypt hash of 'year 4 magenta', the class card credential every main
+    -- teacher starts (and resets) to.
+    c_basic_hash CONSTANT TEXT := '$2a$12$.gPYAFdP7YCuzg4dnVPfqeBQHmmzDaHemVfUdQ6SEeESqP10mFO9u';
+    c_legacy_hash CONSTANT TEXT := '$2a$12$jVvHpVG5qszwKEk8k0suCea/J50mLYP071GLFkw9/NmQwOl.9ppQe';
     c_class      CONSTANT TEXT := 'Year 4 - Magenta';
     c_teacher    CONSTANT TEXT := 'Bethelhem Girma';
     c_email      CONSTANT TEXT := 'bethelhem.girma@bisnoc.local';
@@ -139,7 +139,7 @@ BEGIN
         VALUES (v_school, c_teacher, c_email, c_basic_hash, 'main_teacher', TRUE)
         RETURNING id, role INTO v_new, v_new_role;
 
-        RAISE NOTICE 'Created the staff account "%" <%>, role main_teacher, first password BisNoc2026! — she should change it under Settings.', c_teacher, c_email;
+        RAISE NOTICE 'Created the staff account "%" <%>, role main_teacher, first password "year 4 magenta" — she can change it under Settings.', c_teacher, c_email;
     ELSE
         IF v_new_role NOT IN ('main_teacher', 'admin') THEN
             IF v_new_role IN ('subject_teacher', 'assistant_teacher') THEN
@@ -155,6 +155,11 @@ BEGIN
         IF NOT (SELECT is_active FROM users WHERE id = v_new) THEN
             UPDATE users SET is_active = TRUE WHERE id = v_new;
             RAISE NOTICE 'Re-activated the staff account "%".', c_teacher;
+        END IF;
+
+        IF (SELECT password_hash FROM users WHERE id = v_new) = c_legacy_hash THEN
+            UPDATE users SET password_hash = c_basic_hash WHERE id = v_new;
+            RAISE NOTICE 'Updated "%" from legacy placeholder password to class card password ("year 4 magenta").', c_teacher;
         END IF;
 
         RAISE NOTICE 'Using the existing staff account for "%".', c_teacher;

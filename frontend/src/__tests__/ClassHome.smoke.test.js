@@ -50,24 +50,54 @@ describe('ClassHome dashboard', () => {
         expect(buttons[buttons.length - 1]).toBe(profile);
     });
 
-    test('sidebar groups: Class Room Management, then Admin Communications — greyed "soon" until launch', () => {
+    test('sidebar groups: Class Room Management order, visual dividers, Report Cards & Admin Communications greyed "soon"', () => {
         renderDash('year-3-blue');
         const nav = screen.getByTestId('side-nav');
         expect(screen.getByTestId('side-nav-group-0'))
             .toHaveTextContent('Class Room Management');
         expect(screen.getByTestId('side-nav-group-1'))
             .toHaveTextContent('Admin Communications');
-        // Store / Request / Conduct stay visible but greyed with a "soon"
-        // chip while the channels are introduced one by one (2026-09-22).
+
+        // Exact order inside Class Room Management + Admin Communications + Profile
+        const buttons = within(nav).getAllByRole('button');
+        expect(buttons.map((b) => b.textContent.trim())).toEqual([
+            'Overview',
+            'Students',
+            'Attendance',
+            'Marksheets',
+            'Timetable',
+            'Planning',
+            'Calendar',
+            'Report Cardssoon',
+            'Storesoon',
+            'Requestsoon',
+            'Conduct reportsoon',
+            'Profile',
+        ]);
+
+        // Report Cards and Admin Communications stay visible but greyed with a "soon" chip
+        const reportCards = within(nav).getByRole('button', { name: /^Report Cards soon$/ });
         const store = within(nav).getByRole('button', { name: /^Store soon$/ });
         const request = within(nav).getByRole('button', { name: /^Request soon$/ });
         const conduct = within(nav).getByRole('button', { name: /^Conduct report soon$/ });
-        for (const btn of [store, request, conduct]) expect(btn).toBeDisabled();
-        // group order in the DOM: CRM group label comes before Admin Comms
-        expect(nav.textContent.indexOf('Class Room Management'))
-            .toBeLessThan(nav.textContent.indexOf('Admin Communications'));
-        expect(nav.textContent.indexOf('Admin Communications'))
-            .toBeLessThan(nav.textContent.indexOf('Store'));
+        for (const btn of [reportCards, store, request, conduct]) expect(btn).toBeDisabled();
+
+        // Visual separator lines: after Timetable, and framing Report Cards
+        const afterTimetable = within(nav).getByTestId('side-nav-divider-after-timetable');
+        const beforeReportCards = within(nav).getByTestId('side-nav-divider-before-reportCards');
+        const afterReportCards = within(nav).getByTestId('side-nav-divider-after-reportCards');
+
+        const timetableBtn = within(nav).getByRole('button', { name: 'Timetable' });
+        const planningBtn = within(nav).getByRole('button', { name: 'Planning' });
+        const calendarBtn = within(nav).getByRole('button', { name: 'Calendar' });
+        const adminGroup = within(nav).getByTestId('side-nav-group-1');
+
+        expect(timetableBtn.compareDocumentPosition(afterTimetable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(afterTimetable.compareDocumentPosition(planningBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(calendarBtn.compareDocumentPosition(beforeReportCards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(beforeReportCards.compareDocumentPosition(reportCards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(reportCards.compareDocumentPosition(afterReportCards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(afterReportCards.compareDocumentPosition(adminGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     test('redirects to /classes when no session', () => {

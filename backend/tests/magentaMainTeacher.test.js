@@ -1,11 +1,14 @@
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 
+const bcrypt = require('bcryptjs');
+
 const { reset, rowsOf, supabaseStub } = require('./helpers');
 const request = require('./request');
 const app = require('../app');
 const { signToken } = require('../middleware/auth');
 const {
+    BASIC_PASSWORD_HASH,
     ensureMagentaMainTeacher,
     ensureMagentaMainTeacherOnce,
     resetMagentaEnsureCache,
@@ -103,10 +106,10 @@ describe('ensureMagentaMainTeacher — Ms. Bethelhem Girma account + Year 4 - Ma
         const matSlot = rowsOf('timetable_slots').find((t) => t.id === 'tt-1');
         assert.equal(matSlot.teacher_id, result.user.id);
 
-        // 1) Staff email + password sign-in works immediately with BisNoc2026!
+        // 1) Staff email + password sign-in works immediately with 'year 4 magenta'.
         const emailLogin = await request(app)
             .post('/api/auth/login')
-            .send({ email: 'bethelhem.girma@bisnoc.local', password: 'BisNoc2026!' });
+            .send({ email: 'bethelhem.girma@bisnoc.local', password: 'year 4 magenta' });
         assert.equal(emailLogin.status, 200);
         assert.equal(emailLogin.body.user.name, 'Bethelhem Girma');
         assert.equal(emailLogin.body.user.isActive, true);
@@ -124,6 +127,67 @@ describe('ensureMagentaMainTeacher — Ms. Bethelhem Girma account + Year 4 - Ma
             .send({ password: 'year 4 magenta' });
         assert.equal(pwaLogin.status, 200);
         assert.equal(pwaLogin.body.user.name, 'Bethelhem Girma');
+    });
+
+    test('syncs all seated main teachers to their class card passwords on rollout, preserves admin passwords, and respects later custom passwords on cold restarts', async () => {
+        const BLUE = '3a111111-2222-4333-8444-555555555555';
+        const INDIGO = '4b111111-2222-4333-8444-555555555555';
+        const blueTeacher = mkUser('10000000-0000-4000-8000-000000000001', 'main_teacher', 'Hanna Tesfaye', {
+            email: 'hanna.tesfaye@bisnoc.local',
+            password_hash: '$2a$12$randomSeededHashFromMigration009xxxxxxxxxxxxxxxxxxxxx',
+        });
+        const violetTeacher = mkUser('10000000-0000-4000-8000-000000000002', 'main_teacher', 'Selamawit Bekele', {
+            email: 'selamawit.bekele@bisnoc.local',
+            password_hash: BASIC_PASSWORD_HASH,
+        });
+        // Existing Bethelhem from PR #158 holding BASIC_PASSWORD_HASH triggers the one-time rollout.
+        const legacyBethelhem = mkUser(EXISTING_BETHELHEM_ID, 'main_teacher', 'Bethelhem Girma', {
+            email: 'bethelhem.girma@bisnoc.local',
+            password_hash: BASIC_PASSWORD_HASH,
+        });
+
+        const tables = baseTables({
+            users: [ADMIN, ABIGIA, ENG_TEACHER, blueTeacher, violetTeacher, legacyBethelhem],
+        });
+        tables.classes.push(
+            { id: BLUE, school_id: SCHOOL, name: 'Year 3 - Blue', year_level: 3, capacity: 30 },
+            { id: INDIGO, school_id: SCHOOL, name: 'Year 3 - Indigo', year_level: 3, capacity: 30 }
+        );
+        tables.class_staff = [
+            { id: 'cs-mag-main', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, user_id: EXISTING_BETHELHEM_ID, position: 'main' },
+            { id: 'cs-blue-main', school_id: SCHOOL, academic_year_id: YEAR, class_id: BLUE, user_id: blueTeacher.id, position: 'main' },
+            { id: 'cs-vio-main', school_id: SCHOOL, academic_year_id: YEAR, class_id: VIOLET, user_id: violetTeacher.id, position: 'main' },
+            // Admin temporarily covering Indigo must never have their admin password overwritten.
+            { id: 'cs-ind-main', school_id: SCHOOL, academic_year_id: YEAR, class_id: INDIGO, user_id: ADMIN.id, position: 'main' },
+        ];
+        reset(tables);
+
+        const firstRun = await ensureMagentaMainTeacher({ mode: 'auto' });
+        assert.equal(firstRun.status, 'applied');
+        assert.equal(firstRun.passwordsUpdated, 2, 'Blue + Violet synced (plus Bethelhem upgraded)');
+
+        // Every seated main_teacher can now sign in via email with their class card password.
+        for (const [email, password] of [
+            ['bethelhem.girma@bisnoc.local', 'year 4 magenta'],
+            ['hanna.tesfaye@bisnoc.local', 'year 3 blue'],
+            ['selamawit.bekele@bisnoc.local', 'year 4 violet'],
+        ]) {
+            const loginRes = await request(app).post('/api/auth/login').send({ email, password });
+            assert.equal(loginRes.status, 200, `${email} should sign in with "${password}"`);
+        }
+
+        // Admin password hash was NOT overwritten.
+        assert.equal(rowsOf('users').find((u) => u.id === ADMIN.id).password_hash, ADMIN.password_hash);
+
+        // Now Hanna changes her personal password; a serverless cold start must NOT reset it.
+        const customHash = await bcrypt.hash('MyPersonalSecret99', 4);
+        rowsOf('users').find((u) => u.id === blueTeacher.id).password_hash = customHash;
+        resetMagentaEnsureCache();
+
+        const coldStartRun = await ensureMagentaMainTeacher({ mode: 'auto' });
+        assert.equal(coldStartRun.status, 'already_applied');
+        assert.equal(coldStartRun.passwordsUpdated, 0);
+        assert.equal(rowsOf('users').find((u) => u.id === blueTeacher.id).password_hash, customHash);
     });
 
     test('activates a deactivated pre-existing account, promotes assistant_teacher, and removes duplicate assistant seat', async () => {
@@ -263,8 +327,10 @@ describe('ensureMagentaMainTeacher — Ms. Bethelhem Girma account + Year 4 - Ma
 });
 
 describe('PUT /api/assignments/class-staff & POST /api/assignments/auto-assign-main', () => {
-    test('assigning a main teacher via API hands over main_teacher subjects and timetable slots', async () => {
-        const bethelhem = mkUser(EXISTING_BETHELHEM_ID, 'main_teacher', 'Bethelhem Girma');
+    test('assigning a main teacher via API hands over main_teacher subjects, timetable slots, and upgrades placeholder password to class card password', async () => {
+        const bethelhem = mkUser(EXISTING_BETHELHEM_ID, 'main_teacher', 'Bethelhem Girma', {
+            password_hash: BASIC_PASSWORD_HASH,
+        });
         const tables = baseTables({ users: [ADMIN, ABIGIA, ENG_TEACHER, bethelhem] });
         reset(tables);
 
@@ -289,6 +355,8 @@ describe('PUT /api/assignments/class-staff & POST /api/assignments/auto-assign-m
         assert.equal(res.body.lessonsPlaced, 2);
         assert.equal(rowsOf('class_subjects').find((s) => s.id === 'seat-mat').teacher_id, EXISTING_BETHELHEM_ID);
         assert.equal(rowsOf('timetable_slots').find((t) => t.id === 'tt-1').teacher_id, EXISTING_BETHELHEM_ID);
+        const updatedUser = rowsOf('users').find((u) => u.id === EXISTING_BETHELHEM_ID);
+        assert.ok(bcrypt.compareSync('year 4 magenta', updatedUser.password_hash));
     });
 
     test('auto-assign-main preserves existing non-zero sessions_per_week when called with 0', async () => {
