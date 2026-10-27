@@ -1,7 +1,7 @@
 import { pushApi } from '../api/endpoints';
 
-/** Public VAPID key the browser needs to subscribe. Set at build time. */
-const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY || null;
+/** Public VAPID key the browser needs to subscribe (build-time or fetched from /api/push/config). */
+let cachedVapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY || null;
 
 const urlBase64ToUint8Array = (base64String) => {
     if (!base64String) return null;
@@ -11,7 +11,17 @@ const urlBase64ToUint8Array = (base64String) => {
     return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 };
 
-const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+const resolveApplicationServerKey = async () => {
+    if (!cachedVapidPublicKey) {
+        try {
+            const cfg = await pushApi.config();
+            if (cfg?.publicKey) cachedVapidPublicKey = cfg.publicKey;
+        } catch {
+            /* handled below if still missing */
+        }
+    }
+    return urlBase64ToUint8Array(cachedVapidPublicKey);
+};
 
 /** Is this browser+device able to receive push notifications at all? */
 export const isPushSupported = () =>
@@ -37,8 +47,9 @@ export const subscriptionState = async () => {
 
 /** Ask permission, subscribe via the Push API, register with the backend. */
 export const subscribePush = async () => {
+    const applicationServerKey = await resolveApplicationServerKey();
     if (!applicationServerKey) {
-        throw new Error('Push notifications are not configured on this server.');
+        throw new Error('Browser push notifications are not configured on this server yet (Telegram @bisnocbot alerts still work).');
     }
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
@@ -66,7 +77,7 @@ export const unsubscribePush = async () => {
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) {
         try {
-            await pushApi.unsubscribe({ endpoint: subscription.endpoint });
+            await pushApi.unsubscribe(subscription.endpoint);
         } catch {
             // Best effort: clear locally even if the server call fails.
         }
@@ -74,4 +85,4 @@ export const unsubscribePush = async () => {
     }
 };
 
-export { vapidPublicKey };
+export const vapidPublicKey = cachedVapidPublicKey;

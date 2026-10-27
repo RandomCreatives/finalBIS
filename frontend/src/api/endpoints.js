@@ -96,7 +96,10 @@ export const pushApi = {
     config: () => client.get('/push/config').then((r) => r.data),
     stats: () => client.get('/push/stats').then((r) => r.data),
     subscribe: (subscription) => client.post('/push/subscribe', subscription).then((r) => r.data),
-    unsubscribe: (endpoint) => client.delete('/push/unsubscribe', { data: { endpoint } }).then((r) => r.data),
+    unsubscribe: (endpointOrBody) => {
+        const endpoint = typeof endpointOrBody === 'string' ? endpointOrBody : endpointOrBody?.endpoint;
+        return client.post('/push/unsubscribe', { endpoint }).then((r) => r.data);
+    },
     send: (payload) => client.post('/push/send', payload).then((r) => r.data),
 };
 

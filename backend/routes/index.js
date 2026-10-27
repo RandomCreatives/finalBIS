@@ -1130,13 +1130,14 @@ router.post(
     push.subscribe,
 );
 
-router.post(
-    '/push/unsubscribe',
+const unsubscribeChain = [
     authenticate,
     body('endpoint').isString().notEmpty().withMessage('A valid endpoint is required'),
     validate,
     push.unsubscribe,
-);
+];
+router.post('/push/unsubscribe', ...unsubscribeChain);
+router.delete('/push/unsubscribe', ...unsubscribeChain);
 
 router.post(
     '/push/send',
@@ -1144,9 +1145,9 @@ router.post(
     authorize(ROLES.ADMIN),
     body('title').trim().notEmpty().withMessage('A title is required'),
     body('body').trim().notEmpty().withMessage('A body is required'),
-    body('url').optional({ nullable: true }).isString(),
-    body('audience').optional().isIn(PUSH_ROLES),
-    body('userIds').optional().isArray(),
+    body('url').optional({ values: 'falsy' }).isString(),
+    body('audience').optional({ values: 'falsy' }).isIn([...PUSH_ROLES, 'all']),
+    body('userIds').optional({ values: 'falsy' }).isArray(),
     body('userIds.*').optional().isUUID(),
     validate,
     push.send,

@@ -77,12 +77,16 @@ self.addEventListener('push', (event) => {
 /** Tap the notification → open (or focus) the app at the linked page. */
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    const url = event.notification.data?.url || '/';
+    const rawUrl = event.notification.data?.url || '/';
+    const targetUrl = new URL(rawUrl, self.location.origin).href;
     event.waitUntil(
         self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-            const running = clients.find((c) => new URL(c.url).origin === new URL(url).origin);
-            if (running) return running.focus();
-            return self.clients.openWindow(url);
+            const running = clients.find((c) => new URL(c.url).origin === self.location.origin);
+            if (running) {
+                if ('navigate' in running) running.navigate(targetUrl).catch(() => {});
+                return running.focus();
+            }
+            return self.clients.openWindow(targetUrl);
         }),
     );
 });

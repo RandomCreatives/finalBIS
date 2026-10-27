@@ -21,6 +21,9 @@ if (vapidConfigured) {
 
 const publicVapidKey = publicKey || null;
 
+const isMissingPushTable = (error) =>
+    error?.code === '42P01' || /push_subscriptions.*does not exist/i.test(error?.message || '');
+
 /** Push payload delivered to the browser's service worker. */
 const makePayload = ({ title, body, url = '/' }) =>
     JSON.stringify({
@@ -40,14 +43,15 @@ const options = {
 /** Send one notification to one subscription. Resolves true/false. */
 const sendPush = async (subscription, { title, body, url = '/' }) => {
     if (!vapidConfigured) {
-        console.warn('[webpush] VAPID not configured — push skipped');
         return false;
     }
     try {
+        const p256dh = subscription.p256dhKey || subscription.p256dh_key;
+        const auth = subscription.authKey || subscription.auth_key;
         await webpush.sendNotification(
             {
                 endpoint: subscription.endpoint,
-                keys: { p256: subscription.p256dh_key, auth: subscription.auth_key },
+                keys: { p256dh, auth },
             },
             makePayload({ title, body, url }),
             options,
@@ -74,13 +78,16 @@ const sendPush = async (subscription, { title, body, url = '/' }) => {
 
 /** Every subscription for the given users. */
 const subscriptionsForUsers = async (userIds) => {
-    const ids = userIds.filter(Boolean);
+    const ids = (userIds || []).filter(Boolean);
     if (ids.length === 0) return [];
     const { data, error } = await supabase
         .from('push_subscriptions')
         .select('endpoint, p256dh_key, auth_key')
         .in('user_id', ids);
-    if (error) throw error;
+    if (error) {
+        if (isMissingPushTable(error)) return [];
+        throw error;
+    }
     return data || [];
 };
 
@@ -90,7 +97,10 @@ const subscribedUserCount = async (schoolId) => {
         .from('push_subscriptions')
         .select('user_id, users!inner(school_id)')
         .eq('users.school_id', schoolId);
-    if (error) throw error;
+    if (error) {
+        if (isMissingPushTable(error)) return 0;
+        throw error;
+    }
     const users = new Set((data || []).map((row) => row.user_id));
     return users.size;
 };
