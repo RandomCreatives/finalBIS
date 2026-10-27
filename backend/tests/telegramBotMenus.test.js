@@ -561,21 +561,26 @@ describe('role-smart classes, weekday switcher, pupil card, inline register & pr
         assert.match(sentMessages()[0].text, /Hello Meron/);
     });
 
-    test('publicWebOrigin strips trailing slashes and rejects non-https / localhost URLs', () => {
+    test('publicWebOrigin uses bis-gerji-primary2.vercel.app and rewrites stale final-bis / localhost URLs', () => {
         const orig = process.env.FRONTEND_URL;
         try {
+            assert.equal(DEFAULT_PUBLIC_ORIGIN, 'https://bis-gerji-primary2.vercel.app');
+
             process.env.FRONTEND_URL = 'http://localhost:3000';
-            assert.equal(publicWebOrigin(), DEFAULT_PUBLIC_ORIGIN);
+            assert.equal(publicWebOrigin(), 'https://bis-gerji-primary2.vercel.app');
 
             process.env.FRONTEND_URL = 'https://final-bis.vercel.app///';
-            assert.equal(publicWebOrigin(), 'https://final-bis.vercel.app');
+            assert.equal(publicWebOrigin(), 'https://bis-gerji-primary2.vercel.app');
+
+            process.env.FRONTEND_URL = 'https://bis-gerji-primary2.vercel.app///';
+            assert.equal(publicWebOrigin(), 'https://bis-gerji-primary2.vercel.app');
         } finally {
             if (orig === undefined) delete process.env.FRONTEND_URL;
             else process.env.FRONTEND_URL = orig;
         }
     });
 
-    test('ensureTelegramWebhookOnce registers webhook without dropping pending updates and sets commands', async () => {
+    test('ensureTelegramWebhookOnce registers webhook, chat menu button, and commands without dropping pending updates', async () => {
         _resetWebhookEnsure();
         telegram = [];
 
@@ -587,9 +592,46 @@ describe('role-smart classes, weekday switcher, pupil card, inline register & pr
         assert.equal(hookCall.body.drop_pending_updates, false);
         assert.ok(hookCall.body.allowed_updates.includes('callback_query'));
 
+        const menuBtnCall = telegram.find((c) => c.method === 'setChatMenuButton');
+        assert.ok(menuBtnCall);
+        assert.equal(menuBtnCall.body.menu_button?.type, 'web_app');
+        assert.match(menuBtnCall.body.menu_button?.web_app?.url || '', /\/tma\/$/);
+
         const cmdCall = telegram.find((c) => c.method === 'setMyCommands');
         assert.ok(cmdCall);
         assert.ok(cmdCall.body.commands.some((c) => c.command === 'menu'));
+    });
+
+    test('callTelegramApi automatically retries without button style if Telegram returns HTTP 400', async () => {
+        seed();
+        const attempts = [];
+        global.fetch = async (url, init) => {
+            if (String(url).startsWith('https://api.telegram.org/')) {
+                const body = JSON.parse(init.body);
+                attempts.push(body);
+                const hasStyle = body.reply_markup?.inline_keyboard?.some((row) =>
+                    row.some((b) => b.style !== undefined)
+                );
+                if (hasStyle) {
+                    return { json: async () => ({ ok: false, error_code: 400, description: 'Bad Request: unsupported style' }) };
+                }
+                return { json: async () => ({ ok: true, result: { message_id: 99 } }) };
+            }
+            return realFetch(url, init);
+        };
+
+        await request(app)
+            .post('/api/telegram/webhook')
+            .send({ message: { chat: { id: TG }, text: '/start' } });
+        assert.equal(attempts.length, 2, 'retried once after stripping style');
+        assert.ok(
+            attempts[0].reply_markup.inline_keyboard.some((row) => row.some((b) => b.style)),
+            'first attempt included glass style tint'
+        );
+        assert.ok(
+            attempts[1].reply_markup.inline_keyboard.every((row) => row.every((b) => b.style === undefined)),
+            'retry stripped style cleanly'
+        );
     });
 
     test('POST /api/telegram/send-menu delivers the signed-in user inline menu to their Telegram chat', async () => {

@@ -28,7 +28,6 @@ const { sendPush, subscriptionsForUsers, vapidConfigured } = require('../service
 const DEFAULT_REMINDER_TIME = '08:45';
 const REMINDER_WINDOW_END = '15:00'; // end of period 6 — no reminders in the evening
 const SWEEP_EVERY_MS = 5 * 60 * 1000;
-const WEB_APP = publicWebOrigin();
 
 const reminderTime = () => {
     const configured = String(process.env.ATTENDANCE_REMINDER_TIME || '').trim();
@@ -133,24 +132,27 @@ const findMissingRegisters = async (schoolId, date) => {
         .map((klass) => ({ classId: klass.id, className: klass.name, teachers: teachersOf.get(klass.id) || [] }));
 };
 
-const telegramReminder = (klass, date, dayLabel) => ({
-    text: [
-        '⏰ Daily attendance reminder',
-        `${klass.className} — ${dayLabel}`,
-        '',
-        "Today's register hasn't been taken yet. Please record it now.",
-    ].join('\n'),
-    replyMarkup: {
-        inline_keyboard: [
-            [{ text: '✅ Mark all present', callback_data: `ap:${klass.classId}` }],
-            [
-                { text: '📝 Open the register', url: `${WEB_APP}${registerPath(klass.classId, date)}` },
-                { text: '🌐 Mini App', web_app: { url: `${WEB_APP}/tma/attendance?classId=${klass.classId}` } },
+const telegramReminder = (klass, date, dayLabel) => {
+    const origin = publicWebOrigin();
+    return {
+        text: [
+            '⏰ Daily attendance reminder',
+            `${klass.className} — ${dayLabel}`,
+            '',
+            "Today's register hasn't been taken yet. Please record it now.",
+        ].join('\n'),
+        replyMarkup: {
+            inline_keyboard: [
+                [{ text: '✅ Mark all present', callback_data: `ap:${klass.classId}`, style: 'success' }],
+                [
+                    { text: '📝 Open the register', url: `${origin}${registerPath(klass.classId, date)}` },
+                    { text: '🌐 Mini App', web_app: { url: `${origin}/tma/attendance?classId=${klass.classId}` }, style: 'primary' },
+                ],
+                [{ text: '📝 Mark absences / late', callback_data: `ar:${klass.classId}:1`, style: 'primary' }],
             ],
-            [{ text: '📝 Mark absences / late', callback_data: `ar:${klass.classId}:1` }],
-        ],
-    },
-});
+        },
+    };
+};
 
 /** Remind one school's main teachers. Idempotent for the day. */
 const sweepSchool = async (schoolId, date, time) => {

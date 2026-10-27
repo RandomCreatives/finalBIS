@@ -8,12 +8,15 @@ import {
     CheckSquare,
     ClipboardList,
     Clock,
+    ExternalLink,
+    Globe,
     MessageSquare,
     Sparkles,
     Users,
 } from 'lucide-react';
 import { GlassCard, SectionTitle } from '../components/GlassCard';
 import { useAuth } from '../auth/AuthContext';
+import { openWebPortal } from '../auth/auth';
 import { api } from '../api/api';
 import { todayIso } from '../lib/date';
 
@@ -434,6 +437,31 @@ export default function Dashboard() {
                 </GlassCard>
             )}
 
+            {/* Full Web Portal Launcher (bis-gerji-primary2.vercel.app) */}
+            <GlassCard>
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                            <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                                Full BIS NOC Web Portal
+                            </h3>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            bis-gerji-primary2.vercel.app · calendars, full spreadsheets &amp; reports
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => openWebPortal(user?.role)}
+                        className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold glass-tint-indigo inline-flex items-center gap-1"
+                    >
+                        <span>Open Web</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            </GlassCard>
+
             {/* Quick bridge to @bisnocbot inline chat buttons */}
             <GlassCard>
                 <div className="flex items-start justify-between gap-3">
@@ -452,7 +480,7 @@ export default function Dashboard() {
                         type="button"
                         onClick={handleSendBotMenu}
                         disabled={sendingBotMenu}
-                        className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm shadow-blue-600/25 active:scale-95 transition disabled:opacity-50"
+                        className="shrink-0 btn-primary !py-1.5 !px-3 !text-xs !rounded-xl"
                     >
                         {sendingBotMenu ? 'Sending…' : 'Send to Chat'}
                     </button>
@@ -465,7 +493,7 @@ export default function Dashboard() {
                         <button
                             type="button"
                             onClick={closeMiniAppToChat}
-                            className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 text-white"
+                            className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold glass-btn-emerald"
                         >
                             Switch to Chat
                         </button>

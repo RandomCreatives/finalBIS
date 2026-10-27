@@ -1,5 +1,6 @@
-import { Moon, Sun } from 'lucide-react';
+import { ExternalLink, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { openWebPortal } from '../auth/auth';
 import { useTheme } from '../theme/ThemeContext';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -49,10 +50,21 @@ export default function TopBar() {
                 <div className="flex items-center gap-2 shrink-0">
                     <button
                         type="button"
+                        onClick={() => openWebPortal(user?.role)}
+                        aria-label="Open full BIS NOC web app"
+                        title="Open bis-gerji-primary2.vercel.app"
+                        className="h-9 px-2.5 rounded-xl glass-tint-indigo flex items-center gap-1 text-[11px] font-bold"
+                    >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Web</span>
+                    </button>
+
+                    <button
+                        type="button"
                         onClick={toggleTheme}
                         aria-label={isDark ? 'Switch to light glass theme' : 'Switch to dark glass theme'}
                         title={isDark ? 'Light glass mode' : 'Dark glass mode'}
-                        className="w-9 h-9 rounded-xl glass-subcard flex items-center justify-center text-slate-600 dark:text-slate-200 active:scale-95 transition-transform"
+                        className="w-9 h-9 rounded-xl glass-pill flex items-center justify-center text-slate-600 dark:text-slate-200"
                     >
                         {isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-blue-700" />}
                     </button>
@@ -60,7 +72,7 @@ export default function TopBar() {
                     {user && (
                         <div
                             title={user.name}
-                            className="h-9 px-2.5 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white text-xs font-bold flex items-center justify-center shadow-sm border border-white/20"
+                            className="h-9 px-2.5 rounded-xl glass-pill-active text-xs font-bold flex items-center justify-center"
                         >
                             {initialsFromName(user.name)}
                         </div>

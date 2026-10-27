@@ -20,13 +20,13 @@ Workflow: branch → PR → CI + preview checks → merge → live.
 
 ## Deploying on Vercel
 
-The application is deployed to Vercel under the single project **`final-bis`**, configured via the root `vercel.json`.
+The application is deployed to Vercel at **`https://bis-gerji-primary2.vercel.app`** (project **`bis-gerji-primary2`**), configured via the root `vercel.json`.
 
 ### Environment Variables for Production
 Configure these in Vercel Project Settings → Environment Variables for the **Production** environment:
 - `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`
 - `JWT_SECRET` and `JWT_EXPIRES_IN`
-- `FRONTEND_URL` (public app URL, no trailing slash, e.g. `https://final-bis.vercel.app`)
+- `FRONTEND_URL` (public app URL, no trailing slash, e.g. `https://bis-gerji-primary2.vercel.app`)
 - `CORS_ORIGINS`
 - `CRON_SECRET` (protects `/api/cron/attendance-reminders`)
 - Optional integration credentials: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_LOGIN_ENABLED`, `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY`, `GOOGLE_DRIVE_FOLDER_ID`, SMTP variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`).
@@ -36,7 +36,7 @@ Configure these in Vercel Project Settings → Environment Variables for the **P
 ### Vercel Hobby Plan Deployments & Private Repositories
 Under the Vercel Hobby plan for private repositories, commits deployed automatically must be authored by the GitHub account linked to the Vercel project owner. Otherwise, Vercel will block automatic deployment with a "Deployment Blocked" error.
 - **Unblocking automatic deployments:** Ensure the Vercel owner's account links the GitHub user (e.g. `RandomCreatives`) under Vercel → Settings → Authentication.
-- **Manual deployment option:** From the Vercel dashboard, go to **`final-bis` → Deployments → Create Deployment → `main`**.
+- **Manual deployment option:** From the Vercel dashboard, go to **`bis-gerji-primary2` → Deployments → Create Deployment → `main`**.
 
 ### Database Migrations
 Migrations in `supabase/migrations/` are applied **manually in order using the Supabase SQL Editor**. Merging code to `main` does not automatically run SQL migrations.

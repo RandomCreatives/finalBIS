@@ -1,9 +1,9 @@
-import { getToken } from '../auth/auth';
+import { getToken, resolveApiBase } from '../auth/auth';
 
 // In production the Mini App is served from the same origin as the API, so a
 // relative URL is correct. VITE_API_URL is only needed when the API lives on
 // another host (e.g. a standalone backend during development).
-export const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const API_BASE = resolveApiBase();
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

@@ -46,9 +46,12 @@ const STATUS_META = {
     unmarked: { icon: '☐', label: '', next: 'a' },
 };
 
-const btn = (text, callback_data) => ({ text, callback_data });
-const urlBtn = (text, url) => ({ text, url });
-const webAppBtn = (text, url) => ({ text, web_app: { url } });
+const btn = (text, callback_data, style) =>
+    style ? { text, callback_data, style } : { text, callback_data };
+const urlBtn = (text, url, style) =>
+    style ? { text, url, style } : { text, url };
+const webAppBtn = (text, url, style = 'primary') =>
+    style ? { text, web_app: { url }, style } : { text, web_app: { url } };
 const kb = (rows) => ({ inline_keyboard: rows.filter((row) => row.length > 0) });
 
 /** Shorten a label without splitting a word awkwardly. */
@@ -187,7 +190,7 @@ function buildMainMenu({
     }
 
     if (isAdmin) {
-        rows.push([btn('📊 School pulse', 'pulse')]);
+        rows.push([btn('📊 School pulse', 'pulse', 'primary')]);
     } else if (isMainTeacher && marksAppUrl) {
         rows.push([webAppBtn('📊 Marksheets', marksAppUrl)]);
     }
@@ -445,8 +448,8 @@ function buildAttendanceOptions({
     text += 'Mark everyone present in one tap, tap individual absences/lateness inline, or open the full register.';
 
     const rows = [
-        [btn('✅ Mark all present', `ap:${klass.id}`)],
-        [btn('📝 Mark absences / late', `ar:${klass.id}:1`)],
+        [btn('✅ Mark all present', `ap:${klass.id}`, 'success')],
+        [btn('📝 Mark absences / late', `ar:${klass.id}:1`, 'primary')],
     ];
     if (registerUrl && miniAppRegisterUrl) {
         rows.push([urlBtn('🌐 Open the register', registerUrl), webAppBtn('🌐 Mini App', miniAppRegisterUrl)]);
@@ -503,7 +506,7 @@ function buildInlineRegister({
 
     const rows = [...p.rows];
     if (counts.unmarked > 0) {
-        rows.push([btn(`✅ Save ${counts.unmarked} rest present`, `arp:${klass.id}`)]);
+        rows.push([btn(`✅ Save ${counts.unmarked} rest present`, `arp:${klass.id}`, 'success')]);
     }
     rows.push(...navTight({ back: back || `ca:${klass.id}` }));
 
@@ -525,8 +528,8 @@ function buildFillPresentConfirm({ klass, dayLabel, unmarkedCount = 0, exception
             : '.');
 
     const replyMarkup = kb([
-        [btn(`✅ Yes — ${unmarkedCount} present`, `arp:${klass.id}:y`)],
-        [backBtn(`arp:${klass.id}:n`, '✖️ Cancel')],
+        [btn(`✅ Yes — ${unmarkedCount} present`, `arp:${klass.id}:y`, 'success')],
+        [btn('✖️ Cancel', `arp:${klass.id}:n`, 'danger')],
     ]);
     return { text, replyMarkup };
 }
@@ -545,8 +548,8 @@ function buildAttendanceConfirm({ klass, dayLabel, count = 0 } = {}) {
         'You can still change individual pupils inline or in the Mini App.';
 
     const replyMarkup = kb([
-        [btn(`✅ Yes — ${count} present`, `ap:${klass.id}:y`)],
-        [backBtn(`ap:${klass.id}:n`, '✖️ Cancel')],
+        [btn(`✅ Yes — ${count} present`, `ap:${klass.id}:y`, 'success')],
+        [btn('✖️ Cancel', `ap:${klass.id}:n`, 'danger')],
     ]);
     return { text, replyMarkup };
 }
@@ -651,8 +654,8 @@ function buildNoticeConfirm({ notice } = {}) {
         'The office will see that you have read it. It cannot be undone here.';
 
     const replyMarkup = kb([
-        [btn('✅ Acknowledge', `na:${notice.id}:y`)],
-        [backBtn(`na:${notice.id}:n`, '✖️ Cancel')],
+        [btn('✅ Acknowledge', `na:${notice.id}:y`, 'success')],
+        [btn('✖️ Cancel', `na:${notice.id}:n`, 'danger')],
     ]);
     return { text, replyMarkup };
 }
@@ -669,11 +672,14 @@ function buildNoticePush({ notice } = {}) {
 
     const rows = notice?.requires_ack
         ? [
-            [btn('📖 Read full', `nv:${notice.id}:1`), btn('☑ Acknowledge', `na:${notice.id}`)],
+            [
+                btn('📖 Read full', `nv:${notice.id}:1`, 'primary'),
+                btn('☑ Acknowledge', `na:${notice.id}`, 'success'),
+            ],
             [btn('🏠 Menu', 'menu')],
         ]
         : [
-            [btn('📖 Read notice', `nv:${notice.id}:1`), btn('🏠 Menu', 'menu')],
+            [btn('📖 Read notice', `nv:${notice.id}:1`, 'primary'), btn('🏠 Menu', 'menu')],
         ];
     return { text, replyMarkup: kb(rows) };
 }

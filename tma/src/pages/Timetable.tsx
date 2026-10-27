@@ -93,7 +93,7 @@ export default function Timetable() {
                             onClick={() => setSelectedDay(day)}
                             className={`relative py-2 rounded-xl text-xs font-semibold transition-all flex flex-col items-center justify-center ${
                                 active
-                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    ? 'glass-pill-active'
                                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                             }`}
                         >

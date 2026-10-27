@@ -1,0 +1,34 @@
+{
+  "short_name": "BIS Staff",
+  "name": "BIS NOC Gerji — Staff Mini App",
+  "id": "/tma/",
+  "icons": [
+    {
+      "src": "/tma/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "/tma/favicon-32x32.png",
+      "type": "image/png",
+      "sizes": "32x32"
+    },
+    {
+      "src": "/tma/pwa-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/tma/pwa-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/tma/",
+  "scope": "/tma/",
+  "display": "standalone",
+  "theme_color": "#0f297a",
+  "background_color": "#060d1d"
+}

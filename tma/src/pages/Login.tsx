@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Link2, Moon, RefreshCw, ShieldCheck, Sun } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Link2, Moon, RefreshCw, ShieldCheck, Sun } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
     TelegramAuthError,
@@ -9,6 +9,7 @@ import {
     initData,
     isTelegramEnvironment,
     linkAndSignInWithTelegram,
+    openWebPortal,
     signInWithTelegram,
     telegramUser,
 } from '../auth/auth';
@@ -243,7 +244,7 @@ export default function Login() {
                                     }}
                                     className={`py-2 px-2 rounded-lg transition-all text-center ${
                                         mode === key
-                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            ? 'glass-pill-active'
                                             : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                                 >
@@ -411,6 +412,15 @@ export default function Login() {
                         >
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                             {loading ? 'Signing in…' : 'Sign in with Telegram'}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => openWebPortal()}
+                            className="btn-glass w-full mt-2.5"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>Open Web Portal (bis-gerji-primary2.vercel.app)</span>
                         </button>
 
                         {import.meta.env.DEV && !insideTelegram && (

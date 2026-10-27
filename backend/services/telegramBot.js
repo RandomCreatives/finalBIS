@@ -6,6 +6,7 @@ const {
     answerCallbackQuery,
     setWebhook,
     setMyCommands,
+    setChatMenuButton,
     publicWebOrigin,
 } = require('../utils/telegram');
 const schoolTime = require('../utils/schoolTime');
@@ -13,7 +14,7 @@ const { resolveAttendanceReminder } = require('./attendanceReminders');
 const { consumeLinkToken, LINK_PAYLOAD_PREFIX } = require('./telegramLink');
 const menus = require('./telegramMenus');
 
-const WEB_APP = publicWebOrigin();
+const webOrigin = () => publicWebOrigin();
 
 // Dates and weekdays on the school's clock (Addis Ababa, GMT+3), not the server's UTC.
 const todayStr = () =>
@@ -536,18 +537,18 @@ async function markAllPresent(classId, user) {
 // ---------------------------------------------------------------------------
 // Message + keyboard builders
 // ---------------------------------------------------------------------------
-const WEB_APP_URL = `${WEB_APP}/app`;
-const SUBJECT_WEB_APP_URL = `${WEB_APP}/subject-home`;
-const MINI_APP_URL = `${WEB_APP}/tma/`;
-const MARKS_APP_URL = `${WEB_APP}/tma/marks`;
+const webAppUrl = () => `${webOrigin()}/app`;
+const subjectWebAppUrl = () => `${webOrigin()}/subject-home`;
+const miniAppUrl = () => `${webOrigin()}/tma/`;
+const marksAppUrl = () => `${webOrigin()}/tma/marks`;
 const registerUrl = (classId) =>
-    `${WEB_APP}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`;
+    `${webOrigin()}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`;
 const miniAppRegisterUrl = (classId) =>
-    `${WEB_APP}/tma/attendance?classId=${classId}`;
+    `${webOrigin()}/tma/attendance?classId=${classId}`;
 const miniAppMarksheetUrl = (classId, subjectId) =>
     subjectId
-        ? `${WEB_APP}/tma/marks?classId=${classId}&subjectId=${subjectId}`
-        : `${WEB_APP}/tma/marks?classId=${classId}`;
+        ? `${webOrigin()}/tma/marks?classId=${classId}&subjectId=${subjectId}`
+        : `${webOrigin()}/tma/marks?classId=${classId}`;
 
 /** Role gate shared by the menu (whether to show Attendance) and the action. */
 const canRecordAttendance = (user) => ATTENDANCE_ROLES.has(user.role);
@@ -559,9 +560,9 @@ function buildMainMenu(user) {
         firstName,
         isTeacher: canRecordAttendance(user),
         role: user.role,
-        webAppUrl: isSubject ? SUBJECT_WEB_APP_URL : WEB_APP_URL,
-        miniAppUrl: MINI_APP_URL,
-        marksAppUrl: MARKS_APP_URL,
+        webAppUrl: isSubject ? subjectWebAppUrl() : webAppUrl(),
+        miniAppUrl: miniAppUrl(),
+        marksAppUrl: marksAppUrl(),
     });
 }
 
@@ -594,8 +595,8 @@ function buildClassDetail(klass, studentCount, user, teachingMeta = {}) {
         klass,
         studentCount,
         subjects,
-        webAppUrl: user?.role === 'subject_teacher' ? SUBJECT_WEB_APP_URL : WEB_APP_URL,
-        miniAppUrl: MINI_APP_URL,
+        webAppUrl: user?.role === 'subject_teacher' ? subjectWebAppUrl() : webAppUrl(),
+        miniAppUrl: miniAppUrl(),
         marksheetUrl: hasMarksheet ? miniAppMarksheetUrl(klass.id, teachingMeta.firstSubjectId) : undefined,
         canTakeAttendance: canAtt,
     });
@@ -722,7 +723,7 @@ async function editSchoolPulseWithData(chatId, messageId, user) {
             dayLabel: todayStr(),
             totals,
             missing,
-            miniAppUrl: MINI_APP_URL,
+            miniAppUrl: miniAppUrl(),
         })
     );
 }
@@ -747,7 +748,7 @@ async function editAttendanceShortcut(chatId, messageId, user, page = 1) {
             menus.buildInfo({
                 text: '✅ Attendance\n\nYou are not assigned as a class teacher this year, so there is ' +
                     'no homeroom register for you to take.',
-                rows: [[menus.urlBtn('🌐 Open the web app', WEB_APP_URL)]],
+                rows: [[menus.urlBtn('🌐 Open the web app', webAppUrl())]],
             })
         );
     }
@@ -913,7 +914,7 @@ async function handleMessage(msg) {
                 'or open the web app → Settings → Telegram to create a one-time link.',
             {
                 replyMarkup: menus.kb([
-                    [menus.webAppBtn('🌐 Open Mini App', MINI_APP_URL)],
+                    [menus.webAppBtn('🌐 Open Mini App', miniAppUrl())],
                 ]),
             }
         );
@@ -1343,6 +1344,7 @@ async function ensureTelegramWebhookOnce({ force = false } = {}) {
             return { ok: false, reason: hookRes?.description || 'set_webhook_failed', url: targetUrl };
         }
 
+        await setChatMenuButton(`${origin}/tma/`, 'Open App');
         await setMyCommands(BOT_COMMANDS);
         return { ok: true, url: targetUrl };
     })().catch((err) => {
