@@ -16,8 +16,10 @@ const CLASS_SUBJECT = '7dd1a63a-9a95-498d-9321-f1c92d07f456';
 const THREAD = '9c93f0ec-bc75-47f7-8b08-c02c14cd4595';
 const NOTICE = '934a8a55-fc5c-4ef4-bb17-9d7f5e44f5cb';
 
+const schoolTime = require('../utils/schoolTime');
+
 const isoDate = (offsetDays = 0) =>
-    new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+    schoolTime.addDays(schoolTime.todayIso(), offsetDays);
 
 const user = (id, role, name) => ({
     id,

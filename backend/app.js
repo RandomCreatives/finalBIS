@@ -8,6 +8,7 @@ const { apiLimiter, isAllowedOrigin } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const telegramBot = require('./services/telegramBot');
 const { ensureMagentaMainTeacherOnce } = require('./services/magentaMainTeacher');
+const { ensureFrenchTeacher2MichaelOnce } = require('./services/frenchTeacher2Michael');
 
 const app = express();
 
@@ -93,6 +94,11 @@ if (env.nodeEnv !== 'test') {
             await ensureMagentaMainTeacherOnce();
         } catch (err) {
             console.error('[staffing] Magenta main-teacher ensure failed:', err.message);
+        }
+        try {
+            await ensureFrenchTeacher2MichaelOnce();
+        } catch (err) {
+            console.error('[staffing] French Teacher 2 -> Mr. Michael ensure failed:', err.message);
         }
         if (!req.path.startsWith('/telegram/webhook')) {
             try {

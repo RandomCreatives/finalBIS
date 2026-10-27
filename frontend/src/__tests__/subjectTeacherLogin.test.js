@@ -98,6 +98,7 @@ describe('teacherLabel', () => {
 
     test('real names are shown on staffed seats', () => {
         expect(teacherLabel({ name: 'Dihurwe Desire' })).toBe('Dihurwe Desire');
+        expect(teacherLabel({ name: 'Mr. Michael' })).toBe('Mr. Michael');
     });
 });
 
