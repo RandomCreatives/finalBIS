@@ -1,7 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { initPwaInstallStore } from './utils/pwaInstall';
 import './index.css';
+
+// Capture `beforeinstallprompt` immediately on initial page load before route transitions.
+initPwaInstallStore();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>

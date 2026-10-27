@@ -21,10 +21,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import PersonIcon from '@mui/icons-material/Person';
 import {
-    IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
+    IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard, PwaInstallCard,
 } from '../components/settings/profileCards';
 import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
 import NotificationBell from '../components/NotificationBell';
+import PwaInstallButton from '../components/PwaInstallButton';
 import useApi from '../hooks/useApi';
 import { lessonLabel } from '../utils/periods';
 import Planning from './Planning';
@@ -592,6 +593,7 @@ export default function SubjectHome() {
                         <Typography variant="caption" color="text.secondary">Subject teacher dashboard · 2026/2027</Typography>
                     </Box>
                     <NotificationBell />
+                    <PwaInstallButton />
                     <Chip size="small" label={user.name} sx={{ fontWeight: 700, borderRadius: 1, mr: 0.5 }} />
                     <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
                         <IconButton size="small" onClick={toggleColorScheme}
@@ -738,6 +740,7 @@ export default function SubjectHome() {
                                                 })))}
                                         />
                                         <PreferencesCard />
+                                        <PwaInstallCard />
                                     </Box>
                                 </Grid>
                             </Grid>

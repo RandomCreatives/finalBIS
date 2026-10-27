@@ -23,6 +23,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useColorScheme } from '../theme';
 import { useAuth } from '../auth/AuthContext';
+import PwaInstallButton from '../components/PwaInstallButton';
 
 /* ── styled primitives ───────────────────────────────────── */
 const NavLink = styled(Typography)(({ theme }) => ({
@@ -79,7 +80,9 @@ export default function Landing() {
         return () => media?.removeEventListener?.('change', update);
     }, []);
 
-    if (!loading && isStandalone && user) return <Navigate to="/app" replace />;
+    if (!loading && isStandalone && user) {
+        return <Navigate to={user.role === 'subject_teacher' ? '/subject-home' : '/app'} replace />;
+    }
 
     const dark = theme.palette.mode === 'dark';
 
@@ -131,6 +134,7 @@ export default function Landing() {
                         )}
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <PwaInstallButton />
                             <Box onClick={toggleColorScheme} sx={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 width: 38, height: 38, borderRadius: 2,
