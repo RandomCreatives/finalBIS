@@ -24,9 +24,12 @@ export class ApiError extends Error {
 
 async function request(path: string, method: Method = 'GET', body?: unknown) {
     const token = getToken();
-    if (import.meta.env.DEV && token === '__dev_preview__') {
+    if (
+        import.meta.env.DEV &&
+        (token === '__dev_preview_main__' || token === '__dev_preview_subject__')
+    ) {
         const { handleDevPreviewRequest } = await import('../dev/previewMock');
-        return handleDevPreviewRequest(path, method, body);
+        return handleDevPreviewRequest(token, path, method, body);
     }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

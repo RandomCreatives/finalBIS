@@ -1,35 +1,53 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Activity,
     ArrowRight,
+    BookOpen,
     Calendar,
     CheckCircle2,
     CheckSquare,
     ClipboardList,
+    Clock,
     Sparkles,
     Users,
 } from 'lucide-react';
 import { GlassCard, SectionTitle } from '../components/GlassCard';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/api';
+import { todayIso } from '../lib/date';
 
-interface Flow {
+interface TeachingSubject {
+    id: string;
+    sessionsPerWeek?: number;
+    class?: { id: string; name: string } | null;
+    subject?: { id: string; name: string; code?: string } | null;
+}
+
+interface TodaySlot {
+    id: string;
+    startsAt?: string;
+    endsAt?: string;
+    room?: string | null;
+    class?: { id: string; name: string } | null;
+    subject?: { id: string; name: string; code?: string } | null;
+}
+
+interface OpenTask {
     id: string;
     title: string;
-    metric: string;
-    detail?: string;
-    progress: number;
-    nextAction?: string;
+    dueOn?: string | null;
+    priority?: string;
+    isOverdue?: boolean;
 }
 
 interface MySummary {
-    role?: string;
-    date?: string;
-    term?: { name: string; currentWeek?: number } | null;
-    healthScore?: number;
-    openItems?: number;
-    flows?: Flow[];
+    term?: { id?: string; name: string; currentWeek?: number | null } | null;
+    homerooms?: { position: string; class?: { id: string; name: string } | null }[];
+    teachingSubjects?: TeachingSubject[];
+    todaySlots?: TodaySlot[];
+    openTasks?: OpenTask[];
+    overdueTaskCount?: number;
+    attendanceOutstanding?: { id: string; name: string }[];
 }
 
 function addisGreeting(): string {
@@ -49,18 +67,11 @@ function addisGreeting(): string {
     }
 }
 
-function routeForFlow(flow: Flow): string | null {
-    const key = `${flow.id} ${flow.title}`.toLowerCase();
-    if (key.includes('attend') || key.includes('register')) return '/attendance';
-    if (key.includes('timetable') || key.includes('lesson') || key.includes('schedule')) return '/timetable';
-    if (key.includes('mark') || key.includes('grade') || key.includes('assess')) return '/marks';
-    if (key.includes('student') || key.includes('pupil') || key.includes('roster')) return '/students';
-    return null;
-}
-
 export default function Dashboard() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const isSubjectTeacher = user?.role === 'subject_teacher';
+
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<MySummary | null>(null);
     const [error, setError] = useState('');
@@ -72,92 +83,177 @@ export default function Dashboard() {
             .finally(() => setLoading(false));
     }, []);
 
+    const teachingPairs = useMemo(() => {
+        const list = (stats?.teachingSubjects || []).filter(
+            (s) => s.class?.id && s.subject?.id && s.subject.code !== 'REG',
+        );
+        return list.sort((a, b) =>
+            String(a.class?.name || '').localeCompare(String(b.class?.name || '')),
+        );
+    }, [stats?.teachingSubjects]);
+
+    const uniqueClassCount = useMemo(
+        () => new Set(teachingPairs.map((p) => p.class?.id).filter(Boolean)).size,
+        [teachingPairs],
+    );
+
     if (loading) {
         return (
             <div className="p-4 space-y-3">
-                <div className="h-28 rounded-2xl glass-panel animate-pulse" />
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="h-24 rounded-2xl glass-panel animate-pulse" />
-                    <div className="h-24 rounded-2xl glass-panel animate-pulse" />
+                <div className="h-32 rounded-2xl glass-panel animate-pulse" />
+                <div className="grid grid-cols-3 gap-2.5">
+                    <div className="h-20 rounded-2xl glass-panel animate-pulse" />
+                    <div className="h-20 rounded-2xl glass-panel animate-pulse" />
+                    <div className="h-20 rounded-2xl glass-panel animate-pulse" />
                 </div>
                 <div className="h-40 rounded-2xl glass-panel animate-pulse" />
             </div>
         );
     }
 
-    const flows = stats?.flows ?? [];
-    const health = Math.max(0, Math.min(100, stats?.healthScore ?? 0));
-    const openItems = stats?.openItems ?? 0;
+    const todaySlots = stats?.todaySlots || [];
+    const openTasks = stats?.openTasks || [];
+    const attendanceDue = stats?.attendanceOutstanding || [];
+    const dateLabel = todayIso();
+
+    const quickActions = isSubjectTeacher
+        ? [
+              {
+                  to: '/marks',
+                  label: 'Marksheets',
+                  icon: ClipboardList,
+                  tone: 'text-emerald-600 dark:text-emerald-400',
+              },
+              {
+                  to: '/timetable',
+                  label: 'Timetable',
+                  icon: Calendar,
+                  tone: 'text-blue-600 dark:text-blue-400',
+              },
+              {
+                  to: '/students',
+                  label: 'Pupils',
+                  icon: Users,
+                  tone: 'text-indigo-600 dark:text-indigo-400',
+              },
+          ]
+        : [
+              {
+                  to: '/attendance',
+                  label: 'Register',
+                  icon: CheckSquare,
+                  tone: 'text-emerald-600 dark:text-emerald-400',
+              },
+              {
+                  to: '/timetable',
+                  label: 'Timetable',
+                  icon: Calendar,
+                  tone: 'text-blue-600 dark:text-blue-400',
+              },
+              {
+                  to: user?.role === 'assistant_teacher' ? '/students' : '/marks',
+                  label: user?.role === 'assistant_teacher' ? 'Pupils' : 'Marks',
+                  icon: user?.role === 'assistant_teacher' ? Users : ClipboardList,
+                  tone: 'text-indigo-600 dark:text-indigo-400',
+              },
+          ];
 
     return (
         <div className="p-4 space-y-4">
             {/* Hero Greeting Card */}
             <GlassCard className="relative overflow-hidden">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            {addisGreeting()}
-                        </p>
-                        <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-0.5">
-                            {user?.name || 'BIS Staff'}
-                        </h1>
-                        {(stats?.date || stats?.term?.name) && (
-                            <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300 glass-subcard px-2.5 py-1 rounded-full">
-                                {stats?.date && <span>{stats.date}</span>}
-                                {stats?.term?.name && (
-                                    <>
-                                        <span className="opacity-40">·</span>
-                                        <span>{stats.term.name}</span>
-                                    </>
-                                )}
-                                {stats?.term?.currentWeek ? (
-                                    <>
-                                        <span className="opacity-40">·</span>
-                                        <span className="text-blue-600 dark:text-blue-400 font-semibold">
-                                            Week {stats.term.currentWeek}
-                                        </span>
-                                    </>
-                                ) : null}
-                            </div>
-                        )}
-                    </div>
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {addisGreeting()}
+                </p>
+                <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-0.5">
+                    {user?.name || 'BIS Staff'}
+                </h1>
+                <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300 glass-subcard px-2.5 py-1 rounded-full">
+                    <span>{dateLabel}</span>
+                    {stats?.term?.name && (
+                        <>
+                            <span className="opacity-40">·</span>
+                            <span>{stats.term.name}</span>
+                        </>
+                    )}
+                    {stats?.term?.currentWeek ? (
+                        <>
+                            <span className="opacity-40">·</span>
+                            <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                                Week {stats.term.currentWeek}
+                            </span>
+                        </>
+                    ) : null}
                 </div>
 
-                {/* Metric Tiles */}
+                {/* Role-aware Metric Tiles */}
                 <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="p-3.5 glass-subcard">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Open items</span>
-                            <CheckCircle2
-                                className={`w-4 h-4 ${
-                                    openItems === 0 ? 'text-emerald-500' : 'text-amber-500'
-                                }`}
-                            />
+                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                Today&apos;s lessons
+                            </span>
+                            <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         </div>
                         <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
-                            {openItems}
+                            {todaySlots.length}
                         </p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            {openItems === 0 ? 'All caught up today' : 'Awaiting completion'}
+                            {todaySlots.length === 0 ? 'Free schedule today' : 'Scheduled periods'}
                         </p>
                     </div>
 
-                    <div className="p-3.5 glass-subcard">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Readiness</span>
-                            <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    {isSubjectTeacher ? (
+                        <div
+                            onClick={() => navigate('/marks')}
+                            role="button"
+                            tabIndex={0}
+                            className="p-3.5 glass-subcard cursor-pointer active:scale-[0.99] transition-transform"
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    My classes
+                                </span>
+                                <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                                {uniqueClassCount}
+                            </p>
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5 flex items-center gap-1">
+                                <span>Open marksheets</span>
+                                <ArrowRight className="w-3 h-3" />
+                            </p>
                         </div>
-                        <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
-                            {health}%
-                        </p>
-                        <div className="mt-2 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/70 overflow-hidden">
-                            <div
-                                className="h-full rounded-full bg-gradient-to-r from-blue-600 to-[#95c11f] transition-all duration-500"
-                                style={{ width: `${health}%` }}
-                            />
+                    ) : (
+                        <div
+                            onClick={() => navigate('/attendance')}
+                            role="button"
+                            tabIndex={0}
+                            className="p-3.5 glass-subcard cursor-pointer active:scale-[0.99] transition-transform"
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    Register
+                                </span>
+                                <CheckCircle2
+                                    className={`w-4 h-4 ${
+                                        attendanceDue.length === 0
+                                            ? 'text-emerald-500'
+                                            : 'text-amber-500'
+                                    }`}
+                                />
+                            </div>
+                            <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                                {attendanceDue.length === 0 ? 'Done' : `${attendanceDue.length} due`}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                                {attendanceDue.length === 0
+                                    ? 'All homerooms marked'
+                                    : attendanceDue.map((c) => c.name).join(', ')}
+                            </p>
                         </div>
-                    </div>
+                    )}
                 </div>
             </GlassCard>
 
@@ -169,11 +265,7 @@ export default function Dashboard() {
 
             {/* Quick Actions */}
             <div className="grid grid-cols-3 gap-2.5">
-                {[
-                    { to: '/attendance', label: 'Register', icon: CheckSquare, tone: 'text-emerald-600 dark:text-emerald-400' },
-                    { to: '/timetable', label: 'Timetable', icon: Calendar, tone: 'text-blue-600 dark:text-blue-400' },
-                    { to: '/students', label: 'Pupils', icon: Users, tone: 'text-indigo-600 dark:text-indigo-400' },
-                ].map((item) => {
+                {quickActions.map((item) => {
                     const Icon = item.icon;
                     return (
                         <button
@@ -191,75 +283,131 @@ export default function Dashboard() {
                 })}
             </div>
 
-            {/* Priority Flows */}
+            {/* Subject Teacher: Direct Class Marksheet Jump Cards */}
+            {isSubjectTeacher && teachingPairs.length > 0 && (
+                <GlassCard>
+                    <SectionTitle
+                        right={
+                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                {teachingPairs.length}{' '}
+                                {teachingPairs.length === 1 ? 'marksheet' : 'marksheets'}
+                            </span>
+                        }
+                    >
+                        My class marksheets
+                    </SectionTitle>
+                    <div className="space-y-2">
+                        {teachingPairs.map((pair) => (
+                            <button
+                                key={pair.id}
+                                type="button"
+                                onClick={() =>
+                                    navigate(
+                                        `/marks?classId=${encodeURIComponent(
+                                            pair.class?.id || '',
+                                        )}&subjectId=${encodeURIComponent(
+                                            pair.subject?.id || '',
+                                        )}`,
+                                    )
+                                }
+                                className="w-full p-3 glass-subcard flex items-center justify-between gap-2 text-left active:scale-[0.99] transition-transform"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">
+                                        {pair.class?.name}
+                                    </p>
+                                    <p className="text-xs text-blue-600 dark:text-blue-300 font-medium truncate">
+                                        {pair.subject?.name}
+                                        {pair.sessionsPerWeek
+                                            ? ` · ${pair.sessionsPerWeek} periods/wk`
+                                            : ''}
+                                    </p>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                            </button>
+                        ))}
+                    </div>
+                </GlassCard>
+            )}
+
+            {/* Today's Timetable Preview */}
             <GlassCard>
                 <SectionTitle
                     right={
-                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                            {flows.length} {flows.length === 1 ? 'area' : 'areas'}
-                        </span>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/timetable')}
+                            className="text-[11px] font-semibold text-blue-600 dark:text-blue-300"
+                        >
+                            Full week →
+                        </button>
                     }
                 >
-                    What needs you
+                    Today&apos;s schedule
                 </SectionTitle>
-
-                {flows.length === 0 ? (
-                    <div className="py-5 text-center">
-                        <CheckCircle2 className="w-7 h-7 text-emerald-500 mx-auto mb-1.5" />
-                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                            Nothing outstanding right now.
-                        </p>
-                    </div>
+                {todaySlots.length === 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">
+                        No lessons scheduled for today.
+                    </p>
                 ) : (
-                    <div className="space-y-2.5">
-                        {flows.map((flow) => {
-                            const target = routeForFlow(flow);
-                            const pct = Math.max(0, Math.min(100, flow.progress ?? 0));
-                            return (
-                                <div
-                                    key={flow.id}
-                                    onClick={target ? () => navigate(target) : undefined}
-                                    role={target ? 'button' : undefined}
-                                    tabIndex={target ? 0 : undefined}
-                                    className={`p-3 glass-subcard transition-transform ${
-                                        target ? 'cursor-pointer active:scale-[0.99]' : ''
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="font-semibold text-sm text-slate-900 dark:text-white">
-                                            {flow.title}
-                                        </span>
-                                        <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-300 whitespace-nowrap">
-                                            <span>{flow.metric}</span>
-                                            {target && <ArrowRight className="w-3.5 h-3.5 opacity-75" />}
-                                        </div>
-                                    </div>
-                                    <div className="mt-2 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/70 overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full transition-all ${
-                                                pct >= 100
-                                                    ? 'bg-emerald-500'
-                                                    : 'bg-gradient-to-r from-blue-600 to-sky-400'
-                                            }`}
-                                            style={{ width: `${pct}%` }}
-                                        />
-                                    </div>
-                                    {flow.nextAction && (
-                                        <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                                            {flow.nextAction}
-                                        </p>
-                                    )}
+                    <div className="space-y-2">
+                        {todaySlots.map((slot) => (
+                            <div
+                                key={slot.id}
+                                className="p-2.5 glass-subcard flex items-center justify-between gap-2"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                                        {slot.subject?.name || 'Lesson'}
+                                    </p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                        {slot.class?.name || ''}
+                                        {slot.room ? ` · ${slot.room}` : ''}
+                                    </p>
                                 </div>
-                            );
-                        })}
+                                <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200">
+                                    {String(slot.startsAt || '').slice(0, 5)}
+                                </span>
+                            </div>
+                        ))}
                     </div>
                 )}
             </GlassCard>
 
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 pt-1">
-                <ClipboardList className="w-3.5 h-3.5 opacity-75" />
-                <span>Full marksheet spreadsheets &amp; exports remain on the web portal.</span>
-            </div>
+            {/* Open Tasks (if any) */}
+            {openTasks.length > 0 && (
+                <GlassCard>
+                    <SectionTitle
+                        right={
+                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                {openTasks.length} open
+                            </span>
+                        }
+                    >
+                        Tasks
+                    </SectionTitle>
+                    <div className="space-y-2">
+                        {openTasks.slice(0, 4).map((t) => (
+                            <div key={t.id} className="p-2.5 glass-subcard flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                    {t.title}
+                                </span>
+                                {t.dueOn && (
+                                    <span
+                                        className={`text-[10px] font-semibold shrink-0 px-2 py-0.5 rounded-full ${
+                                            t.isOverdue
+                                                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                                                : 'bg-slate-500/10 text-slate-600 dark:text-slate-300'
+                                        }`}
+                                    >
+                                        {t.dueOn}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </GlassCard>
+            )}
         </div>
     );
 }

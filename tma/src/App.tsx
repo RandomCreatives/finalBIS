@@ -24,6 +24,22 @@ function FullScreenLoader() {
     );
 }
 
+function AttendanceRoute() {
+    const { user } = useAuth();
+    if (user?.role === 'subject_teacher') {
+        return <Navigate to="/" replace />;
+    }
+    return <Attendance />;
+}
+
+function MarksRoute() {
+    const { user } = useAuth();
+    if (user?.role === 'assistant_teacher') {
+        return <Navigate to="/" replace />;
+    }
+    return <Marks />;
+}
+
 function PrivateLayout() {
     const { user, isLoading } = useAuth();
     const location = useLocation();
@@ -52,8 +68,8 @@ export default function App() {
             <Route element={<PrivateLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="timetable" element={<Timetable />} />
-                <Route path="attendance" element={<Attendance />} />
-                <Route path="marks" element={<Marks />} />
+                <Route path="attendance" element={<AttendanceRoute />} />
+                <Route path="marks" element={<MarksRoute />} />
                 <Route path="students" element={<Students />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

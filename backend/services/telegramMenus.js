@@ -199,11 +199,15 @@ function buildClassPicker({
 }
 
 /** One class: the two things a teacher does from the bus. */
-function buildClassDetail({ klass, studentCount = 0, webAppUrl } = {}) {
+function buildClassDetail({ klass, studentCount = 0, webAppUrl, canTakeAttendance = true } = {}) {
     const name = klass?.name || 'Class';
     const text = `🏫 ${name}\n👥 ${studentCount} pupil${studentCount === 1 ? '' : 's'}`;
 
-    const rows = [[btn('👥 Pupils', `cs:${klass.id}`), btn('✅ Attendance', `ca:${klass.id}`)]];
+    const rows = [
+        canTakeAttendance
+            ? [btn('👥 Pupils', `cs:${klass.id}`), btn('✅ Attendance', `ca:${klass.id}`)]
+            : [btn('👥 Pupils', `cs:${klass.id}`)],
+    ];
     if (webAppUrl) rows.push([urlBtn('🌐 Open the class', webAppUrl)]);
     const replyMarkup = kb([...rows, ...navTight({ back: 'cls' })]);
     return { text, replyMarkup };

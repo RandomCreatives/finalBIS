@@ -23,6 +23,8 @@ const gradeFor = (percentage) => {
 
 const shape = (m) => ({
     id: m.id,
+    classId: m.class_id ?? m.class?.id ?? null,
+    class: m.class ?? null,
     termId: m.term_id,
     term: m.term ?? null,
     marks: Number(m.marks),
@@ -34,7 +36,8 @@ const shape = (m) => ({
 });
 
 const SELECT = `
-    id, term_id, marks, max_marks, percentage, grade,
+    id, class_id, subject_id, term_id, marks, max_marks, percentage, grade,
+    class:classes(id, name),
     term:terms(id, name, term_index),
     student:students(id, name, admission_no, roll_num),
     subject:subjects(id, name, code)
@@ -283,7 +286,53 @@ const bulkUpsertMarksheets = asyncHandler(async (req, res) => {
 const listMarksheets = asyncHandler(async (req, res) => {
     const { classId, termId, subjectId } = req.query;
 
-    // Teachers only ever read marks of classes they are attached to.
+    // Subject teachers only ever read marksheets for the exact (class, subject)
+    // pairs assigned to them in the current academic year — never other
+    // subjects taught in those same classes.
+    if (req.user.role === ROLES.SUBJECT_TEACHER) {
+        let yearId = null;
+        try {
+            yearId = await resolveAcademicYearId(req);
+        } catch {
+            return res.json({ marksheets: [] });
+        }
+
+        const { data: mySeats, error: seatErr } = await supabase
+            .from('class_subjects')
+            .select('class_id, subject_id')
+            .eq('academic_year_id', yearId)
+            .eq('teacher_id', req.user.id);
+        if (seatErr) throw seatErr;
+
+        const allowedClasses = new Set((mySeats || []).map((s) => s.class_id));
+        const allowedPairs = new Set((mySeats || []).map((s) => `${s.class_id}|${s.subject_id}`));
+
+        if (classId && !allowedClasses.has(classId)) {
+            throw new ForbiddenError('That class is not one of yours');
+        }
+        if (allowedPairs.size === 0) {
+            return res.json({ marksheets: [] });
+        }
+
+        let query = supabase
+            .from('marksheets')
+            .select(SELECT)
+            .eq('school_id', req.user.school_id)
+            .in('class_id', classId ? [classId] : [...allowedClasses]);
+
+        if (termId) query = query.eq('term_id', termId);
+        if (subjectId) query = query.eq('subject_id', subjectId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const scoped = (data || []).filter((m) =>
+            allowedPairs.has(`${m.class_id}|${m.subject_id ?? m.subject?.id}`),
+        );
+        return res.json({ marksheets: scoped.map(shape) });
+    }
+
+    // Main teachers & other allowed teaching roles read marks of classes they are attached to.
     if (req.user.role !== ROLES.ADMIN) {
         const myClasses = await teacherClassIds(req);
         if (classId) {

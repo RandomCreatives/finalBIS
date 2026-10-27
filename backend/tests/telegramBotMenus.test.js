@@ -286,4 +286,25 @@ describe('old keyboards keep working', () => {
         await press(`ca:${CLASS_ID}`);
         assert.match(lastEdit().text, /Attendance/);
     });
+
+    test('subject teachers do not see Attendance in the bot menu or class detail and cannot run attendance actions', async () => {
+        seed();
+        rowsOf('users')[0].role = 'subject_teacher';
+        rowsOf('class_staff').length = 0;
+        rowsOf('subjects').push({ id: 'subj-fra', school_id: SCHOOL, name: 'French', code: 'FRA' });
+        rowsOf('class_subjects').push({
+            id: 'cs-fra', school_id: SCHOOL, academic_year_id: YEAR,
+            class_id: CLASS_ID, subject_id: 'subj-fra', teacher_id: TEACHER,
+        });
+
+        await press('menu');
+        assert.ok(!hasButton(lastEdit(), 'at'), 'subject teacher main menu must omit Attendance');
+
+        await press(`c:${CLASS_ID}`);
+        assert.ok(!hasButton(lastEdit(), `ca:${CLASS_ID}`), 'class detail must omit Attendance for subject teacher');
+        assert.ok(hasButton(lastEdit(), `cs:${CLASS_ID}`), 'class detail still shows Pupils');
+
+        await press('at');
+        assert.match(lastToast().text, /Attendance is recorded by homeroom teachers/);
+    });
 });

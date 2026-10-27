@@ -24,8 +24,9 @@ const kb = (rows) => ({ inline_keyboard: rows });
 const todayStr = () =>
     schoolTime.formatDay(schoolTime.todayIso(), { weekday: 'long', day: 'numeric', month: 'short' });
 
-// Same roles the website lets record attendance (routes: STAFF).
-const ATTENDANCE_ROLES = new Set(['admin', 'main_teacher', 'assistant_teacher', 'subject_teacher']);
+// Homeroom & leadership roles that record daily attendance in Telegram.
+// Subject teachers do not take daily class attendance.
+const ATTENDANCE_ROLES = new Set(['admin', 'main_teacher', 'assistant_teacher']);
 
 // ---------------------------------------------------------------------------
 // Data access (scoped exactly like the HTTP controllers)
@@ -301,8 +302,13 @@ function buildClasses(classes, { title, rowPrefix, pageBase, icon } = {}) {
     return menus.buildClassPicker({ classes, back: 'menu', title, rowPrefix, pageBase, icon });
 }
 
-function buildClassDetail(klass, studentCount) {
-    return menus.buildClassDetail({ klass, studentCount, webAppUrl: WEB_APP_URL });
+function buildClassDetail(klass, studentCount, user) {
+    return menus.buildClassDetail({
+        klass,
+        studentCount,
+        webAppUrl: WEB_APP_URL,
+        canTakeAttendance: user ? canRecordAttendance(user) : true,
+    });
 }
 
 function buildStudents(students, klass, page = 1) {
@@ -554,7 +560,7 @@ async function handleCallback(query) {
             return;
         }
         const students = await getStudents(classId);
-        await editMessage(chatId, messageId, buildClassDetail(klass, students.length));
+        await editMessage(chatId, messageId, buildClassDetail(klass, students.length, user));
 
     // ── roster (paginated) ───────────────────────────────────────────────
     } else if (data.startsWith('cs:')) {
@@ -570,8 +576,16 @@ async function handleCallback(query) {
 
     // ── attendance ───────────────────────────────────────────────────────
     } else if (data === 'at' || /^at:\d+$/.test(data)) {
+        if (!canRecordAttendance(user)) {
+            await answerCallbackQuery(cbId, { text: 'Attendance is recorded by homeroom teachers', showAlert: true });
+            return;
+        }
         await editAttendanceShortcut(chatId, messageId, user);
     } else if (data.startsWith('ca:')) {
+        if (!canRecordAttendance(user)) {
+            await answerCallbackQuery(cbId, { text: 'Attendance is recorded by homeroom teachers', showAlert: true });
+            return;
+        }
         const classId = data.slice(3);
         const klass = await getKlass(classId, user.school_id);
         if (!klass) {
@@ -613,7 +627,7 @@ async function handleCallback(query) {
             showAlert: !result.ok,
         });
         if (result.ok) {
-            await editMessage(chatId, messageId, buildClassDetail(result.klass, result.students.length));
+            await editMessage(chatId, messageId, buildClassDetail(result.klass, result.students.length, user));
         }
 
     // ── notices (paginated) ──────────────────────────────────────────────
