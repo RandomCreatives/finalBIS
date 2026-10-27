@@ -416,27 +416,40 @@ export default function Login() {
                         {import.meta.env.DEV && !insideTelegram && (
                             <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-white/10 space-y-2">
                                 <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
-                                    Browser preview outside Telegram — explore the new glass UI &amp; 5-tab layout:
+                                    Browser preview outside Telegram — test both staff roles:
                                 </p>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => setNeedsLinking(true)}
-                                        className="btn-glass w-full !py-2.5"
+                                        onClick={async () => {
+                                            const {
+                                                DEV_PREVIEW_SUBJECT_TOKEN,
+                                                DEV_PREVIEW_SUBJECT_USER,
+                                            } = await import('../dev/previewMock');
+                                            finishLogin(
+                                                DEV_PREVIEW_SUBJECT_TOKEN,
+                                                DEV_PREVIEW_SUBJECT_USER,
+                                            );
+                                        }}
+                                        className="btn-primary w-full !py-2.5 !text-xs"
                                     >
-                                        Preview Link Card
+                                        French Teacher
                                     </button>
                                     <button
                                         type="button"
                                         onClick={async () => {
-                                            const { DEV_PREVIEW_TOKEN, DEV_PREVIEW_USER } = await import(
-                                                '../dev/previewMock'
+                                            const {
+                                                DEV_PREVIEW_MAIN_TOKEN,
+                                                DEV_PREVIEW_MAIN_USER,
+                                            } = await import('../dev/previewMock');
+                                            finishLogin(
+                                                DEV_PREVIEW_MAIN_TOKEN,
+                                                DEV_PREVIEW_MAIN_USER,
                                             );
-                                            finishLogin(DEV_PREVIEW_TOKEN, DEV_PREVIEW_USER);
                                         }}
-                                        className="btn-primary w-full !py-2.5 !text-xs"
+                                        className="btn-glass w-full !py-2.5"
                                     >
-                                        Open 5-Tab App
+                                        Main Teacher
                                     </button>
                                 </div>
                             </div>

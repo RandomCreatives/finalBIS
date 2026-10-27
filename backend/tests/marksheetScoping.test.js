@@ -13,6 +13,7 @@ const CLASS_A = '713bfeaa-d141-44f0-864a-cee594efb105';
 const CLASS_B = '2c4e6a80-1f3d-4b5c-8e7a-9d0f1b2c3e45';
 const SUBJ_MAT = '3b7d9e15-8c2a-4f60-b1d4-7e5a9c0f2b38';
 const SUBJ_SCI = 'e8c792f8-5e0f-4a8b-96e6-9a07ea4c932a';
+const SUBJ_FRA = '9a1c3e50-7b2d-4f81-a6c4-3e5f7a9b1c2d';
 
 const STU_A1 = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const STU_B1 = 'c3d4e5f6-a7b8-4c9d-9e1f-2a3b4c5d6e7f';
@@ -28,12 +29,13 @@ const user = (id, role, name) => ({
 const ADMIN = user('b7180a79-119a-4dfb-9934-aa683058abf6', 'admin', 'Admin');
 const MAIN_A = user('82e61fbc-9942-415c-909c-f408360a2ef4', 'main_teacher', 'Meron');
 const MAIN_B = user('7d3e5f91-4a26-4c80-b5e3-9f1a7c2d6b48', 'main_teacher', 'Bekele');
+const FRENCH_T = user('343d1a63-716b-492c-88ca-f466c50aea97', 'subject_teacher', 'Emmanuel');
 
 const tokenFor = (u) => signToken(u);
 
 const tables = () => ({
     schools: [{ id: SCHOOL, name: 'BIS NOC Gerji' }],
-    users: [ADMIN, MAIN_A, MAIN_B],
+    users: [ADMIN, MAIN_A, MAIN_B, FRENCH_T],
     academic_years: [{ id: YEAR, school_id: SCHOOL, name: '2026/2027', is_current: true }],
     terms: [{ id: TERM_1, school_id: SCHOOL, academic_year_id: YEAR, term_index: 1, name: 'Term 1', is_current: true }],
     classes: [
@@ -43,16 +45,18 @@ const tables = () => ({
     subjects: [
         { id: SUBJ_MAT, school_id: SCHOOL, name: 'Mathematics', code: 'MAT', taught_by: 'main_teacher' },
         { id: SUBJ_SCI, school_id: SCHOOL, name: 'Science', code: 'SCI', taught_by: 'main_teacher' },
+        { id: SUBJ_FRA, school_id: SCHOOL, name: 'French', code: 'FRA', taught_by: 'subject_teacher' },
     ],
     class_staff: [
         { id: 'cs-a', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, user_id: MAIN_A.id, position: 'main' },
         { id: 'cs-b', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_B, user_id: MAIN_B.id, position: 'main' },
     ],
     // MAIN_A teaches Maths AND Science in CLASS_A — the multi-row shape that
-    // must never break access checks.
+    // must never break access checks. FRENCH_T teaches French in CLASS_A only.
     class_subjects: [
         { id: 'asg-1', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_MAT, teacher_id: MAIN_A.id, sessions_per_week: 6 },
         { id: 'asg-2', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_SCI, teacher_id: MAIN_A.id, sessions_per_week: 5 },
+        { id: 'asg-3', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, subject_id: SUBJ_FRA, teacher_id: FRENCH_T.id, sessions_per_week: 2 },
     ],
     students: [
         { id: STU_A1, school_id: SCHOOL, name: 'Abel T', admission_no: 'A001', roll_num: 1, class_id: CLASS_A, is_active: true },
@@ -117,6 +121,52 @@ describe('marksheet read scoping', () => {
             .get(`/api/marksheets/student/${STU_B1}`)
             .auth(tokenFor(MAIN_A));
         assert.equal(foreign.status, 403);
+    });
+
+    test('a subject teacher (e.g. French) sees ONLY their assigned (class, subject) marks — never other subjects in the same class', async () => {
+        rowsOf('marksheets').push({
+            id: 'f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c',
+            school_id: SCHOOL,
+            student_id: STU_A1,
+            subject_id: SUBJ_FRA,
+            class_id: CLASS_A,
+            term_id: TERM_1,
+            marks: 92,
+            max_marks: 100,
+            percentage: 92,
+            grade: 'A+',
+            entered_by: FRENCH_T.id,
+        });
+
+        // Unfiltered GET /api/marksheets returns French in CLASS_A, NOT Maths in CLASS_A.
+        const allMine = await request(app)
+            .get('/api/marksheets')
+            .auth(tokenFor(FRENCH_T));
+        assert.equal(allMine.status, 200);
+        assert.equal(allMine.body.marksheets.length, 1);
+        assert.equal(allMine.body.marksheets[0].subject.code, 'FRA');
+        assert.equal(allMine.body.marksheets[0].class.name, 'Year 3A');
+
+        // Asking for CLASS_A without subjectId still returns ONLY French, not Maths.
+        const classOnly = await request(app)
+            .get(`/api/marksheets?classId=${CLASS_A}`)
+            .auth(tokenFor(FRENCH_T));
+        assert.equal(classOnly.status, 200);
+        assert.equal(classOnly.body.marksheets.length, 1);
+        assert.equal(classOnly.body.marksheets[0].subject.code, 'FRA');
+
+        // Asking specifically for Maths in CLASS_A returns empty (not their subject).
+        const wrongSubj = await request(app)
+            .get(`/api/marksheets?classId=${CLASS_A}&subjectId=${SUBJ_MAT}`)
+            .auth(tokenFor(FRENCH_T));
+        assert.equal(wrongSubj.status, 200);
+        assert.equal(wrongSubj.body.marksheets.length, 0);
+
+        // Asking for an unassigned class returns 403.
+        const wrongClass = await request(app)
+            .get(`/api/marksheets?classId=${CLASS_B}`)
+            .auth(tokenFor(FRENCH_T));
+        assert.equal(wrongClass.status, 403);
     });
 });
 
