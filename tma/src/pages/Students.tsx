@@ -105,10 +105,8 @@ export default function Students() {
                                         key={cls}
                                         type="button"
                                         onClick={() => setClassFilter(cls)}
-                                        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                                            active
-                                                ? 'bg-blue-600 text-white shadow-sm'
-                                                : 'glass-subcard text-slate-600 dark:text-slate-300'
+                                        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                                            active ? 'glass-pill-active' : 'glass-pill'
                                         }`}
                                     >
                                         {cls === 'all' ? 'All classes' : cls}
@@ -120,10 +118,10 @@ export default function Students() {
                             <button
                                 type="button"
                                 onClick={() => setSenOnly((v) => !v)}
-                                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+                                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1 ${
                                     senOnly
-                                        ? 'bg-amber-500 text-white shadow-sm'
-                                        : 'glass-subcard text-amber-700 dark:text-amber-300'
+                                        ? 'glass-btn-amber'
+                                        : 'glass-pill !text-amber-700 dark:!text-amber-300'
                                 }`}
                             >
                                 <Sparkles className="w-3 h-3" />
@@ -184,7 +182,7 @@ export default function Students() {
                                     {s.guardianPhone ? (
                                         <a
                                             href={`tel:${String(s.guardianPhone).replace(/\s+/g, '')}`}
-                                            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/12 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold text-[11px] border border-emerald-500/25 active:scale-95 transition-transform"
+                                            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-tint-emerald font-semibold text-[11px]"
                                         >
                                             <Phone className="w-3 h-3" />
                                             <span>{s.guardianPhone}</span>

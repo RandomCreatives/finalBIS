@@ -215,12 +215,14 @@ const verifyTelegramInitData = (initData, botToken, opts = {}) => {
     };
 };
 
-const DEFAULT_PUBLIC_ORIGIN = 'https://final-bis.vercel.app';
+const DEFAULT_PUBLIC_ORIGIN = 'https://bis-gerji-primary2.vercel.app';
+const LEGACY_HOSTS = new Set(['final-bis.vercel.app', 'localhost', '127.0.0.1']);
 
 /**
  * Resolve a guaranteed-valid public HTTPS origin for Telegram `url` and
  * `web_app` inline keyboard buttons (Telegram rejects `http://`, `localhost`,
- * or malformed URLs with HTTP 400).
+ * or malformed URLs with HTTP 400, and legacy `final-bis.vercel.app` is
+ * superseded by `bis-gerji-primary2.vercel.app`).
  */
 const publicWebOrigin = () => {
     const raw = String(process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
@@ -230,8 +232,7 @@ const publicWebOrigin = () => {
         if (
             parsed.protocol === 'https:' &&
             parsed.hostname &&
-            parsed.hostname !== 'localhost' &&
-            parsed.hostname !== '127.0.0.1'
+            !LEGACY_HOSTS.has(parsed.hostname.toLowerCase())
         ) {
             return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`;
         }
@@ -240,6 +241,22 @@ const publicWebOrigin = () => {
     }
     return DEFAULT_PUBLIC_ORIGIN;
 };
+
+const hasButtonStyles = (payload) =>
+    Array.isArray(payload?.reply_markup?.inline_keyboard) &&
+    payload.reply_markup.inline_keyboard.some(
+        (row) => Array.isArray(row) && row.some((b) => b && b.style !== undefined)
+    );
+
+const stripButtonStyles = (payload) => ({
+    ...payload,
+    reply_markup: {
+        ...payload.reply_markup,
+        inline_keyboard: payload.reply_markup.inline_keyboard.map((row) =>
+            row.map(({ style: _style, ...rest }) => rest)
+        ),
+    },
+});
 
 /**
  * Low-level caller for any Telegram Bot API method.
@@ -250,13 +267,31 @@ const callTelegramApi = async (method, payload = {}) => {
     const token = env.telegram.botToken;
     if (!token) return null;
 
-    try {
+    const sendOnce = async (bodyObj) => {
         const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(bodyObj),
         });
-        const data = await response.json();
+        return response.json();
+    };
+
+    try {
+        let data = await sendOnce(payload);
+
+        // Self-healing fallback: if a Bot API validator rejects button `style`
+        // hints with HTTP 400, retry once cleanly without `style`.
+        if (
+            data &&
+            data.ok === false &&
+            data.error_code === 400 &&
+            (method === 'sendMessage' || method === 'editMessageText') &&
+            hasButtonStyles(payload) &&
+            !/message is not modified/i.test(data.description || '')
+        ) {
+            data = await sendOnce(stripButtonStyles(payload));
+        }
+
         if (data && data.ok === false && !/message is not modified/i.test(data.description || '')) {
             console.error(`[telegram] ${method} rejected (${data.error_code}): ${data.description}`);
         }
@@ -314,6 +349,15 @@ const getWebhookInfo = () => callTelegramApi('getWebhookInfo', {});
 
 const setMyCommands = (commands) => callTelegramApi('setMyCommands', { commands });
 
+const setChatMenuButton = (url, text = 'Open App') =>
+    callTelegramApi('setChatMenuButton', {
+        menu_button: {
+            type: 'web_app',
+            text,
+            web_app: { url },
+        },
+    });
+
 const deleteWebhook = () => callTelegramApi('deleteWebhook', { drop_pending_updates: true });
 
 const getMe = () => callTelegramApi('getMe', {});
@@ -335,6 +379,7 @@ module.exports = {
     setWebhook,
     getWebhookInfo,
     setMyCommands,
+    setChatMenuButton,
     deleteWebhook,
     getMe,
 };

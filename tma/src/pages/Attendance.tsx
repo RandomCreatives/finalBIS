@@ -19,28 +19,28 @@ const STATUS_OPTIONS: {
         key: 'present',
         short: 'P',
         label: 'Present',
-        activeCls: 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30',
+        activeCls: 'glass-btn-emerald',
         countCls: 'text-emerald-600 dark:text-emerald-400',
     },
     {
         key: 'late',
         short: 'L',
         label: 'Late',
-        activeCls: 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/30',
+        activeCls: 'glass-btn-amber',
         countCls: 'text-amber-600 dark:text-amber-400',
     },
     {
         key: 'absent',
         short: 'A',
         label: 'Absent',
-        activeCls: 'bg-rose-500 text-white border-rose-500 shadow-sm shadow-rose-500/30',
+        activeCls: 'glass-btn-rose',
         countCls: 'text-rose-600 dark:text-rose-400',
     },
     {
         key: 'excused',
         short: 'E',
         label: 'Excused',
-        activeCls: 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-500/30',
+        activeCls: 'glass-btn-sky',
         countCls: 'text-sky-600 dark:text-sky-400',
     },
 ];
@@ -219,10 +219,8 @@ export default function Attendance() {
                                     key={c.id}
                                     type="button"
                                     onClick={() => void loadClassRoster(c.id)}
-                                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                                        active
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                            : 'glass-subcard text-slate-700 dark:text-slate-200'
+                                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold ${
+                                        active ? 'glass-pill-active' : 'glass-pill'
                                     }`}
                                 >
                                     <span>{c.name}</span>
@@ -280,9 +278,9 @@ export default function Attendance() {
                             <button
                                 type="button"
                                 onClick={markAllPresent}
-                                className="btn-glass"
+                                className="px-3 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 glass-tint-emerald"
                             >
-                                <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                                <CheckCheck className="w-3.5 h-3.5" />
                                 All Present
                             </button>
                             <button
@@ -331,10 +329,8 @@ export default function Attendance() {
                                                     type="button"
                                                     title={opt.label}
                                                     onClick={() => toggle(s.id, opt.key)}
-                                                    className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all active:scale-95 ${
-                                                        active
-                                                            ? opt.activeCls
-                                                            : 'bg-white/50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-white/10'
+                                                    className={`w-8 h-8 rounded-lg text-xs font-bold ${
+                                                        active ? opt.activeCls : 'glass-pill'
                                                     }`}
                                                 >
                                                     {opt.short}

@@ -77,6 +77,7 @@ interface TelegramWebApp {
     ready: () => void;
     expand: () => void;
     close?: () => void;
+    openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
     disableVerticalSwipes?: () => void;
     setHeaderColor?: (color: string) => void;
     setBackgroundColor?: (color: string) => void;
@@ -162,7 +163,38 @@ export function themeColor(key: string, fallback: string): string {
     return getWebApp()?.themeParams?.[key] ?? fallback;
 }
 
-const apiBase = () => (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const PUBLIC_WEB_ORIGIN = 'https://bis-gerji-primary2.vercel.app';
+
+export function resolveApiBase(): string {
+    const raw = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+    if (!raw || /final-bis\.vercel\.app/i.test(raw)) return '';
+    return raw;
+}
+
+const apiBase = () => resolveApiBase();
+
+/**
+ * Open an external HTTPS URL reliably from inside a Telegram Mini App WebView
+ * (`Telegram.WebApp.openLink`) with a standard browser fallback outside Telegram.
+ */
+export function openExternalLink(url: string): void {
+    const webApp = getWebApp();
+    if (webApp?.openLink) {
+        try {
+            webApp.openLink(url);
+            return;
+        } catch {
+            /* fall back to window.open */
+        }
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** Open the BIS NOC full web portal at https://bis-gerji-primary2.vercel.app. */
+export function openWebPortal(role?: string): void {
+    const path = role === 'subject_teacher' ? '/subject-home' : '/app';
+    openExternalLink(`${PUBLIC_WEB_ORIGIN}${path}`);
+}
 
 async function parseAuthResponse(res: Response, fallbackMsg: string): Promise<AuthResponse> {
     if (!res.ok) {
