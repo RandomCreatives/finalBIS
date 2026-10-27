@@ -143,7 +143,11 @@ const telegramReminder = (klass, date, dayLabel) => ({
     replyMarkup: {
         inline_keyboard: [
             [{ text: '✅ Mark all present', callback_data: `ap:${klass.classId}` }],
-            [{ text: '📝 Open the register', url: `${WEB_APP}${registerPath(klass.classId, date)}` }],
+            [
+                { text: '📝 Open the register', url: `${WEB_APP}${registerPath(klass.classId, date)}` },
+                { text: '🌐 Mini App', web_app: { url: `${WEB_APP}/tma/attendance?classId=${klass.classId}` } },
+            ],
+            [{ text: '📝 Mark absences / late', callback_data: `ar:${klass.classId}:1` }],
         ],
     },
 });
