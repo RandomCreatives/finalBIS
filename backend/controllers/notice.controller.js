@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { NotFoundError, asyncHandler } = require('../utils/errors');
+const { sendNoticeTelegramPushes } = require('../services/telegramBot');
 
 /**
  * Broadcast announcements with read receipts.
@@ -101,6 +102,7 @@ const createNotice = asyncHandler(async (req, res) => {
         .single();
 
     if (error) throw error;
+    await sendNoticeTelegramPushes({ ...data, school_id: req.user.school_id }, req.user.id);
     res.status(201).json({ notice: shape(data) });
 });
 

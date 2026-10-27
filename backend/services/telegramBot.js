@@ -12,24 +12,31 @@ const menus = require('./telegramMenus');
 
 const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
 
-// ---------------------------------------------------------------------------
-// Inline keyboard helpers
-// ---------------------------------------------------------------------------
-const btn = (text, callback_data) => ({ text, callback_data });
-const urlBtn = (text, url) => ({ text, url });
-const kb = (rows) => ({ inline_keyboard: rows });
-
 // Dates and weekdays on the school's clock (Addis Ababa, GMT+3), not the server's UTC.
-// (Label shortening and callback encoding live in services/telegramMenus.js.)
 const todayStr = () =>
     schoolTime.formatDay(schoolTime.todayIso(), { weekday: 'long', day: 'numeric', month: 'short' });
 
 // Homeroom & leadership roles that record daily attendance in Telegram.
 // Subject teachers do not take daily class attendance.
 const ATTENDANCE_ROLES = new Set(['admin', 'main_teacher', 'assistant_teacher']);
+const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS']);
+
+const STATUS_FROM_CODE = {
+    p: 'present',
+    a: 'absent',
+    l: 'late',
+    e: 'excused',
+};
+
+const STATUS_LABEL = {
+    present: 'Present',
+    absent: 'Absent',
+    late: 'Late',
+    excused: 'Excused',
+};
 
 // ---------------------------------------------------------------------------
-// Data access (scoped exactly like the HTTP controllers)
+// Data access (scoped like the HTTP controllers)
 // ---------------------------------------------------------------------------
 async function resolveUser(chatId) {
     const numeric = Number(chatId);
@@ -61,9 +68,7 @@ async function getCurrentYearId(user) {
 
 const TT_SELECT = `id, starts_at, ends_at, room, class:classes(name), assignment:class_subjects(subject:subjects(name))`;
 
-async function getTodayTimetable(user, yearId) {
-    // DB day_of_week 1=Mon..7=Sun, today at school.
-    const dow = schoolTime.weekdayToday();
+async function getTimetableForDow(user, yearId, dow) {
     const { data, error } = await supabase
         .from('timetable_slots')
         .select(TT_SELECT)
@@ -75,10 +80,14 @@ async function getTodayTimetable(user, yearId) {
     return data || [];
 }
 
+async function getTodayTimetable(user, yearId) {
+    return getTimetableForDow(user, yearId, schoolTime.weekdayToday());
+}
+
 /**
  * Today's tasks: everything still open, plus anything completed earlier
  * today. Keeping today's completed tasks on the screen is what makes the
- * ✅/☐ toggle honest — a mis-tap can be undone in the same place instead of
+ * ☑/☐ toggle honest — a mis-tap can be undone in the same place instead of
  * the task silently disappearing until it is found in the web app.
  */
 async function getMyTasks(user) {
@@ -106,6 +115,16 @@ async function getMyTasks(user) {
     if (doneError) throw doneError;
 
     return [...(open || []), ...(doneToday || [])];
+}
+
+async function getTaskForPushView(user, taskId) {
+    const { data } = await supabase
+        .from('tasks')
+        .select('id, title, description, status, due_on, priority, assigned_to, assigned_by')
+        .eq('id', taskId)
+        .eq('school_id', user.school_id)
+        .maybeSingle();
+    return data || null;
 }
 
 async function toggleTask(user, taskId) {
@@ -136,15 +155,125 @@ async function toggleTask(user, taskId) {
     return !error;
 }
 
-async function getMyClasses(user, yearId) {
+/** Homeroom classes (for Attendance shortcut): all classes for admins, main/assistant seats for teachers. */
+async function getHomeroomClasses(user, yearId) {
+    if (user.role === 'admin') {
+        const { data, error } = await supabase
+            .from('classes')
+            .select('id, name')
+            .eq('school_id', user.school_id)
+            .order('name');
+        if (error) throw error;
+        return data || [];
+    }
+
+    if (!yearId) return [];
     const { data, error } = await supabase
         .from('class_staff')
-        .select('class:classes(id, name)')
+        .select('position, class:classes(id, name)')
         .eq('user_id', user.id)
         .eq('academic_year_id', yearId)
-        .eq('position', 'main');
+        .in('position', ['main', 'assistant']);
     if (error) throw error;
-    return (data || []).map((r) => r.class).filter(Boolean);
+
+    const seen = new Map();
+    for (const row of data || []) {
+        if (row.class?.id && !seen.has(row.class.id)) {
+            seen.set(row.class.id, row.class);
+        }
+    }
+    return [...seen.values()];
+}
+
+/**
+ * Classes visible in `🏫 Classes`:
+ *  - Admin: every class in the school
+ *  - Subject teacher: distinct classes taught via `class_subjects` (annotated with subject names)
+ *  - Main / Assistant teacher: homeroom classes + any subject-taught classes
+ */
+async function getMyClasses(user, yearId) {
+    if (user.role === 'admin') {
+        return getHomeroomClasses(user, yearId);
+    }
+
+    if (!yearId) return [];
+
+    const byId = new Map();
+
+    if (user.role !== 'subject_teacher') {
+        const homerooms = await getHomeroomClasses(user, yearId);
+        homerooms.forEach((c) => {
+            byId.set(c.id, { id: c.id, name: c.name, subjects: [] });
+        });
+    }
+
+    const { data: subjectSeats, error: subjError } = await supabase
+        .from('class_subjects')
+        .select('class_id, subject_id, class:classes(id, name), subject:subjects(id, name, code)')
+        .eq('teacher_id', user.id)
+        .eq('academic_year_id', yearId);
+    if (subjError) throw subjError;
+
+    for (const seat of subjectSeats || []) {
+        const cls = seat.class;
+        const subj = seat.subject;
+        if (!cls?.id) continue;
+        if (subj?.code === 'REG') continue;
+
+        const entry = byId.get(cls.id) || { id: cls.id, name: cls.name, subjects: [] };
+        if (subj?.name && !entry.subjects.includes(subj.name)) {
+            entry.subjects.push(subj.name);
+        }
+        if (subj?.id && !entry.firstSubjectId) {
+            entry.firstSubjectId = subj.id;
+        }
+        byId.set(cls.id, entry);
+    }
+
+    return [...byId.values()]
+        .map((c) => ({
+            ...c,
+            subtitle: c.subjects.length ? c.subjects.join(', ') : undefined,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Resolve subjects taught by `user` in `classId` (for class detail & marksheet deep-link). */
+async function getClassTeachingMeta(user, yearId, classId) {
+    if (!yearId) return { subjects: [], firstSubjectId: null };
+
+    if (user.role === 'subject_teacher') {
+        const { data } = await supabase
+            .from('class_subjects')
+            .select('subject_id, subject:subjects(id, name, code)')
+            .eq('class_id', classId)
+            .eq('teacher_id', user.id)
+            .eq('academic_year_id', yearId);
+        const valid = (data || [])
+            .map((r) => r.subject)
+            .filter((s) => s?.id && s.code !== 'REG');
+        return {
+            subjects: [...new Set(valid.map((s) => s.name))],
+            firstSubjectId: valid[0]?.id || null,
+        };
+    }
+
+    if (user.role === 'main_teacher') {
+        const { data } = await supabase
+            .from('class_subjects')
+            .select('subject_id, subject:subjects(id, name, code)')
+            .eq('class_id', classId)
+            .eq('academic_year_id', yearId);
+        const valid = (data || [])
+            .map((r) => r.subject)
+            .filter((s) => s?.id && MAIN_TEACHER_MARKSHEET_CODES.has(s.code));
+        return {
+            subjects: [...new Set(valid.map((s) => s.name))],
+            firstSubjectId: valid[0]?.id || null,
+        };
+    }
+
+    return { subjects: [], firstSubjectId: null };
 }
 
 async function getKlass(classId, schoolId) {
@@ -160,12 +289,122 @@ async function getKlass(classId, schoolId) {
 async function getStudents(classId) {
     const { data, error } = await supabase
         .from('students')
-        .select('id, name, admission_no, roll_num')
+        .select('id, class_id, name, admission_no, roll_num, guardian_name, guardian_phone, guardian_email, special_needs, special_needs_note, sen_teacher_name')
         .eq('class_id', classId)
         .eq('is_active', true)
         .order('name');
     if (error) throw error;
     return data || [];
+}
+
+async function getStudentById(studentId, schoolId) {
+    const { data } = await supabase
+        .from('students')
+        .select('id, class_id, name, admission_no, roll_num, guardian_name, guardian_phone, guardian_email, special_needs, special_needs_note, sen_teacher_name')
+        .eq('id', studentId)
+        .eq('school_id', schoolId)
+        .eq('is_active', true)
+        .maybeSingle();
+    return data || null;
+}
+
+async function getTodayAttendanceMap(classId, schoolId, date = schoolTime.todayIso()) {
+    const { data } = await supabase
+        .from('attendance')
+        .select('student_id, status')
+        .eq('school_id', schoolId)
+        .eq('class_id', classId)
+        .eq('date', date)
+        .is('subject_id', null);
+
+    const map = {};
+    for (const row of data || []) {
+        if (row.student_id && row.status) {
+            map[row.student_id] = row.status;
+        }
+    }
+    return map;
+}
+
+function summarizeAttendance(students, statusByStudent) {
+    const summary = {
+        total: students.length,
+        marked: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        exceptions: [],
+    };
+    for (const s of students) {
+        const st = statusByStudent[s.id];
+        if (!st) continue;
+        summary.marked += 1;
+        if (summary[st] !== undefined) summary[st] += 1;
+        if (st !== 'present') {
+            summary.exceptions.push({ id: s.id, name: s.name, status: st });
+        }
+    }
+    return summary;
+}
+
+async function getSchoolPulseData(user) {
+    const date = schoolTime.todayIso();
+    const yearId = await getCurrentYearId(user);
+
+    const [classesRes, studentsRes, attRes, seatsRes] = await Promise.all([
+        supabase.from('classes').select('id, name').eq('school_id', user.school_id).order('name'),
+        supabase.from('students').select('id, class_id').eq('school_id', user.school_id).eq('is_active', true),
+        supabase.from('attendance')
+            .select('class_id, student_id, status')
+            .eq('school_id', user.school_id)
+            .eq('date', date)
+            .is('subject_id', null),
+        yearId
+            ? supabase.from('class_staff')
+                .select('class_id, user:users(name, is_active)')
+                .eq('school_id', user.school_id)
+                .eq('academic_year_id', yearId)
+                .eq('position', 'main')
+            : Promise.resolve({ data: [] }),
+    ]);
+
+    const pupilCountByClass = new Map();
+    for (const s of studentsRes.data || []) {
+        if (!s.class_id) continue;
+        pupilCountByClass.set(s.class_id, (pupilCountByClass.get(s.class_id) || 0) + 1);
+    }
+
+    const teacherByClass = new Map();
+    for (const seat of seatsRes.data || []) {
+        if (seat.user?.is_active && seat.user.name && !teacherByClass.has(seat.class_id)) {
+            teacherByClass.set(seat.class_id, seat.user.name);
+        }
+    }
+
+    const takenClasses = new Set();
+    const totals = { classes: 0, taken: 0, present: 0, absent: 0, late: 0, excused: 0 };
+
+    for (const row of attRes.data || []) {
+        if (row.class_id) takenClasses.add(row.class_id);
+        if (row.status && totals[row.status] !== undefined) {
+            totals[row.status] += 1;
+        }
+    }
+
+    const activeClasses = (classesRes.data || []).filter((c) => (pupilCountByClass.get(c.id) || 0) > 0);
+    totals.classes = activeClasses.length;
+    totals.taken = activeClasses.filter((c) => takenClasses.has(c.id)).length;
+
+    const missing = activeClasses
+        .filter((c) => !takenClasses.has(c.id))
+        .map((c) => ({
+            classId: c.id,
+            className: c.name,
+            teacherName: teacherByClass.get(c.id) || null,
+        }));
+
+    return { totals, missing };
 }
 
 async function getNotices(user) {
@@ -176,7 +415,7 @@ async function getNotices(user) {
         .in('audience', ['all', user.role])
         .order('is_pinned', { ascending: false })
         .order('posted_on', { ascending: false })
-        .limit(5);
+        .limit(25);
     if (error) throw error;
 
     const ids = (notices || []).map((n) => n.id);
@@ -194,6 +433,27 @@ async function getNotices(user) {
     return { notices: notices || [], acked };
 }
 
+async function recordNoticeRead(user, noticeId) {
+    const { data: existing } = await supabase
+        .from('notice_receipts')
+        .select('notice_id, acknowledged_at')
+        .eq('notice_id', noticeId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+    if (existing) return;
+
+    await supabase
+        .from('notice_receipts')
+        .upsert(
+            {
+                notice_id: noticeId,
+                user_id: user.id,
+                read_at: new Date().toISOString(),
+            },
+            { onConflict: 'notice_id,user_id' }
+        );
+}
+
 async function acknowledgeNotice(user, noticeId) {
     await supabase
         .from('notice_receipts')
@@ -209,13 +469,8 @@ async function acknowledgeNotice(user, noticeId) {
 }
 
 /**
- * Guards for "mark all present", shared by the confirm screen and the write.
- *
- * Held to the same rules as the website: staff roles only, the class must be
- * in the user's school, and a submitted (locked) month stays locked for
- * everyone but admins. Returning the roster lets the confirm screen name the
- * exact number of pupils before anything is written — and lets the write
- * reuse the same rows it counted.
+ * Guards for homeroom attendance writes, shared by "mark all present",
+ * inline pupil status toggles, and "save rest present".
  */
 async function checkMarkAllPresent(classId, user) {
     if (!ATTENDANCE_ROLES.has(user.role)) return { ok: false, reason: 'Only teachers can record attendance' };
@@ -242,20 +497,12 @@ async function checkMarkAllPresent(classId, user) {
     return { ok: true, klass, students, date };
 }
 
-/**
- * Write the register. Re-checks everything first: the confirm screen may have
- * been open for a while, and a month can be submitted in between.
- */
-async function markAllPresent(classId, user) {
-    const check = await checkMarkAllPresent(classId, user);
-    if (!check.ok) return check;
-
-    const records = check.students.map((s) => ({ studentId: s.id, status: 'present', note: '' }));
+async function saveAttendanceRecords(classId, user, date, records) {
     const { error } = await supabase.rpc('mark_attendance', {
         p_school_id: user.school_id,
         p_class_id: classId,
         p_subject_id: null,
-        p_date: check.date,
+        p_date: date,
         p_marked_by: user.id,
         p_records: records,
     });
@@ -264,6 +511,20 @@ async function markAllPresent(classId, user) {
         console.error('[telegram] markAttendance failed:', error.message);
         return { ok: false, reason: 'Failed to save' };
     }
+    return { ok: true };
+}
+
+/**
+ * Write the full register as present. Re-checks everything first: the confirm
+ * screen may have been open for a while, and a month can be submitted in between.
+ */
+async function markAllPresent(classId, user) {
+    const check = await checkMarkAllPresent(classId, user);
+    if (!check.ok) return check;
+
+    const records = check.students.map((s) => ({ studentId: s.id, status: 'present', note: '' }));
+    const saved = await saveAttendanceRecords(classId, user, check.date, records);
+    if (!saved.ok) return saved;
 
     await resolveAttendanceReminder({ schoolId: user.school_id, classId, date: check.date });
     return { ok: true, klass: check.klass, students: check.students };
@@ -271,43 +532,69 @@ async function markAllPresent(classId, user) {
 
 // ---------------------------------------------------------------------------
 // Message + keyboard builders
-//
-// Every button lives in services/telegramMenus.js — this layer only supplies
-// the environment-dependent bits (web URLs, the school's date) and the data.
 // ---------------------------------------------------------------------------
 const WEB_APP_URL = `${WEB_APP}/app`;
+const SUBJECT_WEB_APP_URL = `${WEB_APP}/subject-home`;
 const MINI_APP_URL = `${WEB_APP}/tma/`;
+const MARKS_APP_URL = `${WEB_APP}/tma/marks`;
 const registerUrl = (classId) =>
     `${WEB_APP}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`;
+const miniAppRegisterUrl = (classId) =>
+    `${WEB_APP}/tma/attendance?classId=${classId}`;
+const miniAppMarksheetUrl = (classId, subjectId) =>
+    subjectId
+        ? `${WEB_APP}/tma/marks?classId=${classId}&subjectId=${subjectId}`
+        : `${WEB_APP}/tma/marks?classId=${classId}`;
 
 /** Role gate shared by the menu (whether to show Attendance) and the action. */
 const canRecordAttendance = (user) => ATTENDANCE_ROLES.has(user.role);
 
 function buildMainMenu(user) {
     const firstName = (user.name || 'there').split(' ')[0];
+    const isSubject = user.role === 'subject_teacher';
     return menus.buildMainMenu({
         firstName,
         isTeacher: canRecordAttendance(user),
-        webAppUrl: WEB_APP_URL,
+        role: user.role,
+        webAppUrl: isSubject ? SUBJECT_WEB_APP_URL : WEB_APP_URL,
         miniAppUrl: MINI_APP_URL,
+        marksAppUrl: MARKS_APP_URL,
     });
 }
 
-function buildToday(user, yearId, slots, tasks) {
-    return menus.buildToday({ dayLabel: todayStr(), slots, tasks });
+function buildToday(user, yearId, slots, tasks, { dow = schoolTime.weekdayToday(), dayLabel = todayStr(), isToday = true } = {}) {
+    return menus.buildToday({ dayLabel, slots, tasks, dow, isToday });
 }
 
 /** Class list. `rowPrefix: 'ca'` turns it into an attendance picker. */
-function buildClasses(classes, { title, rowPrefix, pageBase, icon } = {}) {
-    return menus.buildClassPicker({ classes, back: 'menu', title, rowPrefix, pageBase, icon });
+function buildClasses(classes, { title, emptyText, rowPrefix, page = 1, pageBase, icon } = {}) {
+    return menus.buildClassPicker({
+        classes,
+        back: 'menu',
+        title,
+        emptyText,
+        rowPrefix,
+        page,
+        pageBase,
+        icon,
+    });
 }
 
-function buildClassDetail(klass, studentCount, user) {
+function buildClassDetail(klass, studentCount, user, teachingMeta = {}) {
+    const canAtt = user ? canRecordAttendance(user) : true;
+    const subjects = teachingMeta.subjects || [];
+    const hasMarksheet =
+        user?.role === 'subject_teacher' ||
+        (user?.role === 'main_teacher' && subjects.length > 0);
+
     return menus.buildClassDetail({
         klass,
         studentCount,
-        webAppUrl: WEB_APP_URL,
-        canTakeAttendance: user ? canRecordAttendance(user) : true,
+        subjects,
+        webAppUrl: user?.role === 'subject_teacher' ? SUBJECT_WEB_APP_URL : WEB_APP_URL,
+        miniAppUrl: MINI_APP_URL,
+        marksheetUrl: hasMarksheet ? miniAppMarksheetUrl(klass.id, teachingMeta.firstSubjectId) : undefined,
+        canTakeAttendance: canAtt,
     });
 }
 
@@ -321,11 +608,13 @@ function buildStudents(students, klass, page = 1) {
     });
 }
 
-function buildAttendanceOptions(klass) {
+function buildAttendanceOptions(klass, summary = null) {
     return menus.buildAttendanceOptions({
         klass,
         dayLabel: todayStr(),
+        summary,
         registerUrl: registerUrl(klass.id),
+        miniAppRegisterUrl: miniAppRegisterUrl(klass.id),
     });
 }
 
@@ -349,37 +638,112 @@ async function editMessage(chatId, messageId, built) {
 }
 const editMenu = (c, m, u) => editMessage(c, m, buildMainMenu(u));
 
-// The data-driven menus are resolved in the *WithData wrappers below:
-async function editTodayWithData(chatId, messageId, user) {
+async function editTodayWithData(chatId, messageId, user, requestedDow = null) {
+    const todayDow = schoolTime.weekdayToday();
+    const dow = requestedDow || todayDow;
+    const isToday = !requestedDow || dow === todayDow;
+
+    let dayLabel = todayStr();
+    if (!isToday && dow >= 1 && dow <= 5) {
+        const weekDates = schoolTime.schoolWeek(schoolTime.todayIso());
+        dayLabel = schoolTime.formatDay(weekDates[dow - 1], {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'short',
+        });
+    }
+
     const yearId = await getCurrentYearId(user);
-    const slots = yearId ? await getTodayTimetable(user, yearId) : [];
+    const slots = yearId ? await getTimetableForDow(user, yearId, dow) : [];
     const tasks = await getMyTasks(user);
-    return editMessage(chatId, messageId, buildToday(user, yearId, slots, tasks));
+    return editMessage(chatId, messageId, buildToday(user, yearId, slots, tasks, { dow, dayLabel, isToday }));
 }
-async function editClassesWithData(chatId, messageId, user) {
+
+async function editClassesWithData(chatId, messageId, user, page = 1) {
     const yearId = await getCurrentYearId(user);
-    const classes = yearId ? await getMyClasses(user, yearId) : [];
-    return editMessage(chatId, messageId, buildClasses(classes));
+    const classes = await getMyClasses(user, yearId);
+    const title =
+        user.role === 'admin'
+            ? '🏫 All school classes'
+            : user.role === 'subject_teacher'
+                ? '🏫 Classes you teach'
+                : '🏫 Your classes';
+    const emptyText =
+        user.role === 'subject_teacher'
+            ? 'No subject teaching assignments found for this academic year.'
+            : 'You have no classes assigned this academic year.';
+
+    return editMessage(chatId, messageId, buildClasses(classes, { title, emptyText, page }));
 }
+
+async function editClassDetailWithData(chatId, messageId, user, klass) {
+    const [students, yearId] = await Promise.all([
+        getStudents(klass.id),
+        getCurrentYearId(user),
+    ]);
+    const teachingMeta = await getClassTeachingMeta(user, yearId, klass.id);
+    return editMessage(chatId, messageId, buildClassDetail(klass, students.length, user, teachingMeta));
+}
+
+async function editAttendanceOptionsWithData(chatId, messageId, user, klass) {
+    const [students, statusByStudent] = await Promise.all([
+        getStudents(klass.id),
+        getTodayAttendanceMap(klass.id, user.school_id),
+    ]);
+    const summary = summarizeAttendance(students, statusByStudent);
+    return editMessage(chatId, messageId, buildAttendanceOptions(klass, summary));
+}
+
+async function editInlineRegisterWithData(chatId, messageId, user, klass, page = 1, statusOverride = null) {
+    const students = await getStudents(klass.id);
+    const statusByStudent = statusOverride || (await getTodayAttendanceMap(klass.id, user.school_id));
+    return editMessage(
+        chatId,
+        messageId,
+        menus.buildInlineRegister({
+            klass,
+            dayLabel: todayStr(),
+            students,
+            statusByStudent,
+            page,
+        })
+    );
+}
+
+async function editSchoolPulseWithData(chatId, messageId, user) {
+    const { totals, missing } = await getSchoolPulseData(user);
+    return editMessage(
+        chatId,
+        messageId,
+        menus.buildSchoolPulse({
+            dayLabel: todayStr(),
+            totals,
+            missing,
+            miniAppUrl: MINI_APP_URL,
+        })
+    );
+}
+
 async function editNoticesWithData(chatId, messageId, user, page = 1) {
     const { notices, acked } = await getNotices(user);
     return editMessage(chatId, messageId, buildNotices(notices, acked, page));
 }
-/** "✅ Attendance" from the menu: straight in when there is one class. */
-async function editAttendanceShortcut(chatId, messageId, user) {
+
+/** "✅ Attendance" from the menu: straight in when there is one homeroom class. */
+async function editAttendanceShortcut(chatId, messageId, user, page = 1) {
     const yearId = await getCurrentYearId(user);
-    const classes = yearId ? await getMyClasses(user, yearId) : [];
+    const classes = await getHomeroomClasses(user, yearId);
 
     if (classes.length === 1) {
-        return editMessage(chatId, messageId, buildAttendanceOptions(classes[0]));
+        return editAttendanceOptionsWithData(chatId, messageId, user, classes[0]);
     }
     if (classes.length === 0) {
         return editMessage(
             chatId,
             messageId,
             menus.buildInfo({
-                text: '✅ Attendance\n\nYou are not a main teacher of any class this year, so there is ' +
-                    'no homeroom register for you to take. Subject registers are on the web app.',
+                text: '✅ Attendance\n\nYou are not assigned as a class teacher this year, so there is ' +
+                    'no homeroom register for you to take.',
                 rows: [[menus.urlBtn('🌐 Open the web app', WEB_APP_URL)]],
             })
         );
@@ -390,6 +754,7 @@ async function editAttendanceShortcut(chatId, messageId, user) {
         buildClasses(classes, {
             title: '✅ Attendance — which class?',
             rowPrefix: 'ca',
+            page,
             pageBase: 'at',
             icon: '✅',
         })
@@ -397,13 +762,73 @@ async function editAttendanceShortcut(chatId, messageId, user) {
 }
 
 // ---------------------------------------------------------------------------
+// Proactive outbound Telegram pushes (Notices & Tasks)
+// ---------------------------------------------------------------------------
+async function sendNoticeTelegramPushes(notice, senderUserId = null) {
+    try {
+        if (!notice?.id || !notice?.school_id) return 0;
+
+        let query = supabase
+            .from('users')
+            .select('id, role, is_active, telegram_id')
+            .eq('school_id', notice.school_id)
+            .eq('is_active', true);
+
+        if (notice.audience && notice.audience !== 'all') {
+            query = query.eq('role', notice.audience);
+        }
+
+        const { data: recipients, error } = await query;
+        if (error || !recipients?.length) return 0;
+
+        const linked = recipients.filter(
+            (u) => u.telegram_id && (!senderUserId || u.id !== senderUserId)
+        );
+        if (!linked.length) return 0;
+
+        const built = menus.buildNoticePush({ notice });
+        const results = await Promise.allSettled(
+            linked.map((u) =>
+                sendTelegramMessage(u.telegram_id, built.text, { replyMarkup: built.replyMarkup })
+            )
+        );
+        return results.filter((r) => r.status === 'fulfilled' && r.value?.ok).length;
+    } catch (err) {
+        console.error('[telegram] sendNoticeTelegramPushes failed:', err.message);
+        return 0;
+    }
+}
+
+async function sendTaskTelegramPush(task, senderUser = null) {
+    try {
+        if (!task?.id || !task?.assigned_to) return false;
+        if (senderUser?.id && task.assigned_to === senderUser.id) return false;
+
+        const { data: assignee, error } = await supabase
+            .from('users')
+            .select('id, is_active, telegram_id')
+            .eq('id', task.assigned_to)
+            .maybeSingle();
+
+        if (error || !assignee?.is_active || !assignee?.telegram_id) return false;
+
+        const built = menus.buildTaskPush({
+            task,
+            assignedByName: senderUser?.name || null,
+        });
+        const res = await sendTelegramMessage(assignee.telegram_id, built.text, {
+            replyMarkup: built.replyMarkup,
+        });
+        return Boolean(res?.ok);
+    } catch (err) {
+        console.error('[telegram] sendTaskTelegramPush failed:', err.message);
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // One-time account linking
 // ---------------------------------------------------------------------------
-/**
- * Plain-English replies for every consume outcome. Nothing here reveals
- * whether a token existed — an unknown token and a token belonging to
- * someone else read the same.
- */
 const LINK_REPLIES = {
     linked: '✅ Linked! This Telegram account is now connected to your BIS NOC staff account.',
     invalid:
@@ -426,8 +851,6 @@ const LINK_REPLIES = {
 async function handleLinkStart(msg, chatId, payload) {
     const from = msg.from || {};
 
-    // A link binds a person, so it is only honoured in a private chat — never
-    // from a group where anyone could read or forward the payload.
     if (msg.chat?.type && msg.chat.type !== 'private') {
         await sendTelegramMessage(
             chatId,
@@ -448,10 +871,6 @@ async function handleLinkStart(msg, chatId, payload) {
         return;
     }
 
-    // Name the staff account and the Telegram id that was bound. It is the
-    // fastest way to spot a mix-up (the wrong Telegram account, or a link
-    // requested while signed in as somebody else) — and the same id is shown
-    // on Settings → Telegram, so the two can be compared at a glance.
     const who = `id ${from.id}${from.username ? ` · @${from.username}` : ''}`;
     const staff = result.user || {};
     const account = staff.name
@@ -474,9 +893,6 @@ async function handleMessage(msg) {
     const chatId = msg.chat?.id;
     if (!chatId) return;
 
-    // One-time link: Telegram delivers the deep-link payload as the first
-    // argument of /start. Handle it before the linked-user gate, because the
-    // whole point is that this account is not linked yet.
     const text = (msg.text || '').trim();
     const startMatch = /^\/start(?:@\w+)?(?:\s+(\S+))?$/i.exec(text);
     const payload = startMatch?.[1] || '';
@@ -507,6 +923,14 @@ async function handleMessage(msg) {
         await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
         return;
     }
+    if (cmd === '/today') {
+        const yearId = await getCurrentYearId(user);
+        const slots = yearId ? await getTodayTimetable(user, yearId) : [];
+        const tasks = await getMyTasks(user);
+        const built = buildToday(user, yearId, slots, tasks);
+        await sendTelegramMessage(chatId, built.text, { replyMarkup: built.replyMarkup });
+        return;
+    }
 
     const menu = buildMainMenu(user);
     await sendTelegramMessage(chatId, "I didn't catch that. Here are your options:", {
@@ -532,25 +956,46 @@ async function handleCallback(query) {
         return;
     }
 
-    // Builders that need DB data are resolved per-branch. Every branch ends
-    // by editing the same message, so the chat stays a single, tidy screen
-    // instead of a growing pile of keyboards. Older keyboards (sent before
-    // this design) keep working: their callbacks are still understood.
+    // ── main menu & schedule ─────────────────────────────────────────────
     if (data === 'menu') {
         await editMenu(chatId, messageId, user);
     } else if (data === 'today') {
         await editTodayWithData(chatId, messageId, user);
+    } else if (/^day:[1-5]$/.test(data)) {
+        const dow = Number(data.split(':')[1]);
+        await editTodayWithData(chatId, messageId, user, dow);
 
-    // ── tasks ────────────────────────────────────────────────────────────
+    // ── admin school pulse ───────────────────────────────────────────────
+    } else if (data === 'pulse') {
+        if (user.role !== 'admin') {
+            await answerCallbackQuery(cbId, { text: 'School pulse is for administrators only', showAlert: true });
+            return;
+        }
+        await editSchoolPulseWithData(chatId, messageId, user);
+
+    // ── tasks (Today view & proactive task push cards) ───────────────────
     } else if (data.startsWith('task:done:')) {
         const taskId = data.slice('task:done:'.length);
         const ok = await toggleTask(user, taskId);
         await answerCallbackQuery(cbId, { text: ok ? 'Updated ✓' : 'Could not update', showAlert: !ok });
         if (ok) await editTodayWithData(chatId, messageId, user);
+    } else if (data.startsWith('tt:')) {
+        const taskId = data.slice(3);
+        const ok = await toggleTask(user, taskId);
+        await answerCallbackQuery(cbId, { text: ok ? 'Task updated ✓' : 'Could not update', showAlert: !ok });
+        if (ok) {
+            const task = await getTaskForPushView(user, taskId);
+            if (task) {
+                await editMessage(chatId, messageId, menus.buildTaskPush({ task }));
+            } else {
+                await editTodayWithData(chatId, messageId, user);
+            }
+        }
 
     // ── classes ──────────────────────────────────────────────────────────
     } else if (data === 'cls' || /^cls:\d+$/.test(data)) {
-        await editClassesWithData(chatId, messageId, user);
+        const page = Number(data.split(':')[1]) || 1;
+        await editClassesWithData(chatId, messageId, user, page);
     } else if (data.startsWith('c:')) {
         const classId = data.slice(2);
         const klass = await getKlass(classId, user.school_id);
@@ -559,10 +1004,9 @@ async function handleCallback(query) {
             await editClassesWithData(chatId, messageId, user);
             return;
         }
-        const students = await getStudents(classId);
-        await editMessage(chatId, messageId, buildClassDetail(klass, students.length, user));
+        await editClassDetailWithData(chatId, messageId, user, klass);
 
-    // ── roster (paginated) ───────────────────────────────────────────────
+    // ── roster (paginated) & pupil guardian card ─────────────────────────
     } else if (data.startsWith('cs:')) {
         const [, classId, page] = data.split(':');
         const klass = await getKlass(classId, user.school_id);
@@ -573,14 +1017,34 @@ async function handleCallback(query) {
         }
         const students = await getStudents(classId);
         await editMessage(chatId, messageId, buildStudents(students, klass, Number(page) || 1));
+    } else if (data.startsWith('st:')) {
+        const [, studentId, pageStr] = data.split(':');
+        const student = await getStudentById(studentId, user.school_id);
+        if (!student) {
+            await answerCallbackQuery(cbId, { text: 'Pupil not found', showAlert: true });
+            await editClassesWithData(chatId, messageId, user);
+            return;
+        }
+        const klass = await getKlass(student.class_id, user.school_id);
+        const page = Number(pageStr) || 1;
+        await editMessage(
+            chatId,
+            messageId,
+            menus.buildStudentDetail({
+                student,
+                klassName: klass?.name || 'Class',
+                back: student.class_id ? `cs:${student.class_id}:${page}` : 'cls',
+            })
+        );
 
-    // ── attendance ───────────────────────────────────────────────────────
+    // ── attendance hub & inline exception picker ─────────────────────────
     } else if (data === 'at' || /^at:\d+$/.test(data)) {
         if (!canRecordAttendance(user)) {
             await answerCallbackQuery(cbId, { text: 'Attendance is recorded by homeroom teachers', showAlert: true });
             return;
         }
-        await editAttendanceShortcut(chatId, messageId, user);
+        const page = Number(data.split(':')[1]) || 1;
+        await editAttendanceShortcut(chatId, messageId, user, page);
     } else if (data.startsWith('ca:')) {
         if (!canRecordAttendance(user)) {
             await answerCallbackQuery(cbId, { text: 'Attendance is recorded by homeroom teachers', showAlert: true });
@@ -593,7 +1057,123 @@ async function handleCallback(query) {
             await editClassesWithData(chatId, messageId, user);
             return;
         }
-        await editMessage(chatId, messageId, buildAttendanceOptions(klass));
+        await editAttendanceOptionsWithData(chatId, messageId, user, klass);
+
+    } else if (data.startsWith('ar:')) {
+        if (!canRecordAttendance(user)) {
+            await answerCallbackQuery(cbId, { text: 'Attendance is recorded by homeroom teachers', showAlert: true });
+            return;
+        }
+        const [, classId, pageStr] = data.split(':');
+        const check = await checkMarkAllPresent(classId, user);
+        if (!check.ok) {
+            await answerCallbackQuery(cbId, { text: check.reason, showAlert: true });
+            return;
+        }
+        await answerCallbackQuery(cbId);
+        await editInlineRegisterWithData(chatId, messageId, user, check.klass, Number(pageStr) || 1);
+
+    } else if (data.startsWith('am:')) {
+        const [, studentId, statusCode, pageStr] = data.split(':');
+        const nextStatus = STATUS_FROM_CODE[statusCode];
+        if (!nextStatus) {
+            await answerCallbackQuery(cbId, { text: 'Invalid attendance status', showAlert: true });
+            return;
+        }
+        const student = await getStudentById(studentId, user.school_id);
+        if (!student || !student.class_id) {
+            await answerCallbackQuery(cbId, { text: 'Pupil not found', showAlert: true });
+            return;
+        }
+        const check = await checkMarkAllPresent(student.class_id, user);
+        if (!check.ok) {
+            await answerCallbackQuery(cbId, { text: check.reason, showAlert: true });
+            return;
+        }
+
+        const saved = await saveAttendanceRecords(student.class_id, user, check.date, [
+            { studentId: student.id, status: nextStatus, note: '' },
+        ]);
+        if (!saved.ok) {
+            await answerCallbackQuery(cbId, { text: saved.reason, showAlert: true });
+            return;
+        }
+
+        const currentMap = await getTodayAttendanceMap(student.class_id, user.school_id, check.date);
+        const updatedMap = { ...currentMap, [student.id]: nextStatus };
+        if (check.students.every((s) => Boolean(updatedMap[s.id]))) {
+            await resolveAttendanceReminder({
+                schoolId: user.school_id,
+                classId: student.class_id,
+                date: check.date,
+            });
+        }
+
+        await answerCallbackQuery(cbId, {
+            text: `${student.name} → ${STATUS_LABEL[nextStatus]}`,
+        });
+        await editInlineRegisterWithData(
+            chatId,
+            messageId,
+            user,
+            check.klass,
+            Number(pageStr) || 1,
+            updatedMap
+        );
+
+    } else if (data.startsWith('arp:')) {
+        const [, classId, action] = data.split(':');
+
+        if (action === 'n') {
+            const klass = await getKlass(classId, user.school_id);
+            await answerCallbackQuery(cbId, { text: 'Cancelled' });
+            if (klass) await editInlineRegisterWithData(chatId, messageId, user, klass, 1);
+            return;
+        }
+
+        const check = await checkMarkAllPresent(classId, user);
+        if (!check.ok) {
+            await answerCallbackQuery(cbId, { text: check.reason, showAlert: true });
+            return;
+        }
+
+        const statusByStudent = await getTodayAttendanceMap(classId, user.school_id, check.date);
+        const unmarked = check.students.filter((s) => !statusByStudent[s.id]);
+        const exceptionCount = check.students.filter(
+            (s) => statusByStudent[s.id] && statusByStudent[s.id] !== 'present'
+        ).length;
+
+        if (!unmarked.length) {
+            await answerCallbackQuery(cbId, { text: 'Every pupil is already marked ✓' });
+            await editAttendanceOptionsWithData(chatId, messageId, user, check.klass);
+            return;
+        }
+
+        if (action !== 'y') {
+            await answerCallbackQuery(cbId);
+            await editMessage(
+                chatId,
+                messageId,
+                menus.buildFillPresentConfirm({
+                    klass: check.klass,
+                    dayLabel: todayStr(),
+                    unmarkedCount: unmarked.length,
+                    exceptionCount,
+                })
+            );
+            return;
+        }
+
+        const records = unmarked.map((s) => ({ studentId: s.id, status: 'present', note: '' }));
+        const saved = await saveAttendanceRecords(classId, user, check.date, records);
+        if (!saved.ok) {
+            await answerCallbackQuery(cbId, { text: saved.reason, showAlert: true });
+            return;
+        }
+
+        await resolveAttendanceReminder({ schoolId: user.school_id, classId, date: check.date });
+        await answerCallbackQuery(cbId, { text: `✅ ${unmarked.length} marked present` });
+        await editAttendanceOptionsWithData(chatId, messageId, user, check.klass);
 
     // Mark all present is a bulk write: ap:<id> asks, ap:<id>:y writes,
     // ap:<id>:n goes back. Nothing is written without the extra tap.
@@ -603,7 +1183,7 @@ async function handleCallback(query) {
         if (action === 'n') {
             const klass = await getKlass(classId, user.school_id);
             await answerCallbackQuery(cbId, { text: 'Cancelled — nothing was saved' });
-            if (klass) await editMessage(chatId, messageId, buildAttendanceOptions(klass));
+            if (klass) await editAttendanceOptionsWithData(chatId, messageId, user, klass);
             return;
         }
 
@@ -627,12 +1207,32 @@ async function handleCallback(query) {
             showAlert: !result.ok,
         });
         if (result.ok) {
-            await editMessage(chatId, messageId, buildClassDetail(result.klass, result.students.length, user));
+            await editClassDetailWithData(chatId, messageId, user, result.klass);
         }
 
-    // ── notices (paginated) ──────────────────────────────────────────────
+    // ── notices (paginated) & full reader ────────────────────────────────
     } else if (data === 'nt' || /^nt:\d+$/.test(data)) {
         await editNoticesWithData(chatId, messageId, user, Number(data.split(':')[1]) || 1);
+    } else if (data.startsWith('nv:')) {
+        const [, noticeId, pageStr] = data.split(':');
+        const { notices, acked } = await getNotices(user);
+        const notice = notices.find((n) => String(n.id) === noticeId);
+        if (!notice) {
+            await answerCallbackQuery(cbId, { text: 'That notice is no longer available', showAlert: true });
+            await editNoticesWithData(chatId, messageId, user);
+            return;
+        }
+        await recordNoticeRead(user, notice.id);
+        const page = Number(pageStr) || 1;
+        await editMessage(
+            chatId,
+            messageId,
+            menus.buildNoticeDetail({
+                notice,
+                acked: acked.has(notice.id),
+                back: `nt:${page}`,
+            })
+        );
 
     // Acknowledging is a permanent record: na:<id> asks, na:<id>:y confirms.
     } else if (data.startsWith('na:')) {
@@ -653,7 +1253,6 @@ async function handleCallback(query) {
         }
 
         if (action !== 'y') {
-            // Already acknowledged? Then there is nothing to confirm.
             if (acked.has(notice.id)) {
                 await answerCallbackQuery(cbId, { text: 'Already acknowledged ✓' });
                 return;
@@ -698,4 +1297,9 @@ const webhookHandler = (req, res) => {
     handleUpdate(req.body).catch((err) => console.error('[telegram] update handling failed:', err));
 };
 
-module.exports = { handleUpdate, webhookHandler };
+module.exports = {
+    handleUpdate,
+    webhookHandler,
+    sendNoticeTelegramPushes,
+    sendTaskTelegramPush,
+};

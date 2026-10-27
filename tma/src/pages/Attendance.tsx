@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCheck, CheckCircle2, Save } from 'lucide-react';
 import { GlassCard, SectionTitle } from '../components/GlassCard';
 import { api } from '../api/api';
@@ -46,6 +47,7 @@ const STATUS_OPTIONS: {
 
 export default function Attendance() {
     const { user } = useAuth();
+    const [searchParams] = useSearchParams();
     const today = useMemo(() => todayIso(), []);
 
     const [loadingClasses, setLoadingClasses] = useState(true);
@@ -106,12 +108,14 @@ export default function Attendance() {
                 const list: any[] = data.classes || [];
                 setClasses(list);
                 if (list.length > 0) {
+                    const qClass = searchParams.get('classId');
+                    const requested = qClass ? list.find((c) => c.id === qClass) : null;
                     const homeroom = list.find(
                         (c) =>
                             c.mainTeacher?.id === user?.id ||
                             c.assistantTeacher?.id === user?.id,
                     );
-                    const initial = homeroom || list[0];
+                    const initial = requested || homeroom || list[0];
                     void loadClassRoster(initial.id);
                 }
             })

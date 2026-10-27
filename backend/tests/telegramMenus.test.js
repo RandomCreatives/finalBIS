@@ -3,7 +3,7 @@
  *
  * Every button the bot can render is collected here and checked against the
  * rules the design depends on, so a new screen cannot quietly break them:
- * Telegram's 64-byte callback limit, two-up rows, a fixed emoji lexicon, one
+ * Telegram's 64-byte callback limit, compact rows, a fixed emoji lexicon, one
  * escape hatch per screen, pagination instead of silent truncation, and
  * confirm screens for anything that writes.
  */
@@ -12,15 +12,18 @@ const assert = require('node:assert/strict');
 
 const menus = require('../services/telegramMenus');
 
-const { MAX_CALLBACK_BYTES, callbackBytes, trunc } = menus;
+const { MAX_CALLBACK_BYTES, LEXICON, callbackBytes, trunc } = menus;
 
 const UUID = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+const STUDENT_UUID = '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e';
 const DAY = 'Thursday 12 Nov';
 
 const klass = { id: UUID, name: 'Year 4 - Magenta' };
 const notices = Array.from({ length: 7 }, (_, i) => ({
     id: `notice-${i + 1}`,
     title: `Notice number ${i + 1} about something reasonably long`,
+    body: `Full body text for notice number ${i + 1}. Please review before Friday morning.`,
+    posted_on: '2026-10-20',
     requires_ack: i % 2 === 0,
 }));
 const tasks = Array.from({ length: 3 }, (_, i) => ({
@@ -31,7 +34,14 @@ const slots = [{
     class: { name: 'Year 4 - Magenta' }, assignment: { subject: { name: 'Mathematics' } },
 }];
 const students = Array.from({ length: 37 }, (_, i) => ({
-    id: `s-${i}`, name: `Pupil ${i + 1}`, admission_no: `BIS-${i + 1}`,
+    id: i === 0 ? STUDENT_UUID : `s-${i}`,
+    name: `Pupil ${i + 1}`,
+    admission_no: `BIS-${i + 1}`,
+    roll_num: i + 1,
+    guardian_name: 'Dawit Bekele',
+    guardian_phone: '+251911223344',
+    special_needs: i === 0,
+    sen_teacher_name: i === 0 ? 'Ms. Rahel' : null,
 }));
 const classes = Array.from({ length: 14 }, (_, i) => ({ id: `class-${i}`, name: `Year 4 - Class ${i + 1}` }));
 
@@ -39,22 +49,90 @@ const classes = Array.from({ length: 14 }, (_, i) => ({ id: `class-${i}`, name: 
 const screens = {
     'main menu': menus.buildMainMenu({ firstName: 'Meron', isTeacher: true, webAppUrl: 'https://x/app' }),
     'main menu (non-teacher)': menus.buildMainMenu({ firstName: 'Ada', isTeacher: false, webAppUrl: 'https://x/app' }),
+    'main menu (subject teacher)': menus.buildMainMenu({
+        firstName: 'Dawit',
+        isTeacher: false,
+        role: 'subject_teacher',
+        webAppUrl: 'https://x/subject-home',
+        miniAppUrl: 'https://x/tma/',
+        marksAppUrl: 'https://x/tma/marks',
+    }),
+    'main menu (admin)': menus.buildMainMenu({
+        firstName: 'Hanna',
+        isTeacher: true,
+        role: 'admin',
+        webAppUrl: 'https://x/app',
+        miniAppUrl: 'https://x/tma/',
+    }),
     today: menus.buildToday({ dayLabel: DAY, slots, tasks }),
+    'today with weekday switcher': menus.buildToday({ dayLabel: DAY, slots, tasks, dow: 3, isToday: false }),
     'today empty': menus.buildToday({ dayLabel: DAY }),
     'class picker': menus.buildClassPicker({ classes }),
+    'class picker page 2': menus.buildClassPicker({ classes, page: 2 }),
     'class picker empty': menus.buildClassPicker({ classes: [] }),
     'class picker (attendance)': menus.buildClassPicker({
         classes, title: '✅ Attendance — which class?', rowPrefix: 'ca', pageBase: 'at', icon: '✅',
     }),
     'class detail': menus.buildClassDetail({ klass, studentCount: 29, webAppUrl: 'https://x/app' }),
+    'class detail (subject teacher)': menus.buildClassDetail({
+        klass,
+        studentCount: 29,
+        subjects: ['French'],
+        webAppUrl: 'https://x/subject-home',
+        miniAppUrl: 'https://x/tma/',
+        marksheetUrl: 'https://x/tma/marks?classId=123',
+        canTakeAttendance: false,
+    }),
     roster: menus.buildRoster({ students, klassName: klass.name, classId: UUID, back: `c:${UUID}` }),
+    'student detail': menus.buildStudentDetail({
+        student: students[0],
+        klassName: klass.name,
+        back: `cs:${UUID}:1`,
+    }),
     'attendance options': menus.buildAttendanceOptions({
-        klass, dayLabel: DAY, registerUrl: 'https://x/app/attendance',
+        klass,
+        dayLabel: DAY,
+        summary: {
+            total: 29,
+            marked: 29,
+            present: 27,
+            absent: 1,
+            late: 1,
+            excused: 0,
+            exceptions: [
+                { name: 'Pupil 1', status: 'absent' },
+                { name: 'Pupil 2', status: 'late' },
+            ],
+        },
+        registerUrl: 'https://x/app/attendance',
+        miniAppRegisterUrl: 'https://x/tma/attendance',
+    }),
+    'inline register': menus.buildInlineRegister({
+        klass,
+        dayLabel: DAY,
+        students,
+        statusByStudent: { [STUDENT_UUID]: 'absent', 's-1': 'late', 's-2': 'present' },
+        page: 1,
+    }),
+    'fill present confirm': menus.buildFillPresentConfirm({
+        klass,
+        dayLabel: DAY,
+        unmarkedCount: 27,
+        exceptionCount: 2,
     }),
     'attendance confirm': menus.buildAttendanceConfirm({ klass, dayLabel: DAY, count: 29 }),
+    'school pulse': menus.buildSchoolPulse({
+        dayLabel: DAY,
+        totals: { classes: 13, taken: 10, present: 240, absent: 8, late: 5, excused: 1 },
+        missing: [{ className: 'Year 3 - Blue', teacherName: 'Ms. Mahilet' }],
+        miniAppUrl: 'https://x/tma/',
+    }),
     notices: menus.buildNotices({ notices, acked: new Set() }),
     'notices page 2': menus.buildNotices({ notices, acked: new Set(), page: 2 }),
+    'notice detail': menus.buildNoticeDetail({ notice: notices[0], acked: false, back: 'nt:1' }),
     'notice confirm': menus.buildNoticeConfirm({ notice: notices[0] }),
+    'notice push': menus.buildNoticePush({ notice: notices[0] }),
+    'task push': menus.buildTaskPush({ task: tasks[0], assignedByName: 'Admin' }),
     'info screen': menus.buildInfo({ text: 'Nothing here' }),
 };
 
@@ -95,7 +173,7 @@ describe('inline keyboard design rules', () => {
         }
     });
 
-    test('rows hold two buttons at most', () => {
+    test('rows hold three buttons at most', () => {
         for (const { screen, rowIndex, button } of allButtons) {
             const row = screens[screen].replyMarkup.inline_keyboard[rowIndex];
             assert.ok(row.length <= 3, `${screen} row ${rowIndex} has ${row.length} buttons ("${button.text}")`);
@@ -110,10 +188,9 @@ describe('inline keyboard design rules', () => {
     });
 
     test('every button uses an emoji from the shared lexicon', () => {
-        const lexicon = ['🏠', '📅', '🏫', '👥', '✅', '📢', '🌐', '🔄', '⬅️', '✖️', '☐', '☑', '⚠️', '‹', '›'];
         for (const { screen, button } of allButtons) {
             assert.ok(
-                lexicon.some((icon) => button.text.startsWith(icon)) || /^\d+\/\d+$/.test(button.text),
+                LEXICON.some((icon) => button.text.startsWith(icon)) || /^\d+\/\d+$/.test(button.text),
                 `${screen}: "${button.text}" does not start with a lexicon icon`
             );
         }
@@ -129,11 +206,15 @@ describe('inline keyboard design rules', () => {
         }
     });
 
-    test('URL buttons are real URL buttons, never callbacks', () => {
+    test('URL and Mini App buttons are real https buttons, never mixed with callbacks', () => {
         for (const { screen, button } of allButtons) {
             if (button.url) {
                 assert.equal(button.callback_data, undefined, `${screen}: "${button.text}" mixes url and callback`);
                 assert.match(button.url, /^https:\/\//, `${screen}: "${button.text}" is not https`);
+            }
+            if (button.web_app) {
+                assert.equal(button.callback_data, undefined, `${screen}: "${button.text}" mixes web_app and callback`);
+                assert.match(button.web_app.url, /^https:\/\//, `${screen}: "${button.text}" web_app is not https`);
             }
         }
     });
@@ -145,7 +226,7 @@ describe('inline keyboard design rules', () => {
     });
 });
 
-describe('two-up menu and navigation', () => {
+describe('two-up menu and role navigation', () => {
     test('the main menu puts four destinations in two rows', () => {
         const rows = screens['main menu'].replyMarkup.inline_keyboard;
         assert.equal(rows[0].length, 2);
@@ -155,10 +236,19 @@ describe('two-up menu and navigation', () => {
         assert.equal(rows[2][0].url, 'https://x/app', 'the web app opens as a URL button');
     });
 
-    test('non-teaching staff do not see the attendance shortcut', () => {
-        const data = screens['main menu (non-teacher)'].replyMarkup.inline_keyboard.flat().map((b) => b.callback_data);
-        assert.ok(!data.includes('at'));
-        assert.ok(data.includes('nt'));
+    test('non-teaching staff and subject teachers do not see the attendance shortcut', () => {
+        const nonTeacher = screens['main menu (non-teacher)'].replyMarkup.inline_keyboard.flat().map((b) => b.callback_data);
+        assert.ok(!nonTeacher.includes('at'));
+        assert.ok(nonTeacher.includes('nt'));
+
+        const subjButtons = screens['main menu (subject teacher)'].replyMarkup.inline_keyboard.flat();
+        assert.ok(!subjButtons.some((b) => b.callback_data === 'at'));
+        assert.ok(subjButtons.some((b) => b.web_app?.url === 'https://x/tma/marks'));
+    });
+
+    test('admins get a live School pulse button on the main menu', () => {
+        const adminButtons = screens['main menu (admin)'].replyMarkup.inline_keyboard.flat();
+        assert.ok(adminButtons.some((b) => b.callback_data === 'pulse'));
     });
 
     test('Back goes to the parent, never to an action', () => {
@@ -221,10 +311,11 @@ describe('destructive actions ask first', () => {
 });
 
 describe('lists paginate instead of truncating', () => {
-    test('notices show a pager and say which slice is visible', () => {
+    test('notices show a pager, Read buttons, and say which slice is visible', () => {
         const first = screens.notices;
         const buttons = first.replyMarkup.inline_keyboard.flat();
         assert.ok(buttons.some((b) => b.callback_data === 'nt:2'), 'has a next page');
+        assert.ok(buttons.some((b) => b.callback_data === 'nv:notice-1:1'), 'has a full-body reader button');
         assert.match(first.text, /showing 1–5 of 7/);
         assert.doesNotMatch(first.text, /Notice number 6/);
 
@@ -233,7 +324,7 @@ describe('lists paginate instead of truncating', () => {
         assert.ok(second.replyMarkup.inline_keyboard.flat().some((b) => b.callback_data === 'nt:1'));
     });
 
-    test('a long roster is split across pages with the same count on every page', () => {
+    test('a long roster is split across pages with pupil guardian buttons', () => {
         const one = menus.buildRoster({ students, klassName: klass.name, classId: UUID, page: 1, back: `c:${UUID}` });
         const three = menus.buildRoster({ students, klassName: klass.name, classId: UUID, page: 3, back: `c:${UUID}` });
 
@@ -243,8 +334,9 @@ describe('lists paginate instead of truncating', () => {
         assert.match(three.text, /Pupil 31\b/);
         assert.ok(!/Pupil 31\b/.test(one.text));
 
-        const pager = one.replyMarkup.inline_keyboard.flat().map((b) => b.callback_data);
-        assert.ok(pager.includes(`cs:${UUID}:2`));
+        const callbacks = one.replyMarkup.inline_keyboard.flat().map((b) => b.callback_data);
+        assert.ok(callbacks.includes(`cs:${UUID}:2`));
+        assert.ok(callbacks.includes(`st:${STUDENT_UUID}:1`), 'tapping a pupil opens their guardian card');
     });
 
     test('an out-of-range page is clamped rather than showing an empty screen', () => {

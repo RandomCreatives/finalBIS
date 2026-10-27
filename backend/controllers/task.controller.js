@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const schoolTime = require('../utils/schoolTime');
 const { NotFoundError, ForbiddenError, asyncHandler } = require('../utils/errors');
+const { sendTaskTelegramPush } = require('../services/telegramBot');
 
 /**
  * Assignable action items.
@@ -86,6 +87,10 @@ const createTask = asyncHandler(async (req, res) => {
 
     if (error) throw error;
 
+    await sendTaskTelegramPush(
+        { ...data, assigned_to: assignedTo, school_id: req.user.school_id },
+        req.user,
+    );
     res.status(201).json({ task: shape(data) });
 });
 
