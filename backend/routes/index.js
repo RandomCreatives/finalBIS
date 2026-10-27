@@ -241,6 +241,8 @@ router.get(
     telegramLink.linkStatus
 );
 
+router.post('/telegram/send-menu', authenticate, auth.sendBotMenu);
+
 // =============================================================================
 // STAFF ACCOUNTS  (admin only)
 // =============================================================================

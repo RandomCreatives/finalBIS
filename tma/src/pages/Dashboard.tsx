@@ -8,6 +8,7 @@ import {
     CheckSquare,
     ClipboardList,
     Clock,
+    MessageSquare,
     Sparkles,
     Users,
 } from 'lucide-react';
@@ -75,6 +76,30 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<MySummary | null>(null);
     const [error, setError] = useState('');
+    const [sendingBotMenu, setSendingBotMenu] = useState(false);
+    const [botMenuNotice, setBotMenuNotice] = useState('');
+    const [botMenuError, setBotMenuError] = useState('');
+
+    const handleSendBotMenu = async () => {
+        setSendingBotMenu(true);
+        setBotMenuError('');
+        setBotMenuNotice('');
+        try {
+            await api.post('/telegram/send-menu', {});
+            setBotMenuNotice('Sent! Close this Mini App to use the inline buttons in @bisnocbot chat.');
+        } catch (e) {
+            setBotMenuError(e instanceof Error ? e.message : 'Could not send menu to Telegram chat');
+        } finally {
+            setSendingBotMenu(false);
+        }
+    };
+
+    const closeMiniAppToChat = () => {
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg?.close) {
+            tg.close();
+        }
+    };
 
     useEffect(() => {
         api.get('/dashboard/me')
@@ -408,6 +433,50 @@ export default function Dashboard() {
                     </div>
                 </GlassCard>
             )}
+
+            {/* Quick bridge to @bisnocbot inline chat buttons */}
+            <GlassCard>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                            <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                            <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                                @bisnocbot Chat Shortcuts
+                            </h3>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            Drop your fresh inline buttons (Today, Classes, Notices{isSubjectTeacher ? '' : ', Attendance'}) into the bot chat.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleSendBotMenu}
+                        disabled={sendingBotMenu}
+                        className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm shadow-blue-600/25 active:scale-95 transition disabled:opacity-50"
+                    >
+                        {sendingBotMenu ? 'Sending…' : 'Send to Chat'}
+                    </button>
+                </div>
+                {botMenuNotice && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-500/12 border border-emerald-500/25 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                            {botMenuNotice}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={closeMiniAppToChat}
+                            className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 text-white"
+                        >
+                            Switch to Chat
+                        </button>
+                    </div>
+                )}
+                {botMenuError && (
+                    <p className="mt-2 text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                        {botMenuError}
+                    </p>
+                )}
+            </GlassCard>
         </div>
     );
 }

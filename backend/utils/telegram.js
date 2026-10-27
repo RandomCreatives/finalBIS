@@ -215,6 +215,32 @@ const verifyTelegramInitData = (initData, botToken, opts = {}) => {
     };
 };
 
+const DEFAULT_PUBLIC_ORIGIN = 'https://final-bis.vercel.app';
+
+/**
+ * Resolve a guaranteed-valid public HTTPS origin for Telegram `url` and
+ * `web_app` inline keyboard buttons (Telegram rejects `http://`, `localhost`,
+ * or malformed URLs with HTTP 400).
+ */
+const publicWebOrigin = () => {
+    const raw = String(process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
+    if (!raw) return DEFAULT_PUBLIC_ORIGIN;
+    try {
+        const parsed = new URL(raw);
+        if (
+            parsed.protocol === 'https:' &&
+            parsed.hostname &&
+            parsed.hostname !== 'localhost' &&
+            parsed.hostname !== '127.0.0.1'
+        ) {
+            return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`;
+        }
+    } catch {
+        /* fall back to production origin */
+    }
+    return DEFAULT_PUBLIC_ORIGIN;
+};
+
 /**
  * Low-level caller for any Telegram Bot API method.
  * Returns the parsed JSON response, or null on transport failure.
@@ -230,7 +256,11 @@ const callTelegramApi = async (method, payload = {}) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
-        return await response.json();
+        const data = await response.json();
+        if (data && data.ok === false && !/message is not modified/i.test(data.description || '')) {
+            console.error(`[telegram] ${method} rejected (${data.error_code}): ${data.description}`);
+        }
+        return data;
     } catch (err) {
         console.error(`[telegram] ${method} failed:`, err.message);
         return null;
@@ -271,14 +301,18 @@ const answerCallbackQuery = async (callbackQueryId, opts = {}) => {
 };
 
 /** Register the webhook. `secret` sets the X-Telegram-Bot-Api-Secret-Token header. */
-const setWebhook = (url, secret) => {
+const setWebhook = (url, secret, opts = {}) => {
     return callTelegramApi('setWebhook', {
         url,
-        allowed_updates: ['message', 'callback_query'],
-        drop_pending_updates: true,
+        allowed_updates: ['message', 'edited_message', 'callback_query'],
+        drop_pending_updates: Boolean(opts.dropPendingUpdates),
         ...(secret ? { secret_token: secret } : {}),
     });
 };
+
+const getWebhookInfo = () => callTelegramApi('getWebhookInfo', {});
+
+const setMyCommands = (commands) => callTelegramApi('setMyCommands', { commands });
 
 const deleteWebhook = () => callTelegramApi('deleteWebhook', { drop_pending_updates: true });
 
@@ -292,11 +326,15 @@ module.exports = {
     TELEGRAM_AUTH_MAX_AGE_MS,
     TELEGRAM_AUTH_MAX_FUTURE_SKEW_MS,
     TELEGRAM_INIT_DATA_MAX_LENGTH,
+    DEFAULT_PUBLIC_ORIGIN,
+    publicWebOrigin,
     callTelegramApi,
     sendTelegramMessage,
     editMessageText,
     answerCallbackQuery,
     setWebhook,
+    getWebhookInfo,
+    setMyCommands,
     deleteWebhook,
     getMe,
 };

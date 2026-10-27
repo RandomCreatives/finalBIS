@@ -14,7 +14,12 @@ const { reset, rowsOf, supabaseStub } = require('./helpers');
 const request = require('./request');
 const app = require('../app');
 const { signToken } = require('../middleware/auth');
-const { handleUpdate } = require('../services/telegramBot');
+const {
+    handleUpdate,
+    ensureTelegramWebhookOnce,
+    _resetWebhookEnsure,
+} = require('../services/telegramBot');
+const { publicWebOrigin, DEFAULT_PUBLIC_ORIGIN } = require('../utils/telegram');
 
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
 const YEAR = '9a6ff1d0-6d70-4a38-b6e7-c1f4f3dc63aa';
@@ -530,6 +535,79 @@ describe('role-smart classes, weekday switcher, pupil card, inline register & pr
 
         await press(`tt:${createdTaskId}`);
         assert.equal(rowsOf('tasks').find((t) => t.id === createdTaskId).status, 'pending');
+    });
+
+    test('POST /api/telegram/webhook awaits handleUpdate before responding 200 (no Vercel serverless freeze)', async () => {
+        seed();
+        let finishedBeforeHttpResponse = false;
+
+        global.fetch = async (url, init) => {
+            if (String(url).startsWith('https://api.telegram.org/')) {
+                await new Promise((r) => setTimeout(r, 25));
+                telegram.push({ method: String(url).split('/').pop(), body: JSON.parse(init.body) });
+                finishedBeforeHttpResponse = true;
+                return { json: async () => ({ ok: true, result: {} }) };
+            }
+            return realFetch(url, init);
+        };
+
+        const res = await request(app)
+            .post('/api/telegram/webhook')
+            .send({ message: { chat: { id: TG }, text: '/start@bisnocbot' } });
+
+        assert.equal(res.status, 200);
+        assert.equal(finishedBeforeHttpResponse, true, 'Telegram API call completed before HTTP 200 returned');
+        assert.equal(sentMessages().length, 1);
+        assert.match(sentMessages()[0].text, /Hello Meron/);
+    });
+
+    test('publicWebOrigin strips trailing slashes and rejects non-https / localhost URLs', () => {
+        const orig = process.env.FRONTEND_URL;
+        try {
+            process.env.FRONTEND_URL = 'http://localhost:3000';
+            assert.equal(publicWebOrigin(), DEFAULT_PUBLIC_ORIGIN);
+
+            process.env.FRONTEND_URL = 'https://final-bis.vercel.app///';
+            assert.equal(publicWebOrigin(), 'https://final-bis.vercel.app');
+        } finally {
+            if (orig === undefined) delete process.env.FRONTEND_URL;
+            else process.env.FRONTEND_URL = orig;
+        }
+    });
+
+    test('ensureTelegramWebhookOnce registers webhook without dropping pending updates and sets commands', async () => {
+        _resetWebhookEnsure();
+        telegram = [];
+
+        const res = await ensureTelegramWebhookOnce({ force: true });
+        assert.equal(res.ok, true);
+
+        const hookCall = telegram.find((c) => c.method === 'setWebhook');
+        assert.ok(hookCall);
+        assert.equal(hookCall.body.drop_pending_updates, false);
+        assert.ok(hookCall.body.allowed_updates.includes('callback_query'));
+
+        const cmdCall = telegram.find((c) => c.method === 'setMyCommands');
+        assert.ok(cmdCall);
+        assert.ok(cmdCall.body.commands.some((c) => c.command === 'menu'));
+    });
+
+    test('POST /api/telegram/send-menu delivers the signed-in user inline menu to their Telegram chat', async () => {
+        seed();
+        telegram = [];
+        const teacher = rowsOf('users')[0];
+
+        const res = await request(app)
+            .post('/api/telegram/send-menu')
+            .auth(signToken(teacher))
+            .send({});
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.sent, true);
+        assert.equal(sentMessages().length, 1);
+        assert.equal(sentMessages()[0].chat_id, TG);
+        assert.ok(hasButton(sentMessages()[0], 'today'));
+        assert.ok(hasButton(sentMessages()[0], 'cls'));
     });
 });
 
