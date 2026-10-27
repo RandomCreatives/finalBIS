@@ -37,8 +37,9 @@ import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import {
-    IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
+    IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard, PwaInstallCard,
 } from '../components/settings/profileCards';
+import PwaInstallButton from '../components/PwaInstallButton';
 import { useColorScheme } from '../theme';
 import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
@@ -1587,6 +1588,7 @@ function ProfileSection({ klass, classId }) {
                     <TelegramCard />
                     <TeachingCard items={teachingItems} />
                     <PreferencesCard />
+                    <PwaInstallCard />
                 </Box>
             </Grid>
         </Grid>
@@ -1737,6 +1739,7 @@ export default function ClassHome() {
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <NotificationBell />
+                            <PwaInstallButton />
                             <Box onClick={toggleColorScheme} sx={{ display: 'flex', alignItems: 'center',
                                 justifyContent: 'center', width: 34, height: 34, borderRadius: 1,
                                 border: `1px solid ${border}`, cursor: 'pointer', color: 'text.secondary',

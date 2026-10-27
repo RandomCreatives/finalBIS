@@ -14,9 +14,14 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import GetAppIcon from '@mui/icons-material/GetApp';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import IosShareIcon from '@mui/icons-material/IosShare';
 import { alpha } from '@mui/material/styles';
 import { authApi } from '../../api/endpoints';
 import { subscriptionState, subscribePush, unsubscribePush } from '../../services/push';
+import { usePwaInstall } from '../../utils/pwaInstall';
+import { IosInstallDialog } from '../PwaInstallButton';
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../auth/AuthContext';
 import { useColorScheme } from '../../theme';
@@ -570,3 +575,78 @@ export function PushCard() {
         </CardShell>
     );
 }
+
+/**
+ * Permanent "Install app" card in Settings / Profile so staff who dismissed
+ * the floating install banner can still install BIS NOC Gerji anytime.
+ */
+export function PwaInstallCard() {
+    const { installed, inTelegram, canNativeInstall, isIos, triggerInstall } = usePwaInstall();
+    const [iosDialogOpen, setIosDialogOpen] = useState(false);
+
+    return (
+        <CardShell icon={GetAppIcon} title="Install app" subtitle="Home screen & desktop shortcut">
+            {installed ? (
+                <Stack spacing={1}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                            icon={<CheckCircleOutlineIcon />}
+                            label="Installed on this device"
+                            color="success"
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontWeight: 700 }}
+                        />
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                        BIS NOC Gerji is running as an installed app on this device.
+                    </Typography>
+                </Stack>
+            ) : inTelegram ? (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.6 }}>
+                    You are currently inside Telegram. To install the standalone Home Screen app, open{' '}
+                    <strong>bis-gerji-primary2.vercel.app</strong> in Safari or Chrome.
+                </Typography>
+            ) : canNativeInstall ? (
+                <Stack spacing={1.25} alignItems="flex-start">
+                    <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<GetAppIcon />}
+                        onClick={() => triggerInstall()}
+                        data-testid="settings-pwa-install-btn"
+                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                    >
+                        Install BIS NOC Gerji
+                    </Button>
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                        Add BIS NOC Gerji to your home screen or dock for one-tap access and push notifications.
+                    </Typography>
+                </Stack>
+            ) : isIos ? (
+                <Stack spacing={1.25} alignItems="flex-start">
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<IosShareIcon />}
+                        onClick={() => setIosDialogOpen(true)}
+                        data-testid="settings-pwa-ios-btn"
+                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                    >
+                        How to add to Home Screen
+                    </Button>
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                        On iPhone or iPad, tap <strong>Share</strong> in Safari and choose <strong>Add to Home Screen</strong>.
+                    </Typography>
+                    <IosInstallDialog open={iosDialogOpen} onClose={() => setIosDialogOpen(false)} />
+                </Stack>
+            ) : (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.6 }}>
+                    To install BIS NOC Gerji on this device, open your browser menu (<strong>⋮</strong> or <strong>Share</strong>) and choose{' '}
+                    <strong>Install app</strong> or <strong>Add to Home Screen</strong>.
+                </Typography>
+            )}
+        </CardShell>
+    );
+}
+

@@ -229,7 +229,7 @@ export default function AppLayout() {
                         <Typography variant="caption" color="text.secondary" noWrap>{caption}</Typography>
                     </Box>
                     <NotificationBell />
-                    <PwaInstallButton visible={user?.email === 'mike@bisnoc.local'} />
+                    <PwaInstallButton />
                     {user?.name && (
                         <Chip size="small" label={user.name}
                             sx={{ fontWeight: 700, borderRadius: 1, display: { xs: 'none', sm: 'inline-flex' } }} />

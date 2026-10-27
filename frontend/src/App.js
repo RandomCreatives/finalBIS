@@ -5,6 +5,7 @@ import { ThemeProvider } from './theme';
 import { AuthProvider } from './auth/AuthContext';
 import RequireAuth from './auth/RequireAuth';
 import AppLayout from './components/AppLayout';
+import PwaInstallBanner from './components/PwaInstallBanner';
 
 import Landing from './pages/Landing';
 import DataCenter from './pages/DataCenter';
@@ -136,6 +137,7 @@ export default function App() {
                         />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
+                    <PwaInstallBanner />
                 </AuthProvider>
             </BrowserRouter>
         </ThemeProvider>
