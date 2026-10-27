@@ -94,6 +94,13 @@ if (env.nodeEnv !== 'test') {
         } catch (err) {
             console.error('[staffing] Magenta main-teacher ensure failed:', err.message);
         }
+        if (!req.path.startsWith('/telegram/webhook')) {
+            try {
+                await telegramBot.ensureTelegramWebhookOnce();
+            } catch (err) {
+                console.error('[telegram] webhook ensure failed:', err.message);
+            }
+        }
         next();
     });
 }

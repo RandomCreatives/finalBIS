@@ -2,7 +2,7 @@ const supabase = require('../config/supabase');
 const schoolTime = require('../utils/schoolTime');
 const { selectAll } = require('../utils/selectAll');
 const { notify, notifyAdmins } = require('../utils/nudges');
-const { sendTelegramMessage } = require('../utils/telegram');
+const { sendTelegramMessage, publicWebOrigin } = require('../utils/telegram');
 const { sendPush, subscriptionsForUsers, vapidConfigured } = require('../services/webpush');
 
 /**
@@ -28,7 +28,7 @@ const { sendPush, subscriptionsForUsers, vapidConfigured } = require('../service
 const DEFAULT_REMINDER_TIME = '08:45';
 const REMINDER_WINDOW_END = '15:00'; // end of period 6 — no reminders in the evening
 const SWEEP_EVERY_MS = 5 * 60 * 1000;
-const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
+const WEB_APP = publicWebOrigin();
 
 const reminderTime = () => {
     const configured = String(process.env.ATTENDANCE_REMINDER_TIME || '').trim();

@@ -4,13 +4,16 @@ const {
     sendTelegramMessage,
     editMessageText,
     answerCallbackQuery,
+    setWebhook,
+    setMyCommands,
+    publicWebOrigin,
 } = require('../utils/telegram');
 const schoolTime = require('../utils/schoolTime');
 const { resolveAttendanceReminder } = require('./attendanceReminders');
 const { consumeLinkToken, LINK_PAYLOAD_PREFIX } = require('./telegramLink');
 const menus = require('./telegramMenus');
 
-const WEB_APP = process.env.FRONTEND_URL || 'https://final-bis.vercel.app';
+const WEB_APP = publicWebOrigin();
 
 // Dates and weekdays on the school's clock (Addis Ababa, GMT+3), not the server's UTC.
 const todayStr = () =>
@@ -917,17 +920,36 @@ async function handleMessage(msg) {
         return;
     }
 
-    const cmd = text.toLowerCase();
-    if (['/start', '/menu', '/help'].includes(cmd)) {
+    const bareCmd = text.split(/\s+/)[0].replace(/@\w+$/, '').toLowerCase();
+    if (['/start', '/menu', '/help'].includes(bareCmd)) {
         const menu = buildMainMenu(user);
         await sendTelegramMessage(chatId, menu.text, { replyMarkup: menu.replyMarkup });
         return;
     }
-    if (cmd === '/today') {
+    if (bareCmd === '/today') {
         const yearId = await getCurrentYearId(user);
         const slots = yearId ? await getTodayTimetable(user, yearId) : [];
         const tasks = await getMyTasks(user);
         const built = buildToday(user, yearId, slots, tasks);
+        await sendTelegramMessage(chatId, built.text, { replyMarkup: built.replyMarkup });
+        return;
+    }
+    if (bareCmd === '/classes') {
+        const yearId = await getCurrentYearId(user);
+        const classes = await getMyClasses(user, yearId);
+        const title =
+            user.role === 'admin'
+                ? '🏫 All school classes'
+                : user.role === 'subject_teacher'
+                    ? '🏫 Classes you teach'
+                    : '🏫 Your classes';
+        const built = buildClasses(classes, { title });
+        await sendTelegramMessage(chatId, built.text, { replyMarkup: built.replyMarkup });
+        return;
+    }
+    if (bareCmd === '/notices') {
+        const { notices, acked } = await getNotices(user);
+        const built = buildNotices(notices, acked, 1);
         await sendTelegramMessage(chatId, built.text, { replyMarkup: built.replyMarkup });
         return;
     }
@@ -958,11 +980,14 @@ async function handleCallback(query) {
 
     // ── main menu & schedule ─────────────────────────────────────────────
     if (data === 'menu') {
+        await answerCallbackQuery(cbId);
         await editMenu(chatId, messageId, user);
     } else if (data === 'today') {
+        await answerCallbackQuery(cbId);
         await editTodayWithData(chatId, messageId, user);
     } else if (/^day:[1-5]$/.test(data)) {
         const dow = Number(data.split(':')[1]);
+        await answerCallbackQuery(cbId);
         await editTodayWithData(chatId, messageId, user, dow);
 
     // ── admin school pulse ───────────────────────────────────────────────
@@ -971,6 +996,7 @@ async function handleCallback(query) {
             await answerCallbackQuery(cbId, { text: 'School pulse is for administrators only', showAlert: true });
             return;
         }
+        await answerCallbackQuery(cbId);
         await editSchoolPulseWithData(chatId, messageId, user);
 
     // ── tasks (Today view & proactive task push cards) ───────────────────
@@ -995,6 +1021,7 @@ async function handleCallback(query) {
     // ── classes ──────────────────────────────────────────────────────────
     } else if (data === 'cls' || /^cls:\d+$/.test(data)) {
         const page = Number(data.split(':')[1]) || 1;
+        await answerCallbackQuery(cbId);
         await editClassesWithData(chatId, messageId, user, page);
     } else if (data.startsWith('c:')) {
         const classId = data.slice(2);
@@ -1004,6 +1031,7 @@ async function handleCallback(query) {
             await editClassesWithData(chatId, messageId, user);
             return;
         }
+        await answerCallbackQuery(cbId);
         await editClassDetailWithData(chatId, messageId, user, klass);
 
     // ── roster (paginated) & pupil guardian card ─────────────────────────
@@ -1016,6 +1044,7 @@ async function handleCallback(query) {
             return;
         }
         const students = await getStudents(classId);
+        await answerCallbackQuery(cbId);
         await editMessage(chatId, messageId, buildStudents(students, klass, Number(page) || 1));
     } else if (data.startsWith('st:')) {
         const [, studentId, pageStr] = data.split(':');
@@ -1027,6 +1056,7 @@ async function handleCallback(query) {
         }
         const klass = await getKlass(student.class_id, user.school_id);
         const page = Number(pageStr) || 1;
+        await answerCallbackQuery(cbId);
         await editMessage(
             chatId,
             messageId,
@@ -1044,6 +1074,7 @@ async function handleCallback(query) {
             return;
         }
         const page = Number(data.split(':')[1]) || 1;
+        await answerCallbackQuery(cbId);
         await editAttendanceShortcut(chatId, messageId, user, page);
     } else if (data.startsWith('ca:')) {
         if (!canRecordAttendance(user)) {
@@ -1057,6 +1088,7 @@ async function handleCallback(query) {
             await editClassesWithData(chatId, messageId, user);
             return;
         }
+        await answerCallbackQuery(cbId);
         await editAttendanceOptionsWithData(chatId, messageId, user, klass);
 
     } else if (data.startsWith('ar:')) {
@@ -1212,6 +1244,7 @@ async function handleCallback(query) {
 
     // ── notices (paginated) & full reader ────────────────────────────────
     } else if (data === 'nt' || /^nt:\d+$/.test(data)) {
+        await answerCallbackQuery(cbId);
         await editNoticesWithData(chatId, messageId, user, Number(data.split(':')[1]) || 1);
     } else if (data.startsWith('nv:')) {
         const [, noticeId, pageStr] = data.split(':');
@@ -1224,6 +1257,7 @@ async function handleCallback(query) {
         }
         await recordNoticeRead(user, notice.id);
         const page = Number(pageStr) || 1;
+        await answerCallbackQuery(cbId);
         await editMessage(
             chatId,
             messageId,
@@ -1272,34 +1306,121 @@ async function handleCallback(query) {
     }
 }
 
+const BOT_COMMANDS = [
+    { command: 'start', description: 'Open your BIS NOC home menu' },
+    { command: 'menu', description: 'Show quick actions & classes' },
+    { command: 'today', description: "Today's timetable & tasks" },
+    { command: 'classes', description: 'Your classes & pupils' },
+    { command: 'notices', description: 'School notices & receipts' },
+];
+
+let webhookEnsurePromise = null;
+
+/**
+ * Self-healing webhook & `/` command menu registration for Vercel Production.
+ * Runs at most once per warm serverless instance (retries automatically if a
+ * network call failed), never drops pending updates, and never hijacks
+ * production from a Vercel preview deployment.
+ */
+async function ensureTelegramWebhookOnce({ force = false } = {}) {
+    if (!env.telegram.botToken) return { ok: false, reason: 'missing_bot_token' };
+    if (!force) {
+        if (!env.isProduction) return { ok: false, reason: 'not_production' };
+        if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'production') {
+            return { ok: false, reason: 'preview_env' };
+        }
+    }
+    if (webhookEnsurePromise && !force) return webhookEnsurePromise;
+
+    webhookEnsurePromise = (async () => {
+        const origin = publicWebOrigin();
+        const targetUrl = `${origin}/api/telegram/webhook`;
+        const secret = env.telegram.webhookSecret || undefined;
+
+        const hookRes = await setWebhook(targetUrl, secret, { dropPendingUpdates: false });
+        if (!hookRes?.ok) {
+            webhookEnsurePromise = null;
+            return { ok: false, reason: hookRes?.description || 'set_webhook_failed', url: targetUrl };
+        }
+
+        await setMyCommands(BOT_COMMANDS);
+        return { ok: true, url: targetUrl };
+    })().catch((err) => {
+        webhookEnsurePromise = null;
+        console.error('[telegram] ensureTelegramWebhookOnce failed:', err.message);
+        return { ok: false, reason: err.message };
+    });
+
+    return webhookEnsurePromise;
+}
+
+/**
+ * Push a staff member's role-smart inline menu straight into their linked
+ * Telegram chat (used on Mini App link and by POST /api/telegram/send-menu).
+ */
+async function sendMainMenuToUser(user) {
+    if (!user?.telegram_id) {
+        return { ok: false, reason: 'Your account is not linked to Telegram yet.' };
+    }
+    const menu = buildMainMenu(user);
+    const res = await sendTelegramMessage(user.telegram_id, menu.text, {
+        replyMarkup: menu.replyMarkup,
+    });
+    if (!res?.ok) {
+        return {
+            ok: false,
+            reason:
+                res?.description ||
+                'Could not deliver to Telegram — open @bisnocbot and tap Start once first.',
+        };
+    }
+    return { ok: true };
+}
+
 async function handleUpdate(update) {
     if (!update) return;
     if (update.message) await handleMessage(update.message);
+    else if (update.edited_message) await handleMessage(update.edited_message);
     else if (update.callback_query) await handleCallback(update.callback_query);
 }
 
 /**
- * Express handler for the Telegram webhook. Verifies the secret token header
- * (when configured), acknowledges Telegram immediately, then processes the
- * update off the request cycle so we never hit Telegram's 60s timeout.
+ * Express handler for the Telegram webhook.
+ *
+ * IMPORTANT (Vercel Serverless / @vercel/node): we MUST `await handleUpdate`
+ * BEFORE sending `200 ok`. Sending the response first causes Vercel to freeze
+ * the serverless execution context before Supabase queries and outbound
+ * `sendMessage` / `editMessageText` calls complete.
  */
-const webhookHandler = (req, res) => {
+const webhookHandler = async (req, res) => {
     const secret = env.telegram.webhookSecret;
     if (secret) {
         const header = req.headers['x-telegram-bot-api-secret-token'];
         if (header !== secret) {
+            console.warn('[telegram] webhook rejected: secret token mismatch');
             res.status(401).json({ error: 'unauthorized' });
             return;
         }
     }
 
+    try {
+        await handleUpdate(req.body);
+    } catch (err) {
+        console.error('[telegram] update handling failed:', err);
+    }
     res.status(200).send('ok');
-    handleUpdate(req.body).catch((err) => console.error('[telegram] update handling failed:', err));
+};
+
+const _resetWebhookEnsure = () => {
+    webhookEnsurePromise = null;
 };
 
 module.exports = {
     handleUpdate,
     webhookHandler,
+    ensureTelegramWebhookOnce,
+    sendMainMenuToUser,
     sendNoticeTelegramPushes,
     sendTaskTelegramPush,
+    _resetWebhookEnsure,
 };

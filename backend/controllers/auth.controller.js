@@ -831,6 +831,11 @@ const telegramWebAppLink = asyncHandler(async (req, res) => {
         throw updateError;
     }
 
+    // Send the staff member's fresh inline menu into their @bisnocbot chat
+    // asynchronously so it is waiting for them when they close the Mini App.
+    const { sendMainMenuToUser } = require('../services/telegramBot');
+    await sendMainMenuToUser(updated).catch(() => {});
+
     res.json({
         token: signToken(updated),
         user: publicUser(updated),
@@ -1142,6 +1147,43 @@ const classPasswordLogin = asyncHandler(async (req, res) => {
     return classLogin(req, res);
 });
 
+/**
+ * POST /api/telegram/send-menu
+ *
+ * Ensures the production Telegram webhook + `/` commands are synced and sends
+ * the signed-in staff member's role-smart inline keyboard directly into their
+ * linked @bisnocbot chat.
+ */
+const sendBotMenu = asyncHandler(async (req, res) => {
+    const { ensureTelegramWebhookOnce, sendMainMenuToUser } = require('../services/telegramBot');
+
+    await ensureTelegramWebhookOnce();
+
+    const { data: staff, error } = await supabase
+        .from('users')
+        .select('id, name, email, role, school_id, telegram_id')
+        .eq('id', req.user.id)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!staff?.telegram_id) {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Your account is not linked to Telegram yet.',
+        });
+    }
+
+    const result = await sendMainMenuToUser(staff);
+    if (!result.ok) {
+        return res.status(502).json({
+            status: 'error',
+            message: result.reason,
+        });
+    }
+
+    res.json({ status: 'ok', sent: true });
+});
+
 module.exports = {
     login,
     classLogin,
@@ -1162,6 +1204,7 @@ module.exports = {
     telegramConfig,
     linkTelegram,
     unlinkTelegram,
+    sendBotMenu,
     publicUser,
     BCRYPT_ROUNDS,
 };
