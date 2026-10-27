@@ -10,8 +10,8 @@ export const DEV_PREVIEW_MAIN_USER = {
 
 export const DEV_PREVIEW_SUBJECT_USER = {
     id: 'preview-teacher-fra',
-    name: 'Mr. Emmanuel (French)',
-    email: 'emmanuel@bisnoc.local',
+    name: 'Mr. Michael',
+    email: 'mr.michael@bisnoc.local',
     role: 'subject_teacher',
 };
 

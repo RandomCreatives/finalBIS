@@ -40,9 +40,9 @@ Under the Vercel Hobby plan for private repositories, commits deployed automatic
 
 ### Database Migrations
 Migrations in `supabase/migrations/` are applied **manually in order using the Supabase SQL Editor**. Merging code to `main` does not automatically run SQL migrations.
-- Latest applied migration: `030_timetable_update_2026_10.sql` (applied).
+- Latest applied migration: `030_timetable_update_2026_10.sql` (applied); `032_magenta_main_teacher_bethelhem.sql` and `033_french_teacher_2_michael.sql` also self-reconcile automatically on API boot.
 - **Pending:** `031_telegram_link_tokens.sql` — creates the one-time linking
-  table and must be applied before **Settings → Telegram → Create link** works.
+  table and must be applied before **Settings → Telegram → Create link** works (in-Mini-App linking on `/tma` works without it).
 - **Auto-reconciled on deploy (`032_magenta_main_teacher_bethelhem.sql`):**
   `backend/services/magentaMainTeacher.js` automatically creates/activates
   Ms. Bethelhem Girma (`bethelhem.girma@bisnoc.local`, `main_teacher`), aligns

@@ -16,12 +16,12 @@ const SUBJECT_REG = '1f97c2b4-6d38-4a9e-b5c1-2d8e7f9a3b60';
 const CS_EN = '7dd1a63a-9a95-498d-9321-f1c92d07f456';
 const CS_REG = '3ac21f55-7b6e-4d1a-8c9f-5e2b4a6d8c13';
 
-const isoDate = (offsetDays = 0) =>
-    new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+const schoolTime = require('../utils/schoolTime');
 
-// JS getDay(): Sunday=0. Timetable rows use ISO 1..7 with Monday=1.
-const jsDay = new Date().getDay();
-const TODAY_ISO = jsDay === 0 ? 7 : jsDay;
+const isoDate = (offsetDays = 0) =>
+    schoolTime.addDays(schoolTime.todayIso(), offsetDays);
+
+const TODAY_ISO = schoolTime.weekdayToday();
 
 const user = (id, role, name) => ({
     id, school_id: SCHOOL, name, email: `${name.toLowerCase()}@school.et`,

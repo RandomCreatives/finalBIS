@@ -553,8 +553,18 @@ const miniAppMarksheetUrl = (classId, subjectId) =>
 /** Role gate shared by the menu (whether to show Attendance) and the action. */
 const canRecordAttendance = (user) => ATTENDANCE_ROLES.has(user.role);
 
+/** Preserve honorific + given name ("Mr. Michael") while keeping "Meron Abebe" -> "Meron". */
+function greetingName(rawName) {
+    const parts = String(rawName || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'there';
+    if (/^(mr|ms|mrs|miss|dr)\.?$/i.test(parts[0]) && parts[1]) {
+        return `${parts[0]} ${parts[1]}`;
+    }
+    return parts[0];
+}
+
 function buildMainMenu(user) {
-    const firstName = (user.name || 'there').split(' ')[0];
+    const firstName = greetingName(user.name);
     const isSubject = user.role === 'subject_teacher';
     return menus.buildMainMenu({
         firstName,
