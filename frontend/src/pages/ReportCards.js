@@ -338,12 +338,14 @@ export default function ReportCards() {
     const students = useApi(
         () => (classId ? studentApi.list({ classId }) : Promise.resolve([])),
         [classId],
+        { syncTopic: 'students' },
     );
     const marksheets = useApi(
         () => (classId && resolvedTermId
             ? marksheetApi.list({ classId, termId: resolvedTermId })
             : Promise.resolve([])),
         [classId, resolvedTermId],
+        { syncTopic: 'assessments' },
     );
 
     const classRecord = (classes.data || []).find((c) => c.id === classId);

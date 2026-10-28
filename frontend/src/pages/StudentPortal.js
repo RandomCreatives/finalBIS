@@ -56,6 +56,7 @@ export default function StudentPortal() {
     const students = useApi(
         () => (classId ? studentApi.list({ classId }) : Promise.resolve([])),
         [classId],
+        { syncTopic: 'students' },
     );
     const roster = useMemo(
         () => [...(students.data || [])].sort((a, b) => (a.rollNum ?? 999) - (b.rollNum ?? 999) || (a.name || '').localeCompare(b.name || '')),

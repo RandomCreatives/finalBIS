@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { asyncHandler } = require('../utils/errors');
+const { normalizeStudentName } = require('../utils/studentRolls');
 const ExcelJS = require('exceljs');
 
 /** Percentage → letter grade. Mirrors marksheet.controller for the public page. */
@@ -275,7 +276,7 @@ const getAcademic = asyncHandler(async (req, res) => {
         if (!m.student) continue;
         const entry = studentAgg.get(m.student_id) || {
             id: m.student_id,
-            name: m.student.name,
+            name: normalizeStudentName(m.student.name),
             admissionNo: m.student.admission_no,
             classId: m.student.class_id,
             className: m.class?.name || null,

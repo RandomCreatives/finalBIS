@@ -10,6 +10,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useColorScheme } from '../theme';
 import { CLASSES, fetchLiveClassCounts } from '../data/classes';
 import { ClassCard, ClassLoginDialog } from '../components/ClassLoginCard';
+import { subscribeSync } from '../utils/liveSync';
 
 /*
  * The staff sign-in wall: every class of the school as a compact card —
@@ -46,10 +47,26 @@ export default function SubjectLogin() {
     const [liveCounts, setLiveCounts] = useState(null);
     useEffect(() => {
         let active = true;
-        fetchLiveClassCounts()
-            .then((counts) => { if (active) setLiveCounts(counts); })
-            .catch(() => {});
-        return () => { active = false; };
+        const refreshCounts = () => {
+            fetchLiveClassCounts()
+                .then((counts) => { if (active) setLiveCounts(counts); })
+                .catch(() => {});
+        };
+        refreshCounts();
+        const unsubscribe = subscribeSync('students', refreshCounts);
+        const timer = window.setInterval(refreshCounts, 30_000);
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') refreshCounts();
+        };
+        window.addEventListener('focus', onVisible);
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            active = false;
+            unsubscribe();
+            window.clearInterval(timer);
+            window.removeEventListener('focus', onVisible);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, []);
 
     const classes = useMemo(() => CLASSES.map((klass) => ({

@@ -42,7 +42,10 @@ export const passwordFor = (className) =>
 /** Fetch exact active, assigned student counts for public class cards. */
 export const fetchLiveClassCounts = async () => {
     const baseUrl = process.env.REACT_APP_API_URL || '';
-    const response = await fetch(`${baseUrl}/api/public/students`);
+    const response = await fetch(`${baseUrl}/api/public/students`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+    });
     if (!response.ok) throw new Error(`Student directory request failed (${response.status})`);
     const data = await response.json();
     return (data.students || []).reduce((counts, student) => {

@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
 const schoolTime = require('../utils/schoolTime');
 const { NotFoundError, ConflictError, asyncHandler } = require('../utils/errors');
 
@@ -21,7 +22,9 @@ const shape = (l) => ({
     status: l.status,
     // Derived on read so it is never stale.
     isOverdue: l.status === 'borrowed' && l.due_on < schoolTime.todayIso(),
-    student: l.student,
+    student: l.student
+        ? { ...l.student, name: normalizeStudentName(l.student.name) }
+        : null,
 });
 
 
@@ -35,7 +38,12 @@ const listLibraryStudents = asyncHandler(async (req, res) => {
         .order('name');
 
     if (error) throw error;
-    res.json({ students: data || [] });
+    res.json({
+        students: sortStudentsCanonically(data || []).map((student) => ({
+            ...student,
+            name: normalizeStudentName(student.name),
+        })),
+    });
 });
 
 /** POST /api/library/loans — issue a book. */

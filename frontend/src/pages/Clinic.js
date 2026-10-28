@@ -45,7 +45,7 @@ export default function Clinic() {
 
     const visits = useApi(() => clinicApi.visits(), []);
     const summary = useApi(() => clinicApi.summary(), []);
-    const students = useApi(() => clinicApi.students(), []);
+    const students = useApi(() => clinicApi.students(), [], { syncTopic: 'students' });
 
     const refresh = () => { visits.reload(); summary.reload(); };
 

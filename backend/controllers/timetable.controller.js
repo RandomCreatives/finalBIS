@@ -2,6 +2,7 @@ const supabase = require('../config/supabase');
 const { resolveYearId } = require('./academicYear.controller');
 const { NotFoundError, ConflictError, ForbiddenError, asyncHandler } = require('../utils/errors');
 const { isFixtureSubject } = require('../utils/subjects');
+const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
 
 /**
  * Weekly timetable.
@@ -173,9 +174,9 @@ const getClassRoster = asyncHandler(async (req, res) => {
             teacher: a.teacher,
             sessionsPerWeek: a.sessions_per_week,
         })),
-        students: (studentRes.data || []).map((s) => ({
+        students: sortStudentsCanonically(studentRes.data || []).map((s) => ({
             id: s.id,
-            name: s.name,
+            name: normalizeStudentName(s.name),
             admissionNo: s.admission_no,
             rollNum: s.roll_num,
             specialNeeds: s.special_needs,

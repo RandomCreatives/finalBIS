@@ -19,15 +19,17 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import PersonIcon from '@mui/icons-material/Person';
 import {
     IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard, PwaInstallCard,
 } from '../components/settings/profileCards';
-import { assignmentApi, assessmentApi, studentApi, termApi, timetableApi } from '../api/endpoints';
+import { assignmentApi, assessmentApi, studentApi, studentRequestApi, termApi, timetableApi } from '../api/endpoints';
 import NotificationBell from '../components/NotificationBell';
 import PwaInstallButton from '../components/PwaInstallButton';
 import useApi from '../hooks/useApi';
 import { lessonLabel } from '../utils/periods';
+import { sortClassRoster } from '../utils/rosterSort';
 import Planning from './Planning';
 import TentativeChip from '../components/TentativeChip';
 import { CalendarBoard } from './PublicCalendar';
@@ -137,23 +139,43 @@ function WeekGrid({ slots }) {
     );
 }
 
+const listPendingRequestsForClass = (classId) => (
+    classId && typeof studentRequestApi?.list === 'function'
+        ? studentRequestApi.list({ status: 'pending', classId }).catch(() => [])
+        : Promise.resolve([])
+);
+
 /* ── my classes ───────────────────────────────────────────── */
 
 function ClassCard({ group }) {
     const [open, setOpen] = useState(false);
     const roster = useApi(
         () => (open ? studentApi.list({ classId: group.classId }) : Promise.resolve(null)),
-        [open, group.classId]
+        [open, group.classId],
+        { syncTopic: 'students' },
     );
-    const students = useMemo(
-        () => [...(roster.data || [])].sort((a, b) => a.name.localeCompare(b.name)),
-        [roster.data]
+    const pendingReqs = useApi(
+        () => (open ? listPendingRequestsForClass(group.classId) : Promise.resolve([])),
+        [open, group.classId],
+        { syncTopic: 'students' },
     );
+    const students = useMemo(() => sortClassRoster(roster.data), [roster.data]);
+    const pendings = Array.isArray(pendingReqs.data) ? pendingReqs.data : [];
+
     return (
         <Paper variant="outlined" sx={{ borderRadius: 1.5, overflow: 'hidden' }}>
             <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                 <Box sx={{ flexGrow: 1, minWidth: 200 }}>
-                    <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{group.className}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{group.className}</Typography>
+                        {open && roster.data && (
+                            <Chip
+                                size="small"
+                                label={`${students.length} student${students.length === 1 ? '' : 's'}`}
+                                sx={{ fontWeight: 700, borderRadius: 1 }}
+                            />
+                        )}
+                    </Box>
                     <Box sx={{ display: 'flex', gap: 0.75, mt: 0.75, flexWrap: 'wrap' }}>
                         {group.subjects.map((s) => (
                             <Chip key={s.id} size="small"
@@ -173,6 +195,12 @@ function ClassCard({ group }) {
                 <>
                     <Divider />
                     <Box sx={{ p: 2, pt: 1.5 }}>
+                        {pendings.length > 0 && (
+                            <Alert severity="warning" sx={{ mb: 1.5, borderRadius: 1.5 }} data-testid="subject-class-pending">
+                                <strong>{pendings.length}</strong> pending office approval:&nbsp;
+                                {pendings.map((r) => r.name).join(' · ')}
+                            </Alert>
+                        )}
                         {roster.loading && <CircularProgress size={22} />}
                         {roster.error && <Alert severity="error">Could not load the class list.</Alert>}
                         {roster.data && students.length === 0 && (
@@ -183,8 +211,8 @@ function ClassCard({ group }) {
                                 {students.map((s, i) => (
                                     <Grid item xs={12} sm={6} md={4} key={s.id}>
                                         <Box sx={{ display: 'flex', gap: 1, py: 0.5, alignItems: 'baseline' }}>
-                                            <Typography variant="caption" color="text.disabled" sx={{ width: 20, textAlign: 'right' }}>
-                                                {i + 1}
+                                            <Typography variant="caption" color="text.disabled" sx={{ width: 22, textAlign: 'right' }}>
+                                                {s.rollNum ?? (i + 1)}
                                             </Typography>
                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>{s.name}</Typography>
                                         </Box>
@@ -193,7 +221,7 @@ function ClassCard({ group }) {
                             </Grid>
                         )}
                         <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1 }}>
-                            Read-only — student lists are managed by the class's main teacher.
+                            Synced live — student lists update automatically when the main teacher or office makes changes.
                         </Typography>
                     </Box>
                 </>
@@ -228,22 +256,28 @@ function MarksSection({ pairs }) {
 
     const rosterApi = useApi(
         () => (classId ? studentApi.list({ classId }) : Promise.resolve([])),
-        [classId]
+        [classId],
+        { syncTopic: 'students' },
     );
-    const roster = useMemo(
-        () => [...(rosterApi.data || [])].sort((a, b) => a.name.localeCompare(b.name)),
-        [rosterApi.data]
+    const pendingReqsApi = useApi(
+        () => listPendingRequestsForClass(classId),
+        [classId],
+        { syncTopic: 'students' },
     );
+    const roster = useMemo(() => sortClassRoster(rosterApi.data), [rosterApi.data]);
+    const pendingStudents = Array.isArray(pendingReqsApi.data) ? pendingReqsApi.data : [];
 
     const assessmentsApi = useApi(
         () => (classId && subjectId && termId
             ? assessmentApi.list({ classId, subjectId, termId })
             : Promise.resolve([])),
-        [classId, subjectId, termId]
+        [classId, subjectId, termId],
+        { syncTopic: 'assessments' },
     );
     const assessments = assessmentsApi.data || [];
 
-    useEffect(() => { setEdits({}); }, [assessmentsApi.data]);
+    // Clear draft edits only when switching class/subject/term (never on background sync).
+    useEffect(() => { setEdits({}); }, [classId, subjectId, termId]);
 
     const loadedValue = (aid, sid) => {
         const a = assessments.find((x) => x.id === aid);
@@ -365,6 +399,30 @@ function MarksSection({ pairs }) {
                 {currentTerm.data && (
                     <Chip size="small" label={currentTerm.data.name} sx={{ fontWeight: 700, borderRadius: 1 }} />
                 )}
+                {!rosterApi.loading && classId && (
+                    <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`${roster.length} student${roster.length === 1 ? '' : 's'}`}
+                        sx={{ fontWeight: 700, borderRadius: 1 }}
+                    />
+                )}
+                <Tooltip title="Refresh student list & marks">
+                    <span>
+                        <IconButton
+                            size="small"
+                            aria-label="Refresh student list"
+                            disabled={!classId || rosterApi.loading}
+                            onClick={() => {
+                                rosterApi.reload();
+                                pendingReqsApi.reload?.();
+                                assessmentsApi.reload();
+                            }}
+                        >
+                            <RefreshIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                    </span>
+                </Tooltip>
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}>
                     {invalidCells.size > 0 && (
                         <Chip size="small" color="error" label={`${invalidCells.size} over max`}
@@ -390,6 +448,14 @@ function MarksSection({ pairs }) {
                 <Alert severity="error">Could not load the marksheet for this class.</Alert>
             )}
 
+            {pendingStudents.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2, borderRadius: 1.5 }} data-testid="subject-marks-pending">
+                    <strong>{pendingStudents.length}</strong> student{pendingStudents.length === 1 ? '' : 's'} pending office approval:&nbsp;
+                    <strong>{pendingStudents.map((r) => r.name).join(' · ')}</strong>
+                    &nbsp;— added by the main teacher and will appear below automatically once approved by the office.
+                </Alert>
+            )}
+
             {!rosterApi.loading && !assessmentsApi.loading && !rosterApi.error && (
                 assessments.length === 0 ? (
                     <Alert severity="info">
@@ -401,6 +467,7 @@ function MarksSection({ pairs }) {
                         <Table size="small" stickyHeader>
                             <TableHead>
                                 <TableRow>
+                                    <TableCell sx={{ width: 56, fontWeight: 800 }}>Roll</TableCell>
                                     <TableCell sx={{ fontWeight: 800, minWidth: 200 }}>Student</TableCell>
                                     {assessments.map((a) => (
                                         <TableCell key={a.id} align="center" sx={{ minWidth: 110 }}>
@@ -427,10 +494,11 @@ function MarksSection({ pairs }) {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {roster.map((s) => {
+                                {roster.map((s, idx) => {
                                     const f = finalFor(s.id);
                                     return (
                                         <TableRow key={s.id} hover>
+                                            <TableCell sx={{ color: 'text.secondary' }}>{s.rollNum ?? (idx + 1)}</TableCell>
                                             <TableCell sx={{ fontWeight: 600 }}>{s.name}</TableCell>
                                             {assessments.map((a) => {
                                                 const key = `${a.id}|${s.id}`;
@@ -441,8 +509,8 @@ function MarksSection({ pairs }) {
                                                             value={currentValue(a.id, s.id)}
                                                             onChange={(e) => setEdits((prev) => ({ ...prev, [key]: e.target.value }))}
                                                             placeholder="—" error={invalid}
-                                                            inputProps={{ min: 0, max: a.maxMarks, style: { textAlign: 'center', padding: '6px 4px' } }}
-                                                            sx={{ width: 72 }} />
+                                                            inputProps={{ min: 0, max: a.maxMarks, step: '0.5', style: { textAlign: 'center', padding: '6px 4px' } }}
+                                                            sx={{ width: 76 }} />
                                                     </TableCell>
                                                 );
                                             })}
@@ -505,11 +573,13 @@ export default function SubjectHome() {
 
     const myAssignments = useApi(
         () => (user ? assignmentApi.subjects({ teacherId: user.id }).then((d) => d.assignments || []) : Promise.resolve([])),
-        [user?.id] // eslint-disable-line react-hooks/exhaustive-deps
+        [user?.id], // eslint-disable-line react-hooks/exhaustive-deps
+        { syncTopic: 'assignments' },
     );
     const week = useApi(
         () => (user ? timetableApi.myWeek() : Promise.resolve([])),
-        [user?.id] // eslint-disable-line react-hooks/exhaustive-deps
+        [user?.id], // eslint-disable-line react-hooks/exhaustive-deps
+        { syncTopic: 'assignments' },
     );
 
     // Group assignments into per-class cards; marked pairs for the Marks tab.

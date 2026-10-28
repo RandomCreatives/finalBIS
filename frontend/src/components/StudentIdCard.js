@@ -122,13 +122,13 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
         setEditing(true);
     };
 
-    const saveEdit = () => {
+    const saveEdit = async () => {
         if (!draft.name.trim()) return;
         if (draft.specialNeeds && !draft.senTeacherName.trim()) {
             setEditError('Assigned SEN Teacher is required when special needs is on.');
             return;
         }
-        onSave({
+        const result = await onSave({
             name: draft.name.trim(),
             gender: draft.gender || null,
             dateOfBirth: draft.dateOfBirth || null,
@@ -139,7 +139,7 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
             specialNeeds: draft.specialNeeds,
             senTeacherName: draft.specialNeeds ? draft.senTeacherName.trim() : null,
         });
-        setEditing(false);
+        if (result !== false) setEditing(false);
     };
 
     const deactivate = () => {
@@ -149,12 +149,13 @@ export default function StudentIdCard({ student, canManage, classes, onClose, on
         }
     };
 
-    const confirmTransfer = () => {
+    const confirmTransfer = async () => {
         if (!targetClass || targetClass === student.className) {
             setTransferError('Choose a different class to transfer to.');
             return;
         }
-        onTransfer(targetClass, reason.trim());
+        const result = await onTransfer(targetClass, reason.trim());
+        if (result !== false) setTransferOpen(false);
     };
 
     const set = (key) => (value) => setDraft((d) => ({ ...d, [key]: value }));

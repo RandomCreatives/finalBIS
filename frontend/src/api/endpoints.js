@@ -1,6 +1,16 @@
 import client from './client';
+import { emitSyncEvent } from '../utils/liveSync';
+
+const syncAfter = (topics) => (res) => {
+    emitSyncEvent(topics);
+    return res;
+};
 
 /** Thin, typed-ish wrappers around the API. Keeps axios out of components. */
+
+export const syncApi = {
+    version: () => client.get('/sync/version').then((r) => r.data),
+};
 
 export const authApi = {
     login: (email, password) => client.post('/auth/login', { email, password }).then((r) => r.data),
@@ -105,20 +115,20 @@ export const pushApi = {
 
 export const assignmentApi = {
     classStaff: (params) => client.get('/assignments/class-staff', { params }).then((r) => r.data),
-    assignStaff: (payload) => client.put('/assignments/class-staff', payload).then((r) => r.data),
-    removeStaff: (id) => client.delete(`/assignments/class-staff/${id}`).then((r) => r.data),
+    assignStaff: (payload) => client.put('/assignments/class-staff', payload).then((r) => r.data).then(syncAfter(['assignments', 'students'])),
+    removeStaff: (id) => client.delete(`/assignments/class-staff/${id}`).then((r) => r.data).then(syncAfter(['assignments', 'students'])),
 
     subjects: (params) => client.get('/assignments/subjects', { params }).then((r) => r.data),
-    assignSubject: (payload) => client.put('/assignments/subjects', payload).then((r) => r.data.assignment),
-    bulkAssignSubject: (payload) => client.post('/assignments/subjects/bulk', payload).then((r) => r.data),
-    removeSubject: (id) => client.delete(`/assignments/subjects/${id}`).then((r) => r.data),
+    assignSubject: (payload) => client.put('/assignments/subjects', payload).then((r) => r.data.assignment).then(syncAfter(['assignments'])),
+    bulkAssignSubject: (payload) => client.post('/assignments/subjects/bulk', payload).then((r) => r.data).then(syncAfter(['assignments'])),
+    removeSubject: (id) => client.delete(`/assignments/subjects/${id}`).then((r) => r.data).then(syncAfter(['assignments'])),
 
-    rotate: (payload) => client.post('/assignments/rotate', payload).then((r) => r.data),
+    rotate: (payload) => client.post('/assignments/rotate', payload).then((r) => r.data).then(syncAfter(['assignments', 'students'])),
     autoAssignMain: (sessionsPerWeek) =>
-        client.post('/assignments/auto-assign-main', { sessionsPerWeek }).then((r) => r.data),
+        client.post('/assignments/auto-assign-main', { sessionsPerWeek }).then((r) => r.data).then(syncAfter(['assignments'])),
 
     workload: () => client.get('/assignments/workload').then((r) => r.data),
-    ensureMagentaBethelhem: () => client.post('/assignments/magenta-bethelhem').then((r) => r.data),
+    ensureMagentaBethelhem: () => client.post('/assignments/magenta-bethelhem').then((r) => r.data).then(syncAfter(['assignments'])),
 };
 
 export const timetableApi = {
@@ -150,24 +160,25 @@ export const studentApi = {
     list: (params) => client.get('/students', { params }).then((r) => r.data.students),
     unassigned: () => client.get('/students/unassigned').then((r) => r.data.students),
     assign: (studentIds, classId, reason) =>
-        client.post('/students/assign', { studentIds, classId, reason }).then((r) => r.data),
+        client.post('/students/assign', { studentIds, classId, reason }).then((r) => r.data).then(syncAfter(['students'])),
     get: (id) => client.get(`/students/${id}`).then((r) => r.data.student),
-    create: (payload) => client.post('/students', payload).then((r) => r.data.student),
-    update: (id, payload) => client.patch(`/students/${id}`, payload).then((r) => r.data.student),
+    create: (payload) => client.post('/students', payload).then((r) => r.data.student).then(syncAfter(['students'])),
+    update: (id, payload) => client.patch(`/students/${id}`, payload).then((r) => r.data.student).then(syncAfter(['students'])),
     transfer: (id, toClassId, reason) =>
-        client.post(`/students/${id}/transfer`, { toClassId, reason }).then((r) => r.data),
+        client.post(`/students/${id}/transfer`, { toClassId, reason }).then((r) => r.data).then(syncAfter(['students'])),
     transfers: (id) => client.get(`/students/${id}/transfers`).then((r) => r.data.transfers),
+    import: (formData) => client.post('/students/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data).then(syncAfter(['students'])),
 };
 
 /* Main-teacher intake -> office approval (migration 019). */
 export const studentRequestApi = {
     list: (params) => client.get('/student-requests', { params }).then((r) => r.data.requests),
-    create: (payload) => client.post('/student-requests', payload).then((r) => r.data.request),
-    approve: (id) => client.patch(`/student-requests/${id}/approve`).then((r) => r.data),
-    reject: (id, note) => client.patch(`/student-requests/${id}/reject`, note ? { note } : {}).then((r) => r.data.request),
-    import: (formData) => client.post('/students/import', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    }).then((r) => r.data),
+    create: (payload) => client.post('/student-requests', payload).then((r) => r.data.request).then(syncAfter(['students'])),
+    approve: (id) => client.patch(`/student-requests/${id}/approve`).then((r) => r.data).then(syncAfter(['students'])),
+    reject: (id, note) => client.patch(`/student-requests/${id}/reject`, note ? { note } : {}).then((r) => r.data.request).then(syncAfter(['students'])),
+    import: (formData) => studentApi.import(formData),
 };
 
 export const paymentApi = {
@@ -182,9 +193,9 @@ export const paymentApi = {
 export const classApi = {
     list: () => client.get('/classes').then((r) => r.data.classes),
     get: (id) => client.get(`/classes/${id}`).then((r) => r.data.class),
-    create: (payload) => client.post('/classes', payload).then((r) => r.data.class),
-    update: (id, payload) => client.patch(`/classes/${id}`, payload).then((r) => r.data.class),
-    remove: (id) => client.delete(`/classes/${id}`).then((r) => r.data),
+    create: (payload) => client.post('/classes', payload).then((r) => r.data.class).then(syncAfter(['assignments', 'students'])),
+    update: (id, payload) => client.patch(`/classes/${id}`, payload).then((r) => r.data.class).then(syncAfter(['assignments', 'students'])),
+    remove: (id) => client.delete(`/classes/${id}`).then((r) => r.data).then(syncAfter(['assignments', 'students'])),
 };
 
 export const subjectApi = {
@@ -219,18 +230,18 @@ export const attendanceApi = {
 
 export const assessmentApi = {
     list: (params) => client.get('/assessments', { params }).then((r) => r.data.assessments),
-    create: (payload) => client.post('/assessments', payload).then((r) => r.data.assessment),
-    saveMarks: (payload) => client.post('/assessments/marks/bulk', payload).then((r) => r.data),
-    remove: (id) => client.delete(`/assessments/${id}`).then((r) => r.data),
+    create: (payload) => client.post('/assessments', payload).then((r) => r.data.assessment).then(syncAfter(['assessments'])),
+    saveMarks: (payload) => client.post('/assessments/marks/bulk', payload).then((r) => r.data).then(syncAfter(['assessments'])),
+    remove: (id) => client.delete(`/assessments/${id}`).then((r) => r.data).then(syncAfter(['assessments'])),
 };
 
 export const marksheetApi = {
     list: (params) => client.get('/marksheets', { params }).then((r) => r.data.marksheets),
     forStudent: (studentId, params) =>
         client.get(`/marksheets/student/${studentId}`, { params }).then((r) => r.data),
-    save: (payload) => client.put('/marksheets', payload).then((r) => r.data.marksheet),
-    bulkSave: (payload) => client.post('/marksheets/bulk', payload).then((r) => r.data),
-    remove: (id) => client.delete(`/marksheets/${id}`).then((r) => r.data),
+    save: (payload) => client.put('/marksheets', payload).then((r) => r.data.marksheet).then(syncAfter(['assessments'])),
+    bulkSave: (payload) => client.post('/marksheets/bulk', payload).then((r) => r.data).then(syncAfter(['assessments'])),
+    remove: (id) => client.delete(`/marksheets/${id}`).then((r) => r.data).then(syncAfter(['assessments'])),
 };
 
 export const libraryApi = {

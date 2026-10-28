@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeStudentName } = require('../utils/studentRolls');
 const { NotFoundError, ForbiddenError, BadRequestError, asyncHandler } = require('../utils/errors');
 
 /**
@@ -17,7 +18,9 @@ const shapeThread = (t, unread = 0) => ({
     status: t.status,
     lastMessageAt: t.last_message_at,
     createdAt: t.created_at,
-    student: t.student || null,
+    student: t.student
+        ? { ...t.student, name: normalizeStudentName(t.student.name) }
+        : null,
     class: t.class || null,
     createdBy: t.author || null,
     participants: (t.participants || []).map((p) => p.user).filter(Boolean),

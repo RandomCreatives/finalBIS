@@ -38,7 +38,7 @@ export default function Assignments({ embedded = false, activeTab = 'all' } = {}
     const staff = useApi(() => userApi.list(), []);
     const workload = useApi(() => assignmentApi.workload(), []);
     const subjectAssignments = useApi(() => assignmentApi.subjects(), []);
-    const unassigned = useApi(() => studentApi.unassigned(), []);
+    const unassigned = useApi(() => studentApi.unassigned(), [], { syncTopic: 'students' });
 
     const teachers = (staff.data || []).filter((s) => s.role !== 'admin' && s.isActive);
 

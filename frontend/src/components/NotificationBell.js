@@ -11,6 +11,7 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { noticeApi, notificationApi } from '../api/endpoints';
+import { subscribeSync } from '../utils/liveSync';
 
 /*
  * The notification bell — sits beside the teacher's name in every staff
@@ -128,7 +129,23 @@ export default function NotificationBell() {
         mounted.current = true;
         refresh();
         const timer = setInterval(refresh, POLL_MS);
-        return () => { mounted.current = false; clearInterval(timer); };
+        const unsub = subscribeSync(['students', 'assignments', 'assessments'], refresh);
+        const onVisible = () => {
+            if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+                refresh();
+            }
+        };
+        if (typeof document !== 'undefined' && process.env.NODE_ENV !== 'test') {
+            document.addEventListener('visibilitychange', onVisible);
+        }
+        return () => {
+            mounted.current = false;
+            clearInterval(timer);
+            unsub();
+            if (typeof document !== 'undefined' && process.env.NODE_ENV !== 'test') {
+                document.removeEventListener('visibilitychange', onVisible);
+            }
+        };
     }, [refresh]);
 
     const openMenu = (e) => { setAnchor(e.currentTarget); refresh(); };

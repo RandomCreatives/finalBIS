@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
     Alert, Box, Button, Chip, CircularProgress, Container, InputAdornment, MenuItem,
@@ -16,6 +16,9 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import { useColorScheme } from '../theme';
 import { readClassLogin } from '../data/classes';
 import StudentIdCard from '../components/StudentIdCard';
+import { classApi, studentApi } from '../api/endpoints';
+import { subscribeSync } from '../utils/liveSync';
+import { normalizeStudentName } from '../utils/rosterSort';
 
 const BASE_URL = process.env.REACT_APP_API_URL || '';
 
@@ -44,26 +47,70 @@ export default function PublicStudents() {
     const [classFilter, setClassFilter] = useState('all');
     const [selectedName, setSelectedName] = useState(null);
     const [toast, setToast] = useState('');
+    const [managedRoster, setManagedRoster] = useState([]);
+    const [managedClasses, setManagedClasses] = useState([]);
+    const [savingStudent, setSavingStudent] = useState(false);
 
     // The class-teacher session (from the class-card login) decides who may
     // edit/transfer: only for students of the signed-in teacher's own class.
     const session = readClassLogin();
 
-    const load = () => {
+    const load = useCallback(async () => {
         setError('');
-        setStudents(null);
-        fetch(`${BASE_URL}/api/public/students`)
-            .then((r) => {
-                if (!r.ok) throw new Error(`Request failed (${r.status})`);
-                return r.json();
-            })
-            .then((data) => {
-                setStudents(data.students || []);
-            })
-            .catch((err) => setError(err.message || 'Could not load the student list'));
-    };
+        try {
+            const response = await fetch(`${BASE_URL}/api/public/students`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' },
+            });
+            if (!response.ok) throw new Error(`Request failed (${response.status})`);
+            const data = await response.json();
+            setStudents(data.students || []);
+        } catch (err) {
+            setError(err.message || 'Could not load the student list');
+        }
+    }, []);
 
-    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const reloadManagedData = useCallback(async () => {
+        if (!session?.classId) {
+            setManagedRoster([]);
+            setManagedClasses([]);
+            return;
+        }
+        try {
+            const [roster, classes] = await Promise.all([
+                studentApi.list({ classId: session.classId }),
+                classApi.list(),
+            ]);
+            setManagedRoster(roster || []);
+            setManagedClasses(classes || []);
+        } catch {
+            // Read-only visitors do not need the authorized class-management payload.
+        }
+    }, [session?.classId]);
+
+    useEffect(() => {
+        load();
+        reloadManagedData();
+        const unsubscribe = subscribeSync('students', () => {
+            load();
+            reloadManagedData();
+        });
+        const refresh = () => {
+            if (document.visibilityState === 'visible') {
+                load();
+                reloadManagedData();
+            }
+        };
+        const timer = window.setInterval(refresh, 30_000);
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        return () => {
+            unsubscribe();
+            window.clearInterval(timer);
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
+        };
+    }, [load, reloadManagedData]);
 
     const classOptions = useMemo(
         () => CLASS_OPTIONS.map((name) => ({ name, yearLevel: name.startsWith('Year 3') ? 3 : 4 })),
@@ -93,20 +140,71 @@ export default function PublicStudents() {
             .filter((g) => g.students.length > 0);
     }, [filtered, classOptions, classFilter]);
 
-    const selectedStudent = (students || []).find((s) => s.name === selectedName) ?? null;
+    const selectedPublicStudent = (students || []).find((s) => s.name === selectedName) ?? null;
+    const managedMatches = session?.classId && selectedPublicStudent
+        ? managedRoster.filter((s) =>
+            s.classId === session.classId
+            && normalizeStudentName(s.name) === normalizeStudentName(selectedPublicStudent.name),
+        )
+        : [];
+    const managedSelection = managedMatches.length === 1 ? managedMatches[0] : null;
+    const selectedStudent = selectedPublicStudent
+        ? managedSelection
+            ? { ...managedSelection, className: selectedPublicStudent.className }
+            : selectedPublicStudent
+        : null;
     const canManageSelected = Boolean(
-        session && selectedStudent && session.className === selectedStudent.className
+        session && managedSelection && selectedPublicStudent
+        && session.className === selectedPublicStudent.className
     );
 
-    const handleSave = (originalName, patch) => {
-        setStudents((prev) => prev.map((s) => (s.name === originalName ? { ...s, ...patch } : s)));
-        if (patch.name && patch.name !== originalName) setSelectedName(patch.name);
-        setToast('Student record saved');
+    const managedStudentFor = () => managedSelection;
+
+    const handleSave = async (patch) => {
+        if (!canManageSelected || savingStudent) return false;
+        const target = managedStudentFor(selectedStudent);
+        if (!target) {
+            setToast('Could not safely identify this student. Please edit the record from your class dashboard.');
+            return false;
+        }
+
+        setSavingStudent(true);
+        try {
+            await studentApi.update(target.id, patch);
+            if (patch.name && patch.name !== selectedStudent.name) setSelectedName(patch.name);
+            await Promise.all([load(), reloadManagedData()]);
+            setToast('Student record saved');
+            return true;
+        } catch (err) {
+            setToast(err.message || 'Could not save the student record');
+            return false;
+        } finally {
+            setSavingStudent(false);
+        }
     };
 
-    const handleTransfer = (name, toClass, reason) => {
-        setStudents((prev) => prev.map((s) => (s.name === name ? { ...s, className: toClass } : s)));
-        setToast(`${name} transferred to ${toClass}${reason ? ` — ${reason}` : ''}`);
+    const handleTransfer = async (toClassName, reason) => {
+        if (!canManageSelected || savingStudent) return false;
+        const source = managedStudentFor(selectedStudent);
+        const targetClass = managedClasses.find((c) => c.name === toClassName);
+        if (!source || !targetClass) {
+            setToast('Could not verify the student or destination class. Please retry from your class dashboard.');
+            return false;
+        }
+
+        setSavingStudent(true);
+        try {
+            await studentApi.transfer(source.id, targetClass.id, reason || null);
+            await Promise.all([load(), reloadManagedData()]);
+            setSelectedName(null);
+            setToast(`${source.name} transferred to ${toClassName}${reason ? ` — ${reason}` : ''}`);
+            return true;
+        } catch (err) {
+            setToast(err.message || 'Transfer failed');
+            return false;
+        } finally {
+            setSavingStudent(false);
+        }
     };
 
     const hasFilters = search.trim() !== '' || classFilter !== 'all';
@@ -290,6 +388,7 @@ export default function PublicStudents() {
                     student={selectedStudent}
                     canManage={canManageSelected}
                     classes={CLASS_OPTIONS}
+                    saving={savingStudent}
                     onClose={() => setSelectedName(null)}
                     onSave={handleSave}
                     onTransfer={handleTransfer}

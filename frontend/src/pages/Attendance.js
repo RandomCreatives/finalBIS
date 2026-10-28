@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Alert, Button, Card, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
@@ -226,6 +226,10 @@ export default function Attendance() {
     const [subjectId, setSubjectId] = useState('');
     const [date, setDate] = useState(searchParams.get('date') || today());
     const [marks, setMarks] = useState({});
+    const marksRef = useRef(marks);
+    const baselineMarksRef = useRef({});
+    const baselineContextRef = useRef('');
+    marksRef.current = marks;
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
@@ -237,7 +241,8 @@ export default function Attendance() {
     );
     const students = useApi(
         () => (classId ? studentApi.list({ classId }) : Promise.resolve([])),
-        [classId]
+        [classId],
+        { syncTopic: 'students' },
     );
     const existing = useApi(
         () => (classId && date
@@ -246,17 +251,31 @@ export default function Attendance() {
         [classId, date, subjectId]
     );
 
-    // Seed the form from whatever is already recorded, defaulting to present.
+    // Seed from the saved register while preserving any unsaved statuses when
+    // the live roster changes in another tab/device.
     useEffect(() => {
-        if (!students.data) return;
+        if (!students.data || students.loading || existing.loading) return;
+        const contextKey = `${classId}|${date}|${subjectId || ''}`;
+        const sameContext = baselineContextRef.current === contextKey;
         const saved = {};
         (existing.data || []).forEach((r) => {
             if (r.student?.id) saved[r.student.id] = r.status;
         });
+        const previousBaseline = baselineMarksRef.current;
         const next = {};
-        students.data.forEach((s) => { next[s.id] = saved[s.id] || 'present'; });
+        students.data.forEach((student) => {
+            const oldStatus = marksRef.current[student.id];
+            const oldBaseline = previousBaseline[student.id];
+            const locallyChanged = sameContext && oldBaseline !== undefined && oldStatus !== oldBaseline;
+            next[student.id] = locallyChanged ? oldStatus : (saved[student.id] || 'present');
+        });
+        baselineContextRef.current = contextKey;
+        baselineMarksRef.current = Object.fromEntries(
+            students.data.map((student) => [student.id, saved[student.id] || 'present']),
+        );
+        marksRef.current = next;
         setMarks(next);
-    }, [students.data, existing.data]);
+    }, [students.data, students.loading, existing.data, existing.loading, classId, date, subjectId]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -416,7 +435,11 @@ export default function Attendance() {
                                                             exclusive size="small"
                                                             value={marks[s.id] || 'present'}
                                                             onChange={(_, value) => {
-                                                                if (value) setMarks((m) => ({ ...m, [s.id]: value }));
+                                                                if (value) {
+                                                                    const next = { ...marksRef.current, [s.id]: value };
+                                                                    marksRef.current = next;
+                                                                    setMarks(next);
+                                                                }
                                                             }}
                                                         >
                                                             {STATUSES.map((st) => (

@@ -6,6 +6,7 @@ const {
     BadRequestError, ForbiddenError, NotFoundError, asyncHandler,
 } = require('../utils/errors');
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
+const { normalizeStudentName } = require('../utils/studentRolls');
 
 /** Hard ceiling for one bulk save — a roster of 30 classes stays well under. */
 const BULK_LIMIT = 200;
@@ -31,7 +32,9 @@ const shape = (m) => ({
     maxMarks: Number(m.max_marks),
     percentage: m.percentage === null ? null : Number(m.percentage),
     grade: m.grade,
-    student: m.student,
+    student: m.student
+        ? { ...m.student, name: normalizeStudentName(m.student.name) }
+        : null,
     subject: m.subject,
 });
 

@@ -12,6 +12,8 @@ import {
 import { GlassCard, SectionTitle } from '../components/GlassCard';
 import { api } from '../api/api';
 import { useAuth } from '../auth/AuthContext';
+import { useLiveSync } from '../hooks/useLiveSync';
+import { sortClassRoster } from '../utils/rosterSort';
 
 const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS']);
 
@@ -37,6 +39,14 @@ interface PupilRow {
     name: string;
     admissionNo?: string;
     rollNum?: number | null;
+    classId?: string | null;
+}
+
+interface PendingStudentRequest {
+    id: string;
+    name: string;
+    className?: string | null;
+    status?: string;
 }
 
 function gradeFor(pct: number): string {
@@ -64,12 +74,14 @@ export default function Marks() {
     const isMainTeacher = user?.role === 'main_teacher';
 
     const [loadingScope, setLoadingScope] = useState(true);
+    const [scopeRevision, setScopeRevision] = useState(0);
     const [pairs, setPairs] = useState<MarksheetPair[]>([]);
     const [selectedPairKey, setSelectedPairKey] = useState('');
     const [term, setTerm] = useState<{ id: string; name: string } | null>(null);
 
     const [loadingSheet, setLoadingSheet] = useState(false);
     const [roster, setRoster] = useState<PupilRow[]>([]);
+    const [pendingStudents, setPendingStudents] = useState<PendingStudentRequest[]>([]);
     const [assessments, setAssessments] = useState<AssessmentColumn[]>([]);
     const [directFinals, setDirectFinals] = useState<Record<string, { marks: number; maxMarks: number; percentage: number; grade: string }>>({});
 
@@ -162,7 +174,7 @@ export default function Marks() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, isAdmin, isMainTeacher]);
+    }, [user?.id, isAdmin, isMainTeacher, scopeRevision]);
 
     const activePair = useMemo(
         () => pairs.find((p) => p.key === selectedPairKey) || null,
@@ -179,35 +191,34 @@ export default function Marks() {
     );
 
     const loadSheet = useCallback(
-        async (pair: MarksheetPair, termId?: string) => {
+        async (pair: MarksheetPair, termId?: string, preserveEdits = false) => {
             setLoadingSheet(true);
             setError('');
-            setEdits({});
+            if (!preserveEdits) setEdits({});
 
             const termQuery = termId ? `&termId=${encodeURIComponent(termId)}` : '';
+            const classQuery = encodeURIComponent(pair.classId);
             try {
-                const [rosterRes, assessRes, marksRes] = await Promise.all([
-                    api.get(`/students?classId=${encodeURIComponent(pair.classId)}`),
+                const [rosterRes, assessRes, marksRes, pendingRes] = await Promise.all([
+                    api.get(`/students?classId=${classQuery}`),
                     api.get(
-                        `/assessments?classId=${encodeURIComponent(pair.classId)}&subjectId=${encodeURIComponent(
+                        `/assessments?classId=${classQuery}&subjectId=${encodeURIComponent(
                             pair.subjectId,
                         )}${termQuery}`,
                     ),
                     api
                         .get(
-                            `/marksheets?classId=${encodeURIComponent(
-                                pair.classId,
-                            )}&subjectId=${encodeURIComponent(pair.subjectId)}${termQuery}`,
+                            `/marksheets?classId=${classQuery}&subjectId=${encodeURIComponent(pair.subjectId)}${termQuery}`,
                         )
                         .catch(() => ({ marksheets: [] })),
+                    api
+                        .get(`/student-requests?status=pending&classId=${classQuery}`)
+                        .catch(() => ({ requests: [] })),
                 ]);
 
-                const pupils: PupilRow[] = (rosterRes?.students || []).sort(
-                    (a: PupilRow, b: PupilRow) =>
-                        (a.rollNum ?? 9999) - (b.rollNum ?? 9999) ||
-                        a.name.localeCompare(b.name),
-                );
+                const pupils: PupilRow[] = sortClassRoster(rosterRes?.students || []);
                 const cols: AssessmentColumn[] = assessRes?.assessments || [];
+                setPendingStudents((pendingRes?.requests || []).filter((row: PendingStudentRequest) => row.status === 'pending'));
 
                 const finalsMap: Record<
                     string,
@@ -246,6 +257,10 @@ export default function Marks() {
         if (!activePair) return;
         void loadSheet(activePair, term?.id);
     }, [activePair, term?.id, loadSheet]);
+
+    useLiveSync(['students', 'assessments'], () => {
+        if (activePair) void loadSheet(activePair, term?.id, true);
+    });
 
     const handleSelectPair = (pair: MarksheetPair) => {
         setSelectedPairKey(pair.key);
@@ -286,6 +301,14 @@ export default function Marks() {
         return out;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [edits, assessments, roster]);
+
+    useLiveSync('assignments', () => {
+        if (dirtyEntries.length > 0) {
+            setNotice('Teaching assignments changed. Save your current marks before switching sheets.');
+            return;
+        }
+        setScopeRevision((revision) => revision + 1);
+    });
 
     const invalidKeys = useMemo(() => {
         const bad = new Set<string>();
@@ -516,6 +539,16 @@ export default function Marks() {
                             <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                             <span>{notice}</span>
                         </div>
+                    )}
+
+                    {pendingStudents.length > 0 && (
+                        <GlassCard className="border-amber-500/30 bg-amber-500/5">
+                            <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                                {pendingStudents.length} student{pendingStudents.length === 1 ? '' : 's'} awaiting office approval: {' '}
+                                {pendingStudents.map((pupil) => pupil.name).join(' · ')}.
+                                {' '}They will appear in this marksheet automatically after approval.
+                            </p>
+                        </GlassCard>
                     )}
 
                     {/* Assessment Columns Bar + New Column Drawer */}

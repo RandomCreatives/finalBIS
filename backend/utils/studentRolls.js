@@ -1,9 +1,38 @@
 const supabase = require('../config/supabase');
 
-const compareStudents = (a, b) =>
-    String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' })
-    || String(a.name || '').localeCompare(String(b.name || ''))
-    || String(a.id || '').localeCompare(String(b.id || ''));
+const normalizeStudentName = (value) =>
+    String(value || '').trim().replace(/\s+/g, ' ');
+
+const rollOf = (row) => {
+    const raw = row?.roll_num ?? row?.rollNum ?? null;
+    const n = raw === null || raw === undefined || raw === '' ? NaN : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const classIdOf = (row) =>
+    row?.class_id ?? row?.classId ?? row?.class?.id ?? null;
+
+const compareStudents = (a, b) => {
+    const classA = classIdOf(a);
+    const classB = classIdOf(b);
+    if (classA && classB && String(classA) === String(classB)) {
+        const rA = rollOf(a);
+        const rB = rollOf(b);
+        if (rA !== null && rB !== null && rA !== rB) return rA - rB;
+        if (rA !== null && rB === null) return -1;
+        if (rA === null && rB !== null) return 1;
+    }
+
+    const nameA = normalizeStudentName(a?.name);
+    const nameB = normalizeStudentName(b?.name);
+    return (
+        nameA.localeCompare(nameB, 'en', { sensitivity: 'base' })
+        || nameA.localeCompare(nameB)
+        || String(a?.id || '').localeCompare(String(b?.id || ''))
+    );
+};
+
+const sortStudentsCanonically = (rows) => [...(rows || [])].sort(compareStudents);
 
 /**
  * Keep one class's active roster at rolls 1..N in alphabetical order.
@@ -30,7 +59,15 @@ const renumberClass = async (schoolId, classId) => {
         .eq('is_active', true);
     if (error) throw error;
 
-    const rows = [...(data || [])].sort(compareStudents);
+    const rows = [...(data || [])].sort((a, b) => {
+        const nameA = normalizeStudentName(a.name);
+        const nameB = normalizeStudentName(b.name);
+        return (
+            nameA.localeCompare(nameB, 'en', { sensitivity: 'base' })
+            || nameA.localeCompare(nameB)
+            || String(a.id || '').localeCompare(String(b.id || ''))
+        );
+    });
     for (const row of rows) {
         const { error: clearError } = await supabase
             .from('students')
@@ -55,4 +92,10 @@ const renumberClasses = async (schoolId, classIds) => {
     for (const classId of unique) await renumberClass(schoolId, classId);
 };
 
-module.exports = { renumberClass, renumberClasses };
+module.exports = {
+    normalizeStudentName,
+    compareStudents,
+    sortStudentsCanonically,
+    renumberClass,
+    renumberClasses,
+};

@@ -39,7 +39,7 @@ export default function Library() {
     const filters = { status: filter };
     const loans = useApi(() => libraryApi.loans(filters), [filter]);
     const summary = useApi(() => libraryApi.summary(), []);
-    const students = useApi(() => libraryApi.students(), []);
+    const students = useApi(() => libraryApi.students(), [], { syncTopic: 'students' });
 
     const refresh = () => { loans.reload(); summary.reload(); };
 

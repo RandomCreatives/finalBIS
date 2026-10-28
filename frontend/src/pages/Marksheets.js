@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert, Box, Button, Card, Chip, IconButton, InputAdornment, MenuItem, Paper, Snackbar,
     Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
@@ -10,12 +10,13 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import { Link as RouterLink } from 'react-router-dom';
-import { assignmentApi, classApi, marksheetApi, studentApi, termApi } from '../api/endpoints';
+import { assignmentApi, classApi, marksheetApi, studentApi, studentRequestApi, termApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 import { marksheetSubjectsFor } from '../utils/marksheetSubjects';
+import { sortClassRoster } from '../utils/rosterSort';
 
 // Kept as page exports for existing consumers/tests.
 export { MAIN_TEACHER_MARKSHEET_CODES, marksheetSubjectsFor } from '../utils/marksheetSubjects';
@@ -46,7 +47,11 @@ export default function Marksheets() {
     const [subjectId, setSubjectId] = useState('');
     const [termId, setTermId] = useState('');
     const [entries, setEntries] = useState({});      // studentId -> { marks, maxMarks }
-    const [baseline, setBaseline] = useState({});    // what was loaded/saved last
+    const [baseline, setBaseline] = useState('{}');  // what was loaded/saved last
+    const entriesRef = useRef(entries);
+    const baselineRef = useRef(baseline);
+    entriesRef.current = entries;
+    baselineRef.current = baseline;
     const [savedIds, setSavedIds] = useState({});    // studentId -> existing row id
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -78,7 +83,7 @@ export default function Marksheets() {
         });
 
         return { classes: [...byId.values()] };
-    }, [user?.id]);
+    }, [user?.id], { syncTopic: 'assignments' });
 
     const classOptions = useMemo(
         () => [...(scope.data?.classes || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
@@ -107,7 +112,8 @@ export default function Marksheets() {
         () => (classId
             ? assignmentApi.subjects({ classId }).then((r) => r.assignments)
             : Promise.resolve([])),
-        [classId]
+        [classId],
+        { syncTopic: 'assignments' },
     );
 
     const subjectOptions = useMemo(
@@ -127,16 +133,26 @@ export default function Marksheets() {
 
     const students = useApi(
         () => (ready ? studentApi.list({ classId }) : Promise.resolve([])),
-        [ready, classId]
+        [ready, classId],
+        { syncTopic: 'students' },
+    );
+    const pendingReqs = useApi(
+        () => (classId && typeof studentRequestApi?.list === 'function'
+            ? studentRequestApi.list({ status: 'pending', classId }).catch(() => [])
+            : Promise.resolve([])),
+        [classId],
+        { syncTopic: 'students' },
     );
     const existing = useApi(
         () => (ready
             ? marksheetApi.list({ classId, subjectId, termId })
             : Promise.resolve([])),
-        [ready, classId, subjectId, termId]
+        [ready, classId, subjectId, termId],
+        { syncTopic: 'assessments' },
     );
 
-    // Seed editable state from the server's rows once both loads complete.
+    // Seed editable state from the server's rows once both loads complete,
+    // preserving any dirty unsaved cells if a background student sync occurs.
     useEffect(() => {
         if (!ready || !students.data || !existing.data) return;
 
@@ -145,25 +161,46 @@ export default function Marksheets() {
             if (m.student?.id) savedByStudent[m.student.id] = m;
         });
 
-        const next = {};
+        const serverBaseline = {};
         const ids = {};
-        students.data.forEach((s) => {
+        sortClassRoster(students.data).forEach((s) => {
             const m = savedByStudent[s.id];
-            next[s.id] = {
+            serverBaseline[s.id] = {
                 marks: m ? String(m.marks) : '',
                 maxMarks: m ? String(m.maxMarks) : '100',
             };
             if (m?.id) ids[s.id] = m.id;
         });
 
-        setEntries(next);
-        setBaseline(JSON.stringify(next));
+        let previousBaseline = {};
+        try {
+            previousBaseline = typeof baselineRef.current === 'string'
+                ? JSON.parse(baselineRef.current)
+                : {};
+        } catch {
+            previousBaseline = {};
+        }
+
+        const merged = { ...serverBaseline };
+        Object.keys(entriesRef.current || {}).forEach((sid) => {
+            if (!(sid in merged)) return;
+            const was = previousBaseline[sid];
+            const current = entriesRef.current[sid];
+            if (was && current && (current.marks !== was.marks || current.maxMarks !== was.maxMarks)) {
+                merged[sid] = current;
+            }
+        });
+
+        const nextBaseline = JSON.stringify(serverBaseline);
+        entriesRef.current = merged;
+        baselineRef.current = nextBaseline;
+        setEntries(merged);
+        setBaseline(nextBaseline);
         setSavedIds(ids);
     }, [ready, students.data, existing.data]);
 
     const roster = useMemo(
-        () => [...(students.data || [])].sort((a, b) =>
-            (a.rollNum ?? 999) - (b.rollNum ?? 999) || (a.name || '').localeCompare(b.name || '')),
+        () => sortClassRoster(students.data),
         [students.data]
     );
 
@@ -196,14 +233,18 @@ export default function Marksheets() {
         : null;
 
     const handleField = (studentId, field, value) => {
-        setEntries((prev) => ({
-            ...prev,
-            [studentId]: { ...prev[studentId], [field]: value },
-        }));
+        const next = {
+            ...entriesRef.current,
+            [studentId]: { ...entriesRef.current[studentId], [field]: value },
+        };
+        entriesRef.current = next;
+        setEntries(next);
     };
 
     const handleDiscard = () => {
-        setEntries(JSON.parse(baseline || '{}'));
+        const next = JSON.parse(baselineRef.current || '{}');
+        entriesRef.current = next;
+        setEntries(next);
         setError('');
     };
 
@@ -230,8 +271,11 @@ export default function Marksheets() {
                 ids[m.student.id] = m.id;
             });
 
+            const nextBaseline = JSON.stringify(next);
+            entriesRef.current = next;
+            baselineRef.current = nextBaseline;
             setEntries(next);
-            setBaseline(JSON.stringify(next));
+            setBaseline(nextBaseline);
             setSavedIds(ids);
             setToast(`Saved ${res.saved} result${res.saved === 1 ? '' : 's'}`);
         } catch (err) {
@@ -247,17 +291,19 @@ export default function Marksheets() {
 
         try {
             await marksheetApi.remove(id);
-            setEntries((prev) => ({ ...prev, [studentId]: { marks: '', maxMarks: '100' } }));
+            const nextEntries = { ...entriesRef.current, [studentId]: { marks: '', maxMarks: '100' } };
+            entriesRef.current = nextEntries;
+            setEntries(nextEntries);
             setSavedIds((prev) => {
                 const next = { ...prev };
                 delete next[studentId];
                 return next;
             });
-            setBaseline((prev) => {
-                const parsed = JSON.parse(prev || '{}');
-                parsed[studentId] = { marks: '', maxMarks: '100' };
-                return JSON.stringify(parsed);
-            });
+            const parsed = JSON.parse(baselineRef.current || '{}');
+            parsed[studentId] = { marks: '', maxMarks: '100' };
+            const nextBaseline = JSON.stringify(parsed);
+            baselineRef.current = nextBaseline;
+            setBaseline(nextBaseline);
             setToast('Result removed');
         } catch (err) {
             setError(err.message || 'Failed to delete result');
@@ -346,6 +392,14 @@ export default function Marksheets() {
                         )}
                     </Stack>
                 </Card>
+
+                {classId && pendingReqs.data?.length > 0 && (
+                    <Alert severity="warning" sx={{ mb: 2 }} data-testid="marksheets-pending-students">
+                        <strong>{pendingReqs.data.length}</strong> student{pendingReqs.data.length === 1 ? '' : 's'} awaiting office approval: {' '}
+                        <strong>{pendingReqs.data.map((request) => request.name).join(' · ')}</strong>.
+                        {' '}They will appear in this marksheet automatically after approval.
+                    </Alert>
+                )}
 
                 {!scope.loading && classOptions.length === 0 && (
                     <Alert severity="info" icon={<SchoolIcon />}>

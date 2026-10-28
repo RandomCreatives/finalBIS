@@ -12,6 +12,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import { useColorScheme } from '../theme';
 import { CLASSES, fetchLiveClassCounts } from '../data/classes';
 import { ClassCard, ClassLoginDialog } from '../components/ClassLoginCard';
+import { subscribeSync } from '../utils/liveSync';
 
 /*
  * Public, login-free view of the school's classes.
@@ -38,10 +39,26 @@ export default function PublicClasses() {
 
     useEffect(() => {
         let active = true;
-        fetchLiveClassCounts()
-            .then((counts) => { if (active) setLiveCounts(counts); })
-            .catch(() => {});
-        return () => { active = false; };
+        const refreshCounts = () => {
+            fetchLiveClassCounts()
+                .then((counts) => { if (active) setLiveCounts(counts); })
+                .catch(() => {});
+        };
+        refreshCounts();
+        const unsubscribe = subscribeSync('students', refreshCounts);
+        const timer = window.setInterval(refreshCounts, 30_000);
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') refreshCounts();
+        };
+        window.addEventListener('focus', onVisible);
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            active = false;
+            unsubscribe();
+            window.clearInterval(timer);
+            window.removeEventListener('focus', onVisible);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, []);
 
     const classes = CLASSES.map((klass) => ({

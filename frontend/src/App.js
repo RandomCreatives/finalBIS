@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CssBaseline } from '@mui/material';
 
@@ -6,6 +7,7 @@ import { AuthProvider } from './auth/AuthContext';
 import RequireAuth from './auth/RequireAuth';
 import AppLayout from './components/AppLayout';
 import PwaInstallBanner from './components/PwaInstallBanner';
+import { initLiveSync } from './utils/liveSync';
 
 import Landing from './pages/Landing';
 import DataCenter from './pages/DataCenter';
@@ -50,6 +52,10 @@ import StudentPortal from './pages/StudentPortal';
 import PushNotifications from './pages/PushNotifications';
 
 export default function App() {
+    useEffect(() => {
+        initLiveSync();
+    }, []);
+
     return (
         <ThemeProvider>
             <CssBaseline />

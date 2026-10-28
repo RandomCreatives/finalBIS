@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Phone, Search, Sparkles, User, X } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { api } from '../api/api';
+import { useLiveSync } from '../hooks/useLiveSync';
+import { sortClassRoster } from '../utils/rosterSort';
 
 function pupilInitials(name?: string): string {
     if (!name) return 'P';
@@ -17,13 +19,24 @@ export default function Students() {
     const [classFilter, setClassFilter] = useState<string>('all');
     const [senOnly, setSenOnly] = useState(false);
     const [error, setError] = useState('');
+    const hasLoaded = useRef(false);
 
-    useEffect(() => {
-        api.get('/students')
-            .then((data) => setStudents(data.students || []))
-            .catch((e) => setError(e instanceof Error ? e.message : 'Could not load students'))
-            .finally(() => setLoading(false));
+    const loadStudents = useCallback(async () => {
+        if (!hasLoaded.current) setLoading(true);
+        setError('');
+        try {
+            const data = await api.get('/students');
+            setStudents(sortClassRoster(data.students || []));
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not load students');
+        } finally {
+            hasLoaded.current = true;
+            setLoading(false);
+        }
     }, []);
+
+    useEffect(() => { void loadStudents(); }, [loadStudents]);
+    useLiveSync('students', () => { void loadStudents(); });
 
     const classNames = useMemo(() => {
         const names = new Set<string>();
