@@ -57,6 +57,7 @@ import ConductSection from '../components/communications/ConductSection';
 import TentativeChip from '../components/TentativeChip';
 import { mainTeacherMarksheetSubjectsFor } from '../utils/marksheetSubjects';
 import { formatDate, formatDay, schoolHour, schoolToday } from '../utils/schoolTime';
+import { sortClassRoster } from '../utils/rosterSort';
 
 /*
  * Main teacher dashboard — where a class-card login lands.
@@ -647,7 +648,15 @@ function MarksSection({ klass, classId, roster, teacherId }) {
         () => (classId
             ? assignmentApi.subjects({ classId }).then((d) => d.assignments)
             : Promise.resolve([])),
-        [classId]
+        [classId],
+        { syncTopic: 'assignments' },
+    );
+    const pendingInClass = useApi(
+        () => (typeof studentRequestApi?.list === 'function'
+            ? studentRequestApi.list({ status: 'pending' }).catch(() => [])
+            : Promise.resolve([])),
+        [],
+        { syncTopic: 'students' },
     );
     // The class-home session is a main-teacher session. Keep this dropdown
     // to that teacher's Term 1 subjects, not every subject offered by the
@@ -667,12 +676,13 @@ function MarksSection({ klass, classId, roster, teacherId }) {
         () => (classId && subjectId && termId
             ? assessmentApi.list({ classId, subjectId, termId })
             : Promise.resolve([])),
-        [classId, subjectId, termId]
+        [classId, subjectId, termId],
+        { syncTopic: 'assessments' },
     );
     const assessments = assessmentsApi.data || [];
 
-    // Reset local edits when the loaded columns change.
-    useEffect(() => { setEdits({}); }, [assessmentsApi.data]);
+    // Reset local edits only when switching class/subject/term (never on background sync).
+    useEffect(() => { setEdits({}); }, [classId, subjectId, termId]);
 
     const loadedValue = (aid, sid) => {
         const a = assessments.find((x) => x.id === aid);
@@ -809,6 +819,14 @@ function MarksSection({ klass, classId, roster, teacherId }) {
                     </Button>
                 </Box>
             </Box>
+
+            {pendingInClass.data?.length > 0 && (
+                <Alert severity="warning" sx={{ borderRadius: 1.5, mb: 2 }}>
+                    <strong>{pendingInClass.data.length}</strong> waiting for office approval:&nbsp;
+                    {pendingInClass.data.map((r) => r.name).join(' · ')}
+                    &nbsp;— will appear in marks once approved.
+                </Alert>
+            )}
 
             {subjects.length === 0 && !classSubjects.loading && (
                 <Alert severity="info" sx={{ borderRadius: 1.5 }}>
@@ -1082,7 +1100,9 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
 
     // New-student intake: this class's pending office approvals (migration 019).
     const pendings = useApi(
-        () => studentRequestApi.list({ status: 'pending' }).catch(() => []), [],
+        () => studentRequestApi.list({ status: 'pending' }).catch(() => []),
+        [],
+        { syncTopic: 'students' },
     );
     const [addOpen, setAddOpen] = useState(false);
 
@@ -1124,8 +1144,10 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
             await studentApi.update(selectedStudent.id, patch);
             await reload();
             setToast('Student record saved');
+            return true;
         } catch (err) {
             setToast(err.message || 'Could not save changes');
+            return false;
         } finally {
             setSaving(false);
         }
@@ -1163,7 +1185,7 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
     const handleTransfer = async (toClassName, reason) => {
         if (!selectedStudent) return;
         const toClassId = classIdByName[toClassName];
-        if (!toClassId) { setToast('Unknown class'); return; }
+        if (!toClassId) { setToast('Unknown class'); return false; }
         setSaving(true);
         try {
             await studentApi.transfer(selectedStudent.id, toClassId, reason);
@@ -1171,8 +1193,10 @@ export function StudentsSection({ klass, roster, loading, error, reload, classNa
             await reload();
             setSelected(null);
             setToast(`${name} transferred to ${toClassName}`);
+            return true;
         } catch (err) {
             setToast(err.message || 'Transfer failed');
+            return false;
         } finally {
             setSaving(false);
         }
@@ -1617,17 +1641,16 @@ export default function ClassHome() {
         () => (session?.classId
             ? studentApi.list({ classId: session.classId })
             : Promise.resolve([])),
-        [session?.classId]
+        [session?.classId],
+        { syncTopic: 'students' },
     );
     const roster = useMemo(
-        () => [...(liveRoster.data || [])].sort(
-            (a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
-        ),
+        () => sortClassRoster(liveRoster.data),
         [liveRoster.data]
     );
 
     // All classes — for the transfer picker.
-    const allClasses = useApi(() => classApi.list().catch(() => []), []);
+    const allClasses = useApi(() => classApi.list().catch(() => []), [], { syncTopic: 'assignments' });
     const classNames = useMemo(
         () => (allClasses.data || []).map((cl) => cl.name).sort(),
         [allClasses.data]

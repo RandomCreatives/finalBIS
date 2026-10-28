@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeStudentName } = require('../utils/studentRolls');
 const {
     NotFoundError, ForbiddenError, ConflictError, BadRequestError, asyncHandler,
 } = require('../utils/errors');
@@ -30,7 +31,9 @@ const shape = (r) => ({
     pickupTime: r.pickup_time,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
-    student: r.student,
+    student: r.student
+        ? { ...r.student, name: normalizeStudentName(r.student.name) }
+        : null,
     class: r.klass,
     requester: r.requester,
     reviewer: r.reviewer,

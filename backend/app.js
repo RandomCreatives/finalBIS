@@ -14,6 +14,8 @@ const app = express();
 
 // Do not disclose the framework on every response.
 app.disable('x-powered-by');
+// Never return 304 cached API responses — rosters, marks, and live sync must always be fresh.
+app.set('etag', false);
 
 // Behind Vercel/Render the client IP arrives via X-Forwarded-For; without
 // this the rate limiter would see one proxy IP for every visitor.
@@ -72,6 +74,15 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '1mb' }));
+
+// Prevent browsers, mobile PWAs, Telegram WebViews, and intermediate proxies
+// from caching dynamic API responses (rosters, marksheets, assignments, sync).
+app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+});
 
 app.get('/', (req, res) => {
     res.json({

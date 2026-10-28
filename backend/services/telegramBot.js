@@ -291,6 +291,7 @@ async function getKlass(classId, schoolId) {
 }
 
 async function getStudents(classId) {
+    const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
     const { data, error } = await supabase
         .from('students')
         .select('id, class_id, name, admission_no, roll_num, guardian_name, guardian_phone, guardian_email, special_needs, special_needs_note, sen_teacher_name')
@@ -298,7 +299,10 @@ async function getStudents(classId) {
         .eq('is_active', true)
         .order('name');
     if (error) throw error;
-    return data || [];
+    return sortStudentsCanonically(data || []).map((s) => ({
+        ...s,
+        name: normalizeStudentName(s.name),
+    }));
 }
 
 async function getStudentById(studentId, schoolId) {

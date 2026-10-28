@@ -1,8 +1,18 @@
+const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const { NotFoundError, ConflictError, BadRequestError, ForbiddenError, asyncHandler } = require('../utils/errors');
-const { resolveYearId } = require('./academicYear.controller');
+const { notifyClassTeachers } = require('../utils/nudges');
+const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
+const {
+    normalizeStudentName,
+    sortStudentsCanonically,
+    renumberClass,
+    renumberClasses,
+} = require('../utils/studentRolls');
 
 const XLSX = require('xlsx');
+
+const PAGE_SIZE = 1000;
 
 const SELECT = `
     id, admission_no, name, roll_num, date_of_birth, gender,
@@ -13,8 +23,8 @@ const SELECT = `
 
 const shape = (s) => ({
     id: s.id,
-    admissionNo: s.admission_no,
-    name: s.name,
+    admissionNo: normalizeStudentName(s.admission_no) || s.admission_no,
+    name: normalizeStudentName(s.name),
     rollNum: s.roll_num,
     dateOfBirth: s.date_of_birth,
     gender: s.gender,
@@ -29,10 +39,6 @@ const shape = (s) => ({
     class: s.class ? { id: s.class.id, name: s.class.name } : null,
 });
 
-
-const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
-const { renumberClass, renumberClasses } = require('../utils/studentRolls');
-
 const senTeacherNameFor = (specialNeeds, value) => {
     if (!specialNeeds) return null;
     const name = String(value || '').trim();
@@ -44,9 +50,10 @@ const senTeacherNameFor = (specialNeeds, value) => {
 const listStudents = asyncHandler(async (req, res) => {
     const { classId, specialNeeds, search, includeInactive } = req.query;
 
+    let myClasses = null;
     // Teachers only ever see students of classes they are attached to.
     if (req.user.role !== 'admin') {
-        const myClasses = await teacherClassIds(req);
+        myClasses = await teacherClassIds(req);
         if (classId) {
             if (!myClasses.includes(classId)) {
                 throw new ForbiddenError('That class is not one of yours');
@@ -56,29 +63,36 @@ const listStudents = asyncHandler(async (req, res) => {
         }
     }
 
-    let query = supabase
-        .from('students')
-        .select(SELECT)
-        .eq('school_id', req.user.school_id)
-        .order('name');
+    const allRows = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+        let query = supabase
+            .from('students')
+            .select(SELECT)
+            .eq('school_id', req.user.school_id)
+            .order('name')
+            .range(from, from + PAGE_SIZE - 1);
 
-    if (classId) {
-        query = query.eq('class_id', classId);
-    } else if (req.user.role !== 'admin') {
-        const myClasses = await teacherClassIds(req);
-        query = query.in('class_id', myClasses);
+        if (classId) {
+            query = query.eq('class_id', classId);
+        } else if (req.user.role !== 'admin') {
+            query = query.in('class_id', myClasses);
+        }
+        if (specialNeeds === 'true') query = query.eq('special_needs', true);
+        if (includeInactive !== 'true') query = query.eq('is_active', true);
+        if (search) {
+            const safe = search.replace(/[%_\\]/g, '\\$&');
+            query = query.or(`name.ilike.%${safe}%,admission_no.ilike.%${safe}%`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        const batch = data || [];
+        allRows.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
     }
-    if (specialNeeds === 'true') query = query.eq('special_needs', true);
-    if (includeInactive !== 'true') query = query.eq('is_active', true);
-    if (search) {
-        const safe = search.replace(/[%_\\]/g, '\\$&');
-        query = query.or(`name.ilike.%${safe}%,admission_no.ilike.%${safe}%`);
-    }
 
-    const { data, error } = await query;
-    if (error) throw error;
-
-    res.json({ students: data.map(shape) });
+    const sorted = sortStudentsCanonically(allRows).map(shape);
+    res.json({ students: sorted });
 });
 
 /**
@@ -95,7 +109,7 @@ const listUnassigned = asyncHandler(async (req, res) => {
         .order('name');
 
     if (error) throw error;
-    res.json({ students: data.map(shape) });
+    res.json({ students: sortStudentsCanonically(data || []).map(shape) });
 });
 
 /**
@@ -110,7 +124,7 @@ const assignStudents = asyncHandler(async (req, res) => {
 
     const { data: moving, error: movingError } = await supabase
         .from('students')
-        .select('class_id')
+        .select('id, name, class_id')
         .eq('school_id', req.user.school_id)
         .in('id', studentIds);
     if (movingError) throw movingError;
@@ -139,6 +153,40 @@ const assignStudents = asyncHandler(async (req, res) => {
     const parts = [];
     if (data.placed) parts.push(`${data.placed} placed`);
     if (data.moved) parts.push(`${data.moved} moved from another class`);
+
+    const totalChanged = (Number(data?.placed) || 0) + (Number(data?.moved) || 0);
+    if (totalChanged > 0 && classId) {
+        const namesPreview = (moving || [])
+            .map((s) => normalizeStudentName(s.name))
+            .filter(Boolean)
+            .slice(0, 3)
+            .join(', ');
+        const eventKey = `roster_assign:${classId}:${crypto.randomUUID()}`;
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'Class list updated',
+            body: namesPreview
+                ? `${totalChanged} student(s) placed in your class (${namesPreview}${moving.length > 3 ? ', …' : ''}).`
+                : `${totalChanged} student(s) placed in your class.`,
+            dedupeKey: eventKey,
+        });
+
+        const uniqueOldClasses = [...new Set(oldClassIds.filter((cid) => cid && cid !== classId))];
+        for (const oldClassId of uniqueOldClasses) {
+            await notifyClassTeachers({
+                schoolId: req.user.school_id,
+                classId: oldClassId,
+                excludeUserIds: [req.user.id],
+                kind: 'roster_update',
+                title: 'Class list updated',
+                body: 'One or more students moved to another class.',
+                dedupeKey: `roster_assign_out:${oldClassId}:${crypto.randomUUID()}`,
+            });
+        }
+    }
 
     res.json({
         message: parts.length ? parts.join(', ') : 'No changes were needed',
@@ -170,13 +218,21 @@ const createStudent = asyncHandler(async (req, res) => {
         guardianName, guardianPhone, guardianEmail, specialNeeds, specialNeedsNote,
         senTeacherName,
     } = req.body;
+    const normalizedName = normalizeStudentName(name);
+    const normalizedAdmissionNo = String(admissionNo || '').trim();
     const normalizedSenTeacherName = senTeacherNameFor(Boolean(specialNeeds), senTeacherName);
+
+    if (classId) {
+        await assertClassAccess(req, classId);
+    } else if (req.user.role !== 'admin') {
+        throw new ForbiddenError('Only an admin can create an unassigned student');
+    }
 
     let { data, error } = await supabase
         .from('students')
         .insert({
-            admission_no: admissionNo,
-            name,
+            admission_no: normalizedAdmissionNo,
+            name: normalizedName,
             roll_num: null,
             class_id: classId ?? null,
             date_of_birth: dateOfBirth ?? null,
@@ -193,7 +249,7 @@ const createStudent = asyncHandler(async (req, res) => {
         .single();
 
     if (error?.code === '23505') {
-        throw new ConflictError(`Admission number "${admissionNo}" is already in use`);
+        throw new ConflictError(`Admission number "${normalizedAdmissionNo}" is already in use`);
     }
     if (error) throw error;
 
@@ -207,6 +263,18 @@ const createStudent = asyncHandler(async (req, res) => {
             .single();
         if (refreshed.error) throw refreshed.error;
         data = refreshed.data;
+
+        const className = data.class?.name || 'your class';
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId,
+            className: data.class?.name || null,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'New student added',
+            body: `${normalizedName} joined ${className}${data.roll_num ? ` — roll ${data.roll_num}` : ''}${normalizedAdmissionNo ? `, ${normalizedAdmissionNo}` : ''}.`,
+            dedupeKey: `student_created:${data.id}`,
+        });
     }
 
     res.status(201).json({ student: shape(data) });
@@ -233,6 +301,13 @@ const updateStudent = asyncHandler(async (req, res) => {
     for (const [key, column] of Object.entries(map)) {
         if (req.body[key] !== undefined) patch[column] = req.body[key];
     }
+    if (patch.name !== undefined) {
+        patch.name = normalizeStudentName(patch.name);
+        if (!patch.name) throw new BadRequestError('Student name cannot be empty');
+    }
+    if (patch.admission_no !== undefined) {
+        patch.admission_no = String(patch.admission_no || '').trim();
+    }
 
     // Only admins move students between classes via patch — everyone else
     // uses the audited transfer endpoint.
@@ -244,7 +319,7 @@ const updateStudent = asyncHandler(async (req, res) => {
     // Teachers may only edit students of their own classes.
     const { data: target, error: targetError } = await supabase
         .from('students')
-        .select('id, class_id, roll_num, special_needs, sen_teacher_name')
+        .select('id, name, is_active, class_id, roll_num, special_needs, sen_teacher_name')
         .eq('id', req.params.id)
         .eq('school_id', req.user.school_id)
         .maybeSingle();
@@ -264,8 +339,12 @@ const updateStudent = asyncHandler(async (req, res) => {
             : null;
     }
 
-    if ((patch.class_id !== undefined && patch.class_id !== target.class_id)
-        || patch.is_active === false || patch.is_active === true) {
+    const oldNormalizedName = normalizeStudentName(target.name);
+    const nameChanged = patch.name !== undefined && patch.name !== oldNormalizedName;
+    const classChanged = patch.class_id !== undefined && patch.class_id !== target.class_id;
+    const activeChanged = patch.is_active !== undefined && Boolean(patch.is_active) !== Boolean(target.is_active);
+
+    if (classChanged || activeChanged) {
         patch.roll_num = null;
     }
 
@@ -295,6 +374,67 @@ const updateStudent = asyncHandler(async (req, res) => {
         data = refreshed.data;
     }
 
+    // Notify affected class teachers when a student's name, active status, or class changes.
+    const updatedName = normalizeStudentName(data.name);
+    const className = data.class?.name || 'the class';
+    if (activeChanged && data.is_active === false && target.class_id) {
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId: target.class_id,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'Student removed from active list',
+            body: `${updatedName} was deactivated in ${className}.`,
+            dedupeKey: `student_deactivated:${data.id}:${crypto.randomUUID()}`,
+        });
+    } else if (activeChanged && data.is_active === true && data.class_id) {
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId: data.class_id,
+            className: data.class?.name || null,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'Student restored to class list',
+            body: `${updatedName} is active again in ${className}${data.roll_num ? ` (roll ${data.roll_num})` : ''}.`,
+            dedupeKey: `student_reactivated:${data.id}:${crypto.randomUUID()}`,
+        });
+    } else if (classChanged) {
+        if (target.class_id) {
+            await notifyClassTeachers({
+                schoolId: req.user.school_id,
+                classId: target.class_id,
+                excludeUserIds: [req.user.id],
+                kind: 'roster_update',
+                title: 'Student moved class',
+                body: `${updatedName} moved to ${className}.`,
+                dedupeKey: `student_moved_out:${data.id}:${crypto.randomUUID()}`,
+            });
+        }
+        if (data.class_id) {
+            await notifyClassTeachers({
+                schoolId: req.user.school_id,
+                classId: data.class_id,
+                className: data.class?.name || null,
+                excludeUserIds: [req.user.id],
+                kind: 'roster_update',
+                title: 'New student in class',
+                body: `${updatedName} joined ${className}${data.roll_num ? ` (roll ${data.roll_num})` : ''}.`,
+                dedupeKey: `student_moved_in:${data.id}:${crypto.randomUUID()}`,
+            });
+        }
+    } else if (nameChanged && data.class_id) {
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId: data.class_id,
+            className: data.class?.name || null,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'Student name updated',
+            body: `"${oldNormalizedName}" was updated to "${updatedName}" in ${className}.`,
+            dedupeKey: `student_renamed:${data.id}:${crypto.randomUUID()}`,
+        });
+    }
+
     res.json({ student: shape(data) });
 });
 
@@ -316,7 +456,7 @@ const transferStudent = asyncHandler(async (req, res) => {
     // Teachers may only transfer students out of their own classes.
     const { data: source, error: sourceError } = await supabase
         .from('students')
-        .select('id, name, class_id')
+        .select('id, name, class_id, class:classes(id, name)')
         .eq('id', req.params.id)
         .eq('school_id', req.user.school_id)
         .maybeSingle();
@@ -338,6 +478,8 @@ const transferStudent = asyncHandler(async (req, res) => {
         return res.json({ message: 'Student is already in that class', student: shape(current.data) });
     }
 
+    const sourceName = normalizeStudentName(source.name);
+
     // A same-name student may be a different child. Do not merge or create a
     // second-looking roster entry automatically; warn the user instead.
     const { data: sameName, error: sameNameError } = await supabase
@@ -346,7 +488,7 @@ const transferStudent = asyncHandler(async (req, res) => {
         .eq('school_id', req.user.school_id)
         .eq('class_id', toClassId)
         .eq('is_active', true)
-        .ilike('name', source.name)
+        .ilike('name', sourceName)
         .limit(1)
         .maybeSingle();
     if (sameNameError) throw sameNameError;
@@ -381,6 +523,34 @@ const transferStudent = asyncHandler(async (req, res) => {
             .single();
         if (refreshed.error) throw refreshed.error;
         data = refreshed.data;
+    }
+
+    const toClassName = data?.class?.name || 'another class';
+    const fromClassName = source.class?.name || 'their previous class';
+    const transferKey = crypto.randomUUID();
+    if (source.class_id) {
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId: source.class_id,
+            className: source.class?.name || null,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'Student transferred out',
+            body: `${sourceName} transferred from ${fromClassName} to ${toClassName}.`,
+            dedupeKey: `student_transfer_out:${source.id}:${transferKey}`,
+        });
+    }
+    if (toClassId) {
+        await notifyClassTeachers({
+            schoolId: req.user.school_id,
+            classId: toClassId,
+            className: data?.class?.name || null,
+            excludeUserIds: [req.user.id],
+            kind: 'roster_update',
+            title: 'Student transferred in',
+            body: `${sourceName} transferred into ${toClassName}${data?.roll_num ? ` — roll ${data.roll_num}` : ''}.`,
+            dedupeKey: `student_transfer_in:${source.id}:${transferKey}`,
+        });
     }
 
     res.json({ message: 'Student transferred', student: shape(data) });
@@ -439,7 +609,7 @@ const importStudents = asyncHandler(async (req, res) => {
 
     const studentsToInsert = rows.map((row) => ({
         admission_no: String(row.admissionNo || '').trim(),
-        name: String(row.name || '').trim(),
+        name: normalizeStudentName(row.name),
         roll_num: null,
         date_of_birth: row.dateOfBirth ? new Date(row.dateOfBirth).toISOString().split('T')[0] : null,
         gender: row.gender ? String(row.gender).toLowerCase() : null,
@@ -472,7 +642,8 @@ const importStudents = asyncHandler(async (req, res) => {
         throw error;
     }
 
-    await renumberClasses(req.user.school_id, studentsToInsert.map((student) => student.class_id));
+    const affectedClassIds = [...new Set(studentsToInsert.map((student) => student.class_id).filter(Boolean))];
+    await renumberClasses(req.user.school_id, affectedClassIds);
     const importedIds = data.map((student) => student.id);
     if (importedIds.length > 0) {
         const refreshed = await supabase
@@ -484,10 +655,26 @@ const importStudents = asyncHandler(async (req, res) => {
         data = refreshed.data;
     }
 
+    for (const cid of affectedClassIds) {
+        const inClass = (data || []).filter((s) => s.class_id === cid);
+        if (inClass.length > 0) {
+            await notifyClassTeachers({
+                schoolId: req.user.school_id,
+                classId: cid,
+                className: inClass[0]?.class?.name || null,
+                excludeUserIds: [req.user.id],
+                kind: 'roster_update',
+                title: 'Class list updated',
+                body: `${inClass.length} new student(s) imported into ${inClass[0]?.class?.name || 'your class'}.`,
+                dedupeKey: `students_imported:${cid}:${crypto.randomUUID()}`,
+            });
+        }
+    }
+
     res.status(201).json({
         message: `${data.length} students imported successfully`,
         imported: data.length,
-        students: data.map(shape),
+        students: sortStudentsCanonically(data).map(shape),
     });
 });
 

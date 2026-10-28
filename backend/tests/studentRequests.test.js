@@ -43,6 +43,9 @@ const tables = () => ({
         { id: 'a1b2c3d4-1111-4444-8888-000000000001', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, user_id: MAIN.id, position: 'main' },
         { id: 'a1b2c3d4-1111-4444-8888-000000000002', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_B, user_id: OTHER_MAIN.id, position: 'main' },
     ],
+    class_subjects: [
+        { id: 'subject-a1', school_id: SCHOOL, academic_year_id: YEAR, class_id: CLASS_A, teacher_id: ENG_T.id },
+    ],
     students: [
         { id: 'd5e6f7a8-2222-4444-8888-0000000000aa', school_id: SCHOOL, class_id: CLASS_A, admission_no: 'BIS2026-315', name: 'Last Kid', roll_num: 24, gender: null, date_of_birth: null, guardian_name: null, guardian_phone: null, guardian_email: null, special_needs: false, special_needs_note: null, is_active: true },
     ],
@@ -113,6 +116,17 @@ describe('GET /api/student-requests', () => {
         const main = await request(app).get('/api/student-requests?status=pending').auth(tokenFor(MAIN));
         assert.equal(main.body.requests.length, 1);
         assert.equal(main.body.requests[0].name, 'Kid A');
+
+        const subject = await request(app)
+            .get(`/api/student-requests?status=pending&classId=${CLASS_A}`)
+            .auth(tokenFor(ENG_T));
+        assert.equal(subject.status, 200);
+        assert.equal(subject.body.requests.length, 1);
+        assert.equal(subject.body.requests[0].name, 'Kid A');
+        assert.deepEqual(
+            Object.keys(subject.body.requests[0]).sort(),
+            ['classId', 'className', 'createdAt', 'id', 'name', 'requestedByName', 'status'],
+        );
     });
 });
 
@@ -139,10 +153,15 @@ describe('PATCH /api/student-requests/:id/approve', () => {
         assert.equal(reqRow.reviewed_by, ADMIN.id);
 
         const nudges = rowsOf('notifications');
-        assert.equal(nudges.length, 1);
-        assert.equal(nudges[0].user_id, MAIN.id);
-        assert.match(nudges[0].title, /Student added/);
-        assert.match(nudges[0].dedupe_key, /^student_request_review:/);
+        assert.equal(nudges.length, 2);
+        const mainNudge = nudges.find((n) => n.user_id === MAIN.id);
+        const subjectNudge = nudges.find((n) => n.user_id === ENG_T.id);
+        assert.ok(mainNudge);
+        assert.match(mainNudge.title, /Student added/);
+        assert.match(mainNudge.dedupe_key, /^student_request_review:/);
+        assert.ok(subjectNudge);
+        assert.match(subjectNudge.title, /New student in your class/);
+        assert.match(subjectNudge.body, /New Child joined Year 3 - Red/);
     });
 
     test('a second review is refused', async () => {

@@ -43,6 +43,7 @@ const push = require('../controllers/push.controller');
 const conductReports = require('../controllers/conductReports.controller');
 const files = require('../controllers/files.controller');
 const telegramLink = require('../controllers/telegramLink.controller');
+const sync = require('../controllers/sync.controller');
 
 const uuid = (name, where = param) => where(name).isUUID().withMessage(`${name} must be a valid id`);
 
@@ -486,9 +487,13 @@ router.patch(
 router.get(
     '/student-requests',
     authenticate,
-    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER, ROLES.ASSISTANT_TEACHER, ROLES.SUBJECT_TEACHER),
+    query('classId').optional({ values: 'falsy' }).isUUID(),
+    validate,
     studentRequests.listRequests
 );
+
+router.get('/sync/version', authenticate, sync.getSyncVersion);
 
 router.post(
     '/student-requests',

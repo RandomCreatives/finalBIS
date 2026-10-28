@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeStudentName } = require('../utils/studentRolls');
 const { BadRequestError, NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
 const { notifyAdmins } = require('../utils/nudges');
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
@@ -75,7 +76,14 @@ const getClassAttendance = asyncHandler(async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.json({ attendance: data });
+    res.json({
+        attendance: (data || []).map((row) => ({
+            ...row,
+            student: row.student
+                ? { ...row.student, name: normalizeStudentName(row.student.name) }
+                : null,
+        })),
+    });
 });
 
 /** GET /api/attendance/student/:studentId?from=&to= */

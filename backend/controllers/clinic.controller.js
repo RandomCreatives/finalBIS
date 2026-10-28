@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
 const { NotFoundError, ConflictError, BadRequestError, asyncHandler } = require('../utils/errors');
 
 const SELECT = `
@@ -34,7 +35,12 @@ const listClinicStudents = asyncHandler(async (req, res) => {
         .eq('is_active', true)
         .order('name');
     if (error) throw error;
-    res.json({ students: data || [] });
+    res.json({
+        students: sortStudentsCanonically(data || []).map((student) => ({
+            ...student,
+            name: normalizeStudentName(student.name),
+        })),
+    });
 });
 
 /** POST /api/clinic/visits */

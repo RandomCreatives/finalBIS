@@ -1,4 +1,5 @@
 import { getToken, resolveApiBase } from '../auth/auth';
+import { emitSyncEvent, topicsForMutation } from '../utils/syncEvents';
 
 // In production the Mini App is served from the same origin as the API, so a
 // relative URL is correct. VITE_API_URL is only needed when the API lives on
@@ -22,6 +23,12 @@ export class ApiError extends Error {
     }
 }
 
+function publishMutation(method: Method, path: string) {
+    if (method === 'GET') return;
+    const topics = topicsForMutation(path);
+    if (topics.length > 0) emitSyncEvent(topics);
+}
+
 async function request(path: string, method: Method = 'GET', body?: unknown) {
     const token = getToken();
     if (
@@ -29,7 +36,9 @@ async function request(path: string, method: Method = 'GET', body?: unknown) {
         (token === '__dev_preview_main__' || token === '__dev_preview_subject__')
     ) {
         const { handleDevPreviewRequest } = await import('../dev/previewMock');
-        return handleDevPreviewRequest(token, path, method, body);
+        const result = await handleDevPreviewRequest(token, path, method, body);
+        publishMutation(method, path);
+        return result;
     }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -38,6 +47,7 @@ async function request(path: string, method: Method = 'GET', body?: unknown) {
     const res = await fetch(`${API_BASE}/api${path}`, {
         method,
         headers,
+        cache: method === 'GET' ? 'no-store' : undefined,
         body: body === undefined ? undefined : JSON.stringify(body),
     });
 
@@ -56,8 +66,13 @@ async function request(path: string, method: Method = 'GET', body?: unknown) {
         throw new ApiError(message, res.status, code, details);
     }
 
-    if (res.status === 204) return null;
-    return res.json();
+    if (res.status === 204) {
+        publishMutation(method, path);
+        return null;
+    }
+    const payload = await res.json();
+    publishMutation(method, path);
+    return payload;
 }
 
 export const api = {

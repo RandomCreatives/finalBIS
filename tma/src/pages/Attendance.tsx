@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCheck, CheckCircle2, Save } from 'lucide-react';
 import { GlassCard, SectionTitle } from '../components/GlassCard';
 import { api } from '../api/api';
 import { useAuth } from '../auth/AuthContext';
 import { todayIso } from '../lib/date';
+import { useLiveSync } from '../hooks/useLiveSync';
+import { sortClassRoster } from '../utils/rosterSort';
 
 type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
 
@@ -60,14 +62,23 @@ export default function Attendance() {
     const [dirty, setDirty] = useState(false);
     const [savedNotice, setSavedNotice] = useState('');
     const [error, setError] = useState('');
+    const recordsRef = useRef(records);
+    const dirtyRef = useRef(dirty);
+    recordsRef.current = records;
+    dirtyRef.current = dirty;
 
     const loadClassRoster = useCallback(
-        async (classId: string) => {
+        async (classId: string, preserveLocalEdits = false) => {
+            const shouldPreserve = preserveLocalEdits && dirtyRef.current;
+            const previousRecords = recordsRef.current;
             setSelectedClass(classId);
             setLoadingRoster(true);
             setError('');
             setSavedNotice('');
-            setDirty(false);
+            if (!shouldPreserve) {
+                dirtyRef.current = false;
+                setDirty(false);
+            }
 
             try {
                 const [rosterRes, attRes] = await Promise.all([
@@ -77,22 +88,38 @@ export default function Attendance() {
                         .catch(() => ({ attendance: [] })),
                 ]);
 
-                const pupilList = rosterRes.students || [];
-                const initialRecords: Record<string, AttendanceStatus> = {};
+                const pupilList = sortClassRoster(rosterRes.students || []);
+                const savedRecords: Record<string, AttendanceStatus> = {};
                 for (const item of attRes.attendance || []) {
                     const sid = item.student?.id || item.studentId || item.student_id;
                     if (sid && item.status) {
-                        initialRecords[sid] = item.status as AttendanceStatus;
+                        savedRecords[sid] = item.status as AttendanceStatus;
                     }
                 }
 
+                const nextRecords: Record<string, AttendanceStatus> = {};
+                for (const pupil of pupilList) {
+                    nextRecords[pupil.id] = shouldPreserve && previousRecords[pupil.id]
+                        ? previousRecords[pupil.id]
+                        : savedRecords[pupil.id] || 'present';
+                }
+
                 setStudents(pupilList);
-                setRecords(initialRecords);
-                if (Object.keys(initialRecords).length > 0) {
-                    setSavedNotice(`Loaded ${Object.keys(initialRecords).length} saved marks for today`);
+                recordsRef.current = nextRecords;
+                setRecords(nextRecords);
+                if (shouldPreserve) {
+                    dirtyRef.current = true;
+                    setDirty(true);
+                } else {
+                    dirtyRef.current = false;
+                    setDirty(false);
+                }
+                if (Object.keys(savedRecords).length > 0) {
+                    setSavedNotice(`Loaded ${Object.keys(savedRecords).length} saved marks for today`);
                 }
             } catch (e) {
                 setStudents([]);
+                recordsRef.current = {};
                 setRecords({});
                 setError(e instanceof Error ? e.message : 'Could not load class register');
             } finally {
@@ -123,8 +150,20 @@ export default function Attendance() {
             .finally(() => setLoadingClasses(false));
     }, [user?.id, loadClassRoster]);
 
+    useLiveSync('students', () => {
+        if (selectedClass) void loadClassRoster(selectedClass, true);
+    });
+    useLiveSync('assignments', () => {
+        api.get('/classes?mine=true')
+            .then((data) => setClasses(data.classes || []))
+            .catch(() => {});
+    });
+
     const toggle = (studentId: string, status: AttendanceStatus) => {
-        setRecords((prev) => ({ ...prev, [studentId]: status }));
+        const next = { ...recordsRef.current, [studentId]: status };
+        recordsRef.current = next;
+        setRecords(next);
+        dirtyRef.current = true;
         setDirty(true);
         setSavedNotice('');
     };
@@ -134,7 +173,9 @@ export default function Attendance() {
         for (const s of students) {
             next[s.id] = 'present';
         }
+        recordsRef.current = next;
         setRecords(next);
+        dirtyRef.current = true;
         setDirty(true);
         setSavedNotice('');
     };
@@ -153,6 +194,7 @@ export default function Attendance() {
                     status,
                 })),
             });
+            dirtyRef.current = false;
             setDirty(false);
             setSavedNotice(`Saved ${res?.count ?? Object.keys(records).length} attendance records`);
         } catch (e) {

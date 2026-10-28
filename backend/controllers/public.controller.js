@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { asyncHandler } = require('../utils/errors');
 const { isFixtureSubject } = require('../utils/subjects');
+const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
 
 /*
  * Public showcase endpoints. Resilience contract: these pages are the
@@ -116,7 +117,7 @@ const listPublicStudents = asyncHandler(async (req, res) => {
 
         const { data: students, error } = await supabase
             .from('students')
-            .select('name, class:classes(name, year_level)')
+            .select('id, name, roll_num, class_id, class:classes(name, year_level)')
             .eq('school_id', school.id)
             .eq('is_active', true)
             .order('name');
@@ -124,10 +125,9 @@ const listPublicStudents = asyncHandler(async (req, res) => {
         if (error) throw error;
 
         return res.json({
-            students: (students || [])
-                .filter((s) => s.class) // unplaced students never appear publicly
+            students: sortStudentsCanonically((students || []).filter((s) => s.class)) // unplaced students never appear publicly
                 .map((s) => ({
-                    name: s.name,
+                    name: normalizeStudentName(s.name),
                     className: s.class.name,
                     yearLevel: s.class.year_level,
                 })),

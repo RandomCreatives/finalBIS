@@ -1,11 +1,12 @@
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
-const { notify, notifyAdmins } = require('../utils/nudges');
+const { notify, notifyAdmins, notifyClassTeachers } = require('../utils/nudges');
 const {
     AppError, NotFoundError, ConflictError, BadRequestError, ForbiddenError, asyncHandler,
 } = require('../utils/errors');
 const { resolveYearId } = require('./academicYear.controller');
-const { renumberClass } = require('../utils/studentRolls');
+const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
+const { normalizeStudentName, renumberClass } = require('../utils/studentRolls');
 
 /*
  * Main-teacher student intake (Mike, 2026-09-23).
@@ -13,7 +14,8 @@ const { renumberClass } = require('../utils/studentRolls');
  * A main teacher proposes a new student for their own class; the office
  * (admin) gets a bell nudge and approves or declines. Approving creates the
  * real student record with the next admission number (BIS2026-…) and the
- * next roll number in that class; the teacher is nudged either way.
+ * next roll number in that class; the main teacher and all subject/assistant
+ * teachers attached to that class are nudged immediately.
  *
  * The student_requests table arrives with migration 019. Until it is pasted,
  * reads degrade to an empty list and writes answer with a clear 503 — the
@@ -23,7 +25,9 @@ const { renumberClass } = require('../utils/studentRolls');
 const TABLE = 'student_requests';
 
 const missingTable = (error) =>
-    error?.code === '42P01' || /student_requests.*does not exist/i.test(error?.message || '');
+    error?.code === '42P01'
+    || error?.code === 'PGRST205'
+    || /student_requests.*does not exist|schema cache/i.test(error?.message || '');
 
 const unavailable = () =>
     new AppError('New-student requests are being switched on — please try again in a few minutes', 503);
@@ -34,7 +38,7 @@ const slugFor = (className) =>
 const shape = (row, extras = {}) => ({
     id: row.id,
     classId: row.class_id,
-    name: row.name,
+    name: normalizeStudentName(row.name),
     gender: row.gender,
     dateOfBirth: row.date_of_birth,
     guardianName: row.guardian_name,
@@ -74,7 +78,7 @@ const mainClassOf = async (req) => {
  */
 const submitRequest = asyncHandler(async (req, res) => {
     const klass = await mainClassOf(req);
-    const name = String(req.body.name || '').trim().replace(/\s+/g, ' ');
+    const name = normalizeStudentName(req.body.name);
     if (name.length < 2) throw new BadRequestError('The student\'s full name is required');
     const specialNeeds = Boolean(req.body.specialNeeds);
     const senTeacherName = String(req.body.senTeacherName || '').trim();
@@ -128,18 +132,34 @@ const submitRequest = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/student-requests?status=pending — admins see the whole school;
- * a main teacher sees only their own class. Degrades to an empty list until
- * migration 019 lands.
+ * GET /api/student-requests?status=pending[&classId=…]
+ * - Admins see the whole school (or one class if `classId` is supplied).
+ * - Main teachers default to their own homeroom when `classId` is omitted.
+ * - Subject & assistant teachers see pending requests for classes they teach
+ *   so they know when a pupil added by a main teacher is still awaiting office
+ *   approval before marks unlock.
  */
 const listRequests = asyncHandler(async (req, res) => {
     const status = ['pending', 'approved', 'rejected'].includes(req.query.status)
         ? req.query.status : 'pending';
+    const requestedClassId = req.query.classId || null;
 
-    let classFilter = null;
-    if (req.user.role !== 'admin') {
+    let singleClassId = null;
+    let multiClassIds = null;
+
+    if (req.user.role === 'admin') {
+        if (requestedClassId) singleClassId = requestedClassId;
+    } else if (requestedClassId) {
+        await assertClassAccess(req, requestedClassId);
+        singleClassId = requestedClassId;
+    } else if (req.user.role === 'main_teacher') {
         const klass = await mainClassOf(req);
-        classFilter = klass.id;
+        singleClassId = klass.id;
+    } else {
+        multiClassIds = await teacherClassIds(req);
+        if (multiClassIds.length === 0) {
+            return res.json({ requests: [] });
+        }
     }
 
     let query = supabase
@@ -148,7 +168,9 @@ const listRequests = asyncHandler(async (req, res) => {
         .eq('school_id', req.user.school_id)
         .eq('status', status)
         .order('created_at', { ascending: false });
-    if (classFilter) query = query.eq('class_id', classFilter);
+
+    if (singleClassId) query = query.eq('class_id', singleClassId);
+    else if (multiClassIds) query = query.in('class_id', multiClassIds);
 
     const { data, error } = await query;
     if (error) {
@@ -165,11 +187,27 @@ const listRequests = asyncHandler(async (req, res) => {
     const className = new Map((classesRes.data || []).map((c) => [c.id, c.name]));
     const userName = new Map((usersRes.data || []).map((u) => [u.id, u.name]));
 
+    const isRestrictedViewer = !['admin', 'main_teacher'].includes(req.user.role);
+
     res.json({
-        requests: (data || []).map((row) => shape(row, {
-            className: className.get(row.class_id) || null,
-            requestedByName: userName.get(row.requested_by) || null,
-        })),
+        requests: (data || []).map((row) => {
+            const shaped = shape(row, {
+                className: className.get(row.class_id) || null,
+                requestedByName: userName.get(row.requested_by) || null,
+            });
+            if (isRestrictedViewer) {
+                return {
+                    id: shaped.id,
+                    classId: shaped.classId,
+                    className: shaped.className,
+                    name: shaped.name,
+                    status: shaped.status,
+                    createdAt: shaped.createdAt,
+                    requestedByName: shaped.requestedByName,
+                };
+            }
+            return shaped;
+        }),
     });
 });
 
@@ -217,6 +255,7 @@ const markReviewed = async (req, requestId, patch) => {
 /** PATCH /api/student-requests/:id/approve — admin only. Creates the student. */
 const approveRequest = asyncHandler(async (req, res) => {
     const request = await pendingRequestOf(req);
+    const cleanName = normalizeStudentName(request.name);
 
     let student = null;
     for (let attempt = 0; attempt < 3 && !student; attempt += 1) {
@@ -225,7 +264,7 @@ const approveRequest = asyncHandler(async (req, res) => {
             school_id: req.user.school_id,
             class_id: request.class_id,
             admission_no: await nextAdmissionNo(req),
-            name: request.name,
+            name: cleanName,
             roll_num: null,
             date_of_birth: request.date_of_birth,
             gender: request.gender,
@@ -263,20 +302,34 @@ const approveRequest = asyncHandler(async (req, res) => {
         userIds: [request.requested_by],
         kind: 'student_request',
         title: 'Student added ✓',
-        body: `${request.name} joined ${className} — roll ${student.roll_num}, ${student.admission_no}.`,
+        body: `${cleanName} joined ${className} — roll ${student.roll_num}, ${student.admission_no}.`,
         link: `/class-home/${slugFor(className)}`,
         dedupeKey: `student_request_review:${request.id}`,
     });
 
+    // Also notify all subject & assistant teachers attached to this class so
+    // their marksheets and class lists stay in lockstep with the main teacher.
+    await notifyClassTeachers({
+        schoolId: req.user.school_id,
+        classId: request.class_id,
+        className: klass?.name || null,
+        excludeUserIds: [req.user.id, request.requested_by],
+        kind: 'roster_update',
+        title: 'New student in your class',
+        body: `${cleanName} joined ${className} — roll ${student.roll_num}, ${student.admission_no}.`,
+        dedupeKey: `student_request_class_sync:${request.id}`,
+    });
+
     res.json({
-        request: shape({ ...request, status: 'approved', student_id: student.id }, { className }),
-        student: { id: student.id, admissionNo: student.admission_no, rollNum: student.roll_num, name: request.name },
+        request: shape({ ...request, name: cleanName, status: 'approved', student_id: student.id }, { className }),
+        student: { id: student.id, admissionNo: student.admission_no, rollNum: student.roll_num, name: cleanName },
     });
 });
 
 /** PATCH /api/student-requests/:id/reject — admin only. Body: { note? }. */
 const rejectRequest = asyncHandler(async (req, res) => {
     const request = await pendingRequestOf(req);
+    const cleanName = normalizeStudentName(request.name);
     const note = String(req.body.note || '').trim();
 
     await markReviewed(req, request.id, { status: 'rejected', review_note: note || null });
@@ -291,13 +344,13 @@ const rejectRequest = asyncHandler(async (req, res) => {
         kind: 'student_request',
         title: 'Student request declined',
         body: note
-            ? `${request.name} (${className}) was not added: ${note}`
-            : `${request.name} (${className}) was not added.`,
+            ? `${cleanName} (${className}) was not added: ${note}`
+            : `${cleanName} (${className}) was not added.`,
         link: `/class-home/${slugFor(className)}`,
         dedupeKey: `student_request_review:${request.id}`,
     });
 
-    res.json({ request: shape({ ...request, status: 'rejected', review_note: note || null }, { className }) });
+    res.json({ request: shape({ ...request, name: cleanName, status: 'rejected', review_note: note || null }, { className }) });
 });
 
 module.exports = { submitRequest, listRequests, approveRequest, rejectRequest };

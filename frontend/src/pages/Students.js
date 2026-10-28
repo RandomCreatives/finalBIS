@@ -50,10 +50,11 @@ export default function Students() {
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
 
-    const classes = useApi(() => classApi.list(), []);
+    const classes = useApi(() => classApi.list(), [], { syncTopic: 'assignments' });
     const students = useApi(
         () => studentApi.list({ classId: classFilter || undefined, search: search || undefined }),
-        [classFilter, search]
+        [classFilter, search],
+        { syncTopic: 'students' },
     );
 
     // Payment is an office responsibility. Admins always see this panel;
@@ -201,8 +202,10 @@ export default function Students() {
             setSelectedCard(next);
             await students.reload();
             setToast('Student record saved');
+            return true;
         } catch (err) {
             setToast(err.message || 'Could not save the student record');
+            return false;
         } finally {
             setSaving(false);
         }
@@ -213,7 +216,7 @@ export default function Students() {
         const target = (classes.data || []).find((c) => c.name === toClassName);
         if (!target) {
             setToast('Unknown class');
-            return;
+            return false;
         }
         setSaving(true);
         try {
@@ -221,8 +224,10 @@ export default function Students() {
             setSelectedCard(null);
             await students.reload();
             setToast(`${selectedCard.name} transferred to ${toClassName}`);
+            return true;
         } catch (err) {
             setToast(err.message || 'Transfer failed');
+            return false;
         } finally {
             setSaving(false);
         }

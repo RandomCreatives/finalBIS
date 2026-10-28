@@ -42,7 +42,7 @@ export default function Tasks() {
 
     const staff = useApi(() => (canAssign && isAdmin ? userApi.list() : Promise.resolve([])), [canAssign, isAdmin]);
     const classes = useApi(() => classApi.list(), []);
-    const students = useApi(() => studentApi.list(), []);
+    const students = useApi(() => studentApi.list(), [], { syncTopic: 'students' });
 
     const setField = (f) => (e) => setDialog((d) => ({ ...d, [f]: e.target.value }));
 
