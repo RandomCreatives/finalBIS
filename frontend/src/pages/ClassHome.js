@@ -660,8 +660,8 @@ function MarksSection({ klass, classId, roster, teacherId }) {
     );
     // The class-home session is a main-teacher session. Keep this dropdown
     // to that teacher's Term 1 subjects, not every subject offered by the
-    // class. Old sessions without userId still get the safe MAT/SCI/GLS code
-    // filter.
+    // class. Old sessions without userId still get the safe MAT/SCI/GLS/GCT
+    // code filter (GCT is the legacy Global Citizenship code).
     const subjects = useMemo(
         () => mainTeacherMarksheetSubjectsFor(classSubjects.data, teacherId),
         [classSubjects.data, teacherId]

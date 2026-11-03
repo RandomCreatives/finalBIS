@@ -320,6 +320,24 @@ describe('old keyboards keep working', () => {
 describe('role-smart classes, weekday switcher, pupil card, inline register & proactive pushes', () => {
     const sentMessages = () => telegram.filter((c) => c.method === 'sendMessage').map((c) => c.body);
 
+    test('main teachers get a direct marksheet button for a legacy GCT Global Citizenship seat', async () => {
+        seed();
+        rowsOf('subjects').push({
+            id: 'subj-gct', school_id: SCHOOL, name: 'Global Citizenship', code: 'GCT',
+        });
+        rowsOf('class_subjects').push({
+            id: 'cs-gct', school_id: SCHOOL, academic_year_id: YEAR,
+            class_id: CLASS_ID, subject_id: 'subj-gct', teacher_id: TEACHER,
+        });
+
+        await press(`c:${CLASS_ID}`);
+
+        assert.match(lastEdit().text, /Subject: Global Citizenship/);
+        const marksheetBtn = buttonsOf(lastEdit()).find((b) => b.web_app?.url?.includes('/tma/marks'));
+        assert.ok(marksheetBtn, 'opens the Mini App marksheet');
+        assert.match(marksheetBtn.web_app.url, new RegExp(`classId=${CLASS_ID}&subjectId=subj-gct`));
+    });
+
     test('subject teachers see taught classes with subject labels and direct Mini App marksheet button', async () => {
         seed();
         rowsOf('users')[0].role = 'subject_teacher';

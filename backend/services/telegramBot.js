@@ -23,7 +23,8 @@ const todayStr = () =>
 // Homeroom & leadership roles that record daily attendance in Telegram.
 // Subject teachers do not take daily class attendance.
 const ATTENDANCE_ROLES = new Set(['admin', 'main_teacher', 'assistant_teacher']);
-const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS']);
+// 030_timetable_update_2026_10 supports the legacy GCT code as well as GLS.
+const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS', 'GCT']);
 
 const STATUS_FROM_CODE = {
     p: 'present',

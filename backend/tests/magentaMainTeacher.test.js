@@ -21,9 +21,11 @@ const VIOLET = '2c4e6a80-1f3d-4b5c-8e7a-9d0f1b2c3e45';
 
 const SUBJ_MAT = '11111111-1111-4111-8111-111111111111';
 const SUBJ_SCI = '22222222-2222-4222-8222-222222222222';
-const SUBJ_GLS = '33333333-3333-4333-8333-333333333333';
+const SUBJ_GCT = '33333333-3333-4333-8333-333333333333';
 const SUBJ_REG = '44444444-4444-4444-8444-444444444444';
 const SUBJ_ENG = '55555555-5555-4555-8555-555555555555';
+const TERM_1 = '66666666-6666-4666-8666-666666666666';
+const STUDENT = '77777777-7777-4777-8777-777777777777';
 
 const mkUser = (id, role, name, extra = {}) => ({
     id,
@@ -54,7 +56,8 @@ const baseTables = ({ users = [ADMIN, ABIGIA, ENG_TEACHER] } = {}) => ({
     subjects: [
         { id: SUBJ_MAT, school_id: SCHOOL, name: 'Mathematics', code: 'MAT', taught_by: 'main_teacher' },
         { id: SUBJ_SCI, school_id: SCHOOL, name: 'Science', code: 'SCI', taught_by: 'main_teacher' },
-        { id: SUBJ_GLS, school_id: SCHOOL, name: 'Global Citizenship', code: 'GLS', taught_by: 'main_teacher' },
+        // 030_timetable_update_2026_10 still supports this legacy code.
+        { id: SUBJ_GCT, school_id: SCHOOL, name: 'Global Citizenship', code: 'GCT', taught_by: 'main_teacher' },
         { id: SUBJ_REG, school_id: SCHOOL, name: 'Registration', code: 'REG', taught_by: 'main_teacher' },
         { id: SUBJ_ENG, school_id: SCHOOL, name: 'English', code: 'ENG', taught_by: 'subject_teacher' },
     ],
@@ -64,7 +67,7 @@ const baseTables = ({ users = [ADMIN, ABIGIA, ENG_TEACHER] } = {}) => ({
     class_subjects: [
         { id: 'seat-mat', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, subject_id: SUBJ_MAT, teacher_id: ABIGIA.id, sessions_per_week: 6 },
         { id: 'seat-sci', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, subject_id: SUBJ_SCI, teacher_id: ABIGIA.id, sessions_per_week: 3 },
-        { id: 'seat-gls', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, subject_id: SUBJ_GLS, teacher_id: ABIGIA.id, sessions_per_week: 3 },
+        { id: 'seat-gct', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, subject_id: SUBJ_GCT, teacher_id: ABIGIA.id, sessions_per_week: 3 },
         { id: 'seat-reg', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, subject_id: SUBJ_REG, teacher_id: null, sessions_per_week: 5 },
         { id: 'seat-eng', school_id: SCHOOL, academic_year_id: YEAR, class_id: MAGENTA, subject_id: SUBJ_ENG, teacher_id: ENG_TEACHER.id, sessions_per_week: 5 },
     ],
@@ -93,7 +96,7 @@ describe('ensureMagentaMainTeacher — Ms. Bethelhem Girma account + Year 4 - Ma
         assert.equal(result.user.email, 'bethelhem.girma@bisnoc.local');
         assert.equal(result.user.role, 'main_teacher');
         assert.equal(result.user.isActive, true);
-        assert.equal(result.seatsTransferred, 4, 'MAT, SCI, GLS and unassigned REG move');
+        assert.equal(result.seatsTransferred, 4, 'MAT, SCI, legacy GCT and unassigned REG move');
         assert.equal(result.lessonsPlaced, 2);
 
         // Subject-teacher English seat and outgoing teacher account stay untouched.
@@ -127,6 +130,49 @@ describe('ensureMagentaMainTeacher — Ms. Bethelhem Girma account + Year 4 - Ma
             .send({ password: 'year 4 magenta' });
         assert.equal(pwaLogin.status, 200);
         assert.equal(pwaLogin.body.user.name, 'Bethelhem Girma');
+    });
+
+    test('reconciliation preserves existing legacy-GCT marks and the assigned teacher can still read them by term', async () => {
+        const existingMark = {
+            id: 'mark-gct-existing',
+            school_id: SCHOOL,
+            academic_year_id: YEAR,
+            student_id: STUDENT,
+            subject_id: SUBJ_GCT,
+            class_id: MAGENTA,
+            term_id: TERM_1,
+            marks: 84,
+            max_marks: 100,
+            percentage: 84,
+            grade: 'A',
+            entered_by: ABIGIA.id,
+        };
+        const tables = baseTables();
+        tables.terms = [{
+            id: TERM_1, school_id: SCHOOL, academic_year_id: YEAR,
+            term_index: 1, name: 'Term 1', is_current: true,
+        }];
+        tables.students = [{
+            id: STUDENT, school_id: SCHOOL, class_id: MAGENTA,
+            name: 'Test Pupil', admission_no: 'MAG-001', roll_num: 1,
+        }];
+        tables.marksheets = [existingMark];
+        reset(tables);
+
+        const result = await ensureMagentaMainTeacher();
+        assert.deepEqual(rowsOf('marksheets'), [existingMark], 'staffing reconciliation must not rewrite or delete marks');
+
+        const teacher = rowsOf('users').find((u) => u.id === result.user.id);
+        const visible = await request(app)
+            .get(`/api/marksheets?classId=${MAGENTA}&subjectId=${SUBJ_GCT}&termId=${TERM_1}`)
+            .auth(tokenFor(teacher));
+
+        assert.equal(visible.status, 200);
+        assert.equal(visible.body.marksheets.length, 1);
+        assert.equal(visible.body.marksheets[0].marks, 84);
+        assert.equal(visible.body.marksheets[0].termId, TERM_1);
+        assert.equal(visible.body.marksheets[0].student.id, STUDENT);
+        assert.equal(visible.body.marksheets[0].subject.code, 'GCT');
     });
 
     test('syncs all seated main teachers to their class card passwords on rollout, preserves admin passwords, and respects later custom passwords on cold restarts', async () => {
