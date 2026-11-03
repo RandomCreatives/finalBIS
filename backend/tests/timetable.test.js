@@ -1,10 +1,11 @@
-const { test, describe, beforeEach } = require('node:test');
+const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 const { reset, rowsOf, supabaseStub } = require('./helpers');
 const request = require('./request');
 const app = require('../app');
 const { signToken } = require('../middleware/auth');
+const schoolTime = require('../utils/schoolTime');
 
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
 const YEAR = 'f1c9d3e2-4b7a-4c81-9d6e-5a2f8b3c1d40';
@@ -60,6 +61,10 @@ const tables = () => ({
 beforeEach(() => {
     reset(tables());
     supabaseStub._rpc = {};
+});
+
+afterEach(() => {
+    schoolTime.clock.now = () => new Date();
 });
 
 describe('timetable visibility', () => {
@@ -128,6 +133,39 @@ describe('timetable visibility', () => {
     test('the timetable requires authentication', async () => {
         assert.equal((await request(app).get('/api/timetable')).status, 401);
         assert.equal((await request(app).get('/api/timetable/my-week')).status, 401);
+        assert.equal((await request(app).get('/api/timetable/my-current')).status, 401);
+    });
+});
+
+describe('current class / period card', () => {
+    test('main and assistant teachers see their assigned class; subject teachers see their own lesson', async () => {
+        schoolTime.clock.now = () => new Date('2026-11-02T06:15:00.000Z'); // 09:15 Addis
+
+        const main = await request(app).get('/api/timetable/my-current').auth(tokenFor(MAIN_A));
+        assert.equal(main.status, 200);
+        assert.equal(main.body.date, '2026-11-02');
+        assert.equal(main.body.time, '09:15');
+        assert.equal(main.body.current.teacherId, ENG_T.id);
+        assert.equal(main.body.current.classId, CLASS_A);
+        assert.equal(main.body.next.teacherId, MAIN_A.id);
+
+        const assistant = await request(app).get('/api/timetable/my-current').auth(tokenFor(ASSIST));
+        assert.equal(assistant.status, 200);
+        assert.equal(assistant.body.current.teacherId, ENG_T.id);
+        assert.equal(assistant.body.next.teacherId, MAIN_A.id);
+
+        const subjectTeacher = await request(app).get('/api/timetable/my-current').auth(tokenFor(ENG_T));
+        assert.equal(subjectTeacher.status, 200);
+        assert.equal(subjectTeacher.body.current.teacherId, ENG_T.id);
+        assert.equal(subjectTeacher.body.next, null);
+    });
+
+    test('weekends have no current or upcoming period', async () => {
+        schoolTime.clock.now = () => new Date('2026-11-07T06:15:00.000Z'); // Saturday, 09:15 Addis
+        const response = await request(app).get('/api/timetable/my-current').auth(tokenFor(MAIN_A));
+        assert.equal(response.status, 200);
+        assert.equal(response.body.current, null);
+        assert.equal(response.body.next, null);
     });
 });
 

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
 import { ThemeProvider } from '../theme';
 import { useAuth } from '../auth/AuthContext';
-import { attendanceApi, dashboardApi, termApi } from '../api/endpoints';
+import { attendanceApi, dashboardApi, termApi, timetableApi } from '../api/endpoints';
 
 jest.mock('../auth/AuthContext', () => ({
     useAuth: jest.fn(),
@@ -18,6 +18,7 @@ jest.mock('../api/endpoints', () => ({
     },
     attendanceApi: { week: jest.fn() },
     termApi: { current: jest.fn() },
+    timetableApi: { myCurrent: jest.fn() },
 }));
 
 const renderDashboard = () =>
@@ -36,6 +37,10 @@ beforeEach(() => {
         isAdmin: true,
     });
     termApi.current.mockResolvedValue({ term: { name: 'Term 1', weekCount: 13 }, currentWeek: 0 });
+    timetableApi.myCurrent.mockResolvedValue({
+        date: '2026-11-03', time: '09:00', timeZone: 'Africa/Addis_Ababa',
+        current: null, next: null,
+    });
     dashboardApi.summary.mockResolvedValue({
         students: 390, classes: 14, staff: 33,
         attendanceToday: { marked: 0, present: 0, rate: 0 },

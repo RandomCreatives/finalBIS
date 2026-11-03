@@ -174,6 +174,40 @@ app.get('/api/cron/attendance-reminders', async (req, res) => {
     }
 });
 
+/**
+ * Teacher deadlines and duty reminders. Vercel calls this every five minutes
+ * during the school day (08:00–16:55 Addis Ababa time); each action is
+ * time-gated and idempotent, and the response contains counts only.
+ */
+app.get('/api/cron/teacher-reminders', async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+        return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+    try {
+        const { runTeacherReminders } = require('./services/teacherReminders');
+        const result = await runTeacherReminders();
+        console.log('[teacher-reminders]', JSON.stringify(result));
+        res.json({
+            status: 'ok',
+            date: result.date,
+            time: result.time,
+            due: result.due,
+            schools: result.schools.map((s) => ({
+                schoolDay: s.schoolDay,
+                briefings: s.briefings,
+                lessonPlanReminders: s.lessonPlanReminders,
+                dutyReminders: s.dutyReminders,
+                telegramSent: s.telegramSent,
+                pushSent: s.pushSent,
+            })),
+        });
+    } catch (err) {
+        console.error('[teacher-reminders] failed:', err.message);
+        res.status(500).json({ status: 'error', message: 'Teacher reminders failed' });
+    }
+});
+
 // Telegram webhook: registered before the IP limiter so Telegram's own
 // delivery IPs are never throttled, and the secret-token header is checked.
 app.post('/api/telegram/webhook', telegramBot.webhookHandler);
