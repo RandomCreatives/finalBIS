@@ -24,6 +24,7 @@ import SubjectLogin from './pages/SubjectLogin';
 import SubjectTeacherLogin from './pages/SubjectTeacherLogin';
 import LibrarianLogin from './pages/LibrarianLogin';
 import NurseLogin from './pages/NurseLogin';
+import TelegramEntry from './pages/TelegramEntry';
 
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -69,6 +70,7 @@ export default function App() {
                         <Route path="/subject-login" element={<SubjectTeacherLogin />} />
                         <Route path="/librarian-login" element={<LibrarianLogin />} />
                         <Route path="/nurse-login" element={<NurseLogin />} />
+                        <Route path="/telegram-entry/:role" element={<TelegramEntry />} />
 
                         <Route
                             path="/app"

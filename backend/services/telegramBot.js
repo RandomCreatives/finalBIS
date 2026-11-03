@@ -542,12 +542,17 @@ async function markAllPresent(classId, user) {
 // ---------------------------------------------------------------------------
 // Message + keyboard builders
 // ---------------------------------------------------------------------------
-const webAppUrl = () => `${webOrigin()}/app`;
-const subjectWebAppUrl = () => `${webOrigin()}/subject-home`;
+const portalEntryUrl = (role, nextPath) => {
+    const roleName = typeof role === 'string' && /^[a-z_]+$/.test(role) ? role : 'staff';
+    const next = nextPath ? `?next=${encodeURIComponent(nextPath)}` : '';
+    return `${webOrigin()}/telegram-entry/${encodeURIComponent(roleName)}${next}`;
+};
 const miniAppUrl = () => `${webOrigin()}/tma/`;
 const marksAppUrl = () => `${webOrigin()}/tma/marks`;
-const registerUrl = (classId) =>
-    `${webOrigin()}/app/attendance?classId=${classId}&date=${schoolTime.todayIso()}`;
+const registerUrl = (classId, role) => portalEntryUrl(
+    role,
+    `/app/attendance?classId=${encodeURIComponent(classId)}&date=${schoolTime.todayIso()}`,
+);
 const miniAppRegisterUrl = (classId) =>
     `${webOrigin()}/tma/attendance?classId=${classId}`;
 const miniAppMarksheetUrl = (classId, subjectId) =>
@@ -570,12 +575,11 @@ function greetingName(rawName) {
 
 function buildMainMenu(user) {
     const firstName = greetingName(user.name);
-    const isSubject = user.role === 'subject_teacher';
     return menus.buildMainMenu({
         firstName,
         isTeacher: canRecordAttendance(user),
         role: user.role,
-        webAppUrl: isSubject ? subjectWebAppUrl() : webAppUrl(),
+        webAppUrl: portalEntryUrl(user?.role),
         miniAppUrl: miniAppUrl(),
         marksAppUrl: marksAppUrl(),
     });
@@ -610,7 +614,7 @@ function buildClassDetail(klass, studentCount, user, teachingMeta = {}) {
         klass,
         studentCount,
         subjects,
-        webAppUrl: user?.role === 'subject_teacher' ? subjectWebAppUrl() : webAppUrl(),
+        webAppUrl: portalEntryUrl(user?.role),
         miniAppUrl: miniAppUrl(),
         marksheetUrl: hasMarksheet ? miniAppMarksheetUrl(klass.id, teachingMeta.firstSubjectId) : undefined,
         canTakeAttendance: canAtt,
@@ -627,12 +631,12 @@ function buildStudents(students, klass, page = 1) {
     });
 }
 
-function buildAttendanceOptions(klass, summary = null) {
+function buildAttendanceOptions(klass, summary = null, user = null) {
     return menus.buildAttendanceOptions({
         klass,
         dayLabel: todayStr(),
         summary,
-        registerUrl: registerUrl(klass.id),
+        registerUrl: registerUrl(klass.id, user?.role),
         miniAppRegisterUrl: miniAppRegisterUrl(klass.id),
     });
 }
@@ -710,7 +714,7 @@ async function editAttendanceOptionsWithData(chatId, messageId, user, klass) {
         getTodayAttendanceMap(klass.id, user.school_id),
     ]);
     const summary = summarizeAttendance(students, statusByStudent);
-    return editMessage(chatId, messageId, buildAttendanceOptions(klass, summary));
+    return editMessage(chatId, messageId, buildAttendanceOptions(klass, summary, user));
 }
 
 async function editInlineRegisterWithData(chatId, messageId, user, klass, page = 1, statusOverride = null) {
@@ -763,7 +767,7 @@ async function editAttendanceShortcut(chatId, messageId, user, page = 1) {
             menus.buildInfo({
                 text: '✅ Attendance\n\nYou are not assigned as a class teacher this year, so there is ' +
                     'no homeroom register for you to take.',
-                rows: [[menus.urlBtn('🌐 Open the web app', webAppUrl())]],
+                rows: [[menus.urlBtn('🌐 Open the web app', portalEntryUrl(user?.role))]],
             })
         );
     }

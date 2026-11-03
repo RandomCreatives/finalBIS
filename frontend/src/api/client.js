@@ -35,8 +35,15 @@ client.interceptors.response.use(
     (error) => {
         if (error.response?.status === 401 && getToken()) {
             clearToken();
-            if (window.location.pathname !== '/login') {
-                window.location.replace('/login?expired=1');
+            const pathname = window.location.pathname;
+            const signInPaths = new Set([
+                '/login', '/pwa-sign-in', '/pwa-main-teacher-login', '/teacher-login',
+                '/subject-login', '/librarian-login', '/nurse-login',
+            ]);
+            const isRoleEntry = pathname.startsWith('/telegram-entry/');
+            if (!signInPaths.has(pathname) && !isRoleEntry) {
+                const next = `${pathname}${window.location.search || ''}`;
+                window.location.replace(`/pwa-sign-in?expired=1&next=${encodeURIComponent(next)}`);
             }
         }
 

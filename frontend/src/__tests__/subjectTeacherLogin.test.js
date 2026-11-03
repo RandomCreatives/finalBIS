@@ -128,6 +128,7 @@ describe('SubjectTeacherLogin wall', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        localStorage.clear();
     });
 
     test('renders collapsible subject bars: real names where staffed, teacher numbers where not', async () => {
@@ -196,7 +197,7 @@ describe('SubjectTeacherLogin wall', () => {
             seatHolder('1', 'Amanuel Teamu Tsegaye', [{ code: 'ICT', name: 'ICT', seats: 14 }]),
         ]);
         renderWall();
-        fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
         expect(mockNavigate).toHaveBeenCalledWith('/');
     });
 
@@ -205,7 +206,7 @@ describe('SubjectTeacherLogin wall', () => {
             seatHolder('1', 'ICT Teacher 1', [{ code: 'ICT', name: 'ICT', seats: 14 }]),
         ]);
         renderWall();
-        expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /switch to (light|dark) mode/i })).toBeInTheDocument();
 
         fireEvent.click((await screen.findByText('ICT')).closest('.MuiAccordionSummary-root'));
         fireEvent.click(await screen.findByTestId('subject-seat-card'));

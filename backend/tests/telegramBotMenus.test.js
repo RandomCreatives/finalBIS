@@ -125,7 +125,39 @@ describe('navigation', () => {
         const rows = lastEdit().reply_markup.inline_keyboard;
         assert.deepEqual(rows[0].map((b) => b.callback_data), ['today', 'cls']);
         assert.deepEqual(rows[1].map((b) => b.callback_data), ['at', 'nt']);
-        assert.ok(rows[2][0].url, 'the web app is a URL button');
+        assert.equal(
+            rows[2][0].url,
+            `${publicWebOrigin()}/telegram-entry/main_teacher`,
+            'the web button carries the linked staff role instead of opening /app directly',
+        );
+    });
+
+    test('inline web links carry the linked role for teacher, subject-teacher, and admin accounts', async () => {
+        seed();
+        await press('menu');
+        let webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the web app');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/main_teacher`);
+
+        await press(`c:${CLASS_ID}`);
+        webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the class');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/main_teacher`);
+
+        await press(`ca:${CLASS_ID}`);
+        const registerLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the register');
+        assert.match(registerLink.url, /\/telegram-entry\/main_teacher\?next=/);
+        assert.match(registerLink.url, /classId%3D/);
+
+        seed();
+        rowsOf('users')[0].role = 'subject_teacher';
+        await press('menu');
+        webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the web app');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/subject_teacher`);
+
+        seed();
+        rowsOf('users')[0].role = 'admin';
+        await press('menu');
+        webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the web app');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/admin`);
     });
 
     test('menu → classes → class → attendance → back, all on one message', async () => {
