@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, Navigate, useNavigate } from 'react-router-dom';
 import {
     Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, CircularProgress,
     Container, Dialog, DialogActions, DialogContent, DialogTitle, Grid, IconButton,
@@ -86,7 +86,7 @@ export default function SubjectTeacherLogin() {
     const theme = useTheme();
     const dark = theme.palette.mode === 'dark';
     const { toggleColorScheme } = useColorScheme();
-    const { loginWithToken } = useAuth();
+    const { loginWithToken, user, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
     // Back to wherever you came from; a fresh tab lands on the landing page.
@@ -128,6 +128,18 @@ export default function SubjectTeacherLogin() {
             setSubmitting(false);
         }
     };
+
+    if (authLoading) {
+        return (
+            <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+                <CircularProgress aria-label="Checking sign-in" />
+            </Box>
+        );
+    }
+
+    if (user?.role === 'subject_teacher') {
+        return <Navigate to="/subject-home" replace />;
+    }
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: dark ? 'background.default' : '#f8fafc', pb: 8 }}>

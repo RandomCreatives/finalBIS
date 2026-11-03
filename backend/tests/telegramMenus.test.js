@@ -47,13 +47,13 @@ const classes = Array.from({ length: 14 }, (_, i) => ({ id: `class-${i}`, name: 
 
 /** Every screen the bot can build, keyed by a readable name. */
 const screens = {
-    'main menu': menus.buildMainMenu({ firstName: 'Meron', isTeacher: true, webAppUrl: 'https://x/app' }),
-    'main menu (non-teacher)': menus.buildMainMenu({ firstName: 'Ada', isTeacher: false, webAppUrl: 'https://x/app' }),
+    'main menu': menus.buildMainMenu({ firstName: 'Meron', isTeacher: true, role: 'main_teacher', webAppUrl: 'https://x/telegram-entry/main_teacher' }),
+    'main menu (non-teacher)': menus.buildMainMenu({ firstName: 'Ada', isTeacher: false, webAppUrl: 'https://x/telegram-entry/staff' }),
     'main menu (subject teacher)': menus.buildMainMenu({
         firstName: 'Dawit',
         isTeacher: false,
         role: 'subject_teacher',
-        webAppUrl: 'https://x/subject-home',
+        webAppUrl: 'https://x/telegram-entry/subject_teacher',
         miniAppUrl: 'https://x/tma/',
         marksAppUrl: 'https://x/tma/marks',
     }),
@@ -61,7 +61,7 @@ const screens = {
         firstName: 'Hanna',
         isTeacher: true,
         role: 'admin',
-        webAppUrl: 'https://x/app',
+        webAppUrl: 'https://x/telegram-entry/admin',
         miniAppUrl: 'https://x/tma/',
     }),
     today: menus.buildToday({ dayLabel: DAY, slots, tasks }),
@@ -73,12 +73,12 @@ const screens = {
     'class picker (attendance)': menus.buildClassPicker({
         classes, title: '✅ Attendance — which class?', rowPrefix: 'ca', pageBase: 'at', icon: '✅',
     }),
-    'class detail': menus.buildClassDetail({ klass, studentCount: 29, webAppUrl: 'https://x/app' }),
+    'class detail': menus.buildClassDetail({ klass, studentCount: 29, webAppUrl: 'https://x/telegram-entry/main_teacher' }),
     'class detail (subject teacher)': menus.buildClassDetail({
         klass,
         studentCount: 29,
         subjects: ['French'],
-        webAppUrl: 'https://x/subject-home',
+        webAppUrl: 'https://x/telegram-entry/subject_teacher',
         miniAppUrl: 'https://x/tma/',
         marksheetUrl: 'https://x/tma/marks?classId=123',
         canTakeAttendance: false,
@@ -104,7 +104,7 @@ const screens = {
                 { name: 'Pupil 2', status: 'late' },
             ],
         },
-        registerUrl: 'https://x/app/attendance',
+        registerUrl: 'https://x/telegram-entry/main_teacher?next=%2Fapp%2Fattendance%3FclassId%3D123',
         miniAppRegisterUrl: 'https://x/tma/attendance',
     }),
     'inline register': menus.buildInlineRegister({
@@ -233,7 +233,7 @@ describe('two-up menu and role navigation', () => {
         assert.equal(rows[1].length, 2);
         assert.deepEqual(rows[0].map((b) => b.callback_data), ['today', 'cls']);
         assert.deepEqual(rows[1].map((b) => b.callback_data), ['at', 'nt']);
-        assert.equal(rows[2][0].url, 'https://x/app', 'the web app opens as a URL button');
+        assert.equal(rows[2][0].url, 'https://x/telegram-entry/main_teacher', 'the web app carries the teacher role');
     });
 
     test('non-teaching staff and subject teachers do not see the attendance shortcut', () => {

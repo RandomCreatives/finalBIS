@@ -10,7 +10,9 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import { Link as RouterLink } from 'react-router-dom';
-import { assignmentApi, classApi, marksheetApi, studentApi, studentRequestApi, termApi } from '../api/endpoints';
+import {
+    academicYearApi, assignmentApi, classApi, marksheetApi, studentApi, studentRequestApi, termApi,
+} from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
@@ -96,6 +98,11 @@ export default function Marksheets() {
     }, [classOptions, classId]);
 
     const terms = useApi(() => termApi.list(), []);
+    const years = useApi(() => academicYearApi.list(), []);
+    const yearNameById = useMemo(
+        () => new Map((years.data || []).map((year) => [String(year.id), year.name])),
+        [years.data],
+    );
 
     // Default to the current term once terms arrive.
     useEffect(() => {
@@ -143,21 +150,50 @@ export default function Marksheets() {
         [classId],
         { syncTopic: 'students' },
     );
+    // Load this class/subject's records across terms so an empty selected term
+    // can be distinguished from marks saved safely under a different term.
     const existing = useApi(
         () => (ready
-            ? marksheetApi.list({ classId, subjectId, termId })
+            ? marksheetApi.list({ classId, subjectId })
             : Promise.resolve([])),
-        [ready, classId, subjectId, termId],
+        [ready, classId, subjectId],
         { syncTopic: 'assessments' },
     );
+    const selectedMarksheets = useMemo(
+        () => (existing.data || []).filter((m) => String(m.termId) === String(termId)),
+        [existing.data, termId],
+    );
+    const otherTermMarkCounts = useMemo(() => {
+        const termById = new Map((terms.data || []).map((term) => [String(term.id), term]));
+        const counts = new Map();
+        (existing.data || []).forEach((mark) => {
+            if (!mark.termId || String(mark.termId) === String(termId)) return;
+            const key = String(mark.termId);
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return [...counts.entries()].map(([id, count]) => {
+            const term = termById.get(id);
+            const mark = (existing.data || []).find((row) => String(row.termId) === id);
+            const yearName = term?.academicYearId
+                ? yearNameById.get(String(term.academicYearId))
+                : null;
+            return {
+                id,
+                name: term?.name
+                    ? `${term.name}${yearName ? ` (${yearName})` : ''}`
+                    : (mark?.term?.name || 'Another term'),
+                count,
+            };
+        });
+    }, [existing.data, termId, terms.data, yearNameById]);
 
-    // Seed editable state from the server's rows once both loads complete,
+    // Seed editable state from this term's rows once both loads complete,
     // preserving any dirty unsaved cells if a background student sync occurs.
     useEffect(() => {
         if (!ready || !students.data || !existing.data) return;
 
         const savedByStudent = {};
-        (existing.data || []).forEach((m) => {
+        selectedMarksheets.forEach((m) => {
             if (m.student?.id) savedByStudent[m.student.id] = m;
         });
 
@@ -197,7 +233,7 @@ export default function Marksheets() {
         setEntries(merged);
         setBaseline(nextBaseline);
         setSavedIds(ids);
-    }, [ready, students.data, existing.data]);
+    }, [ready, students.data, existing.data, selectedMarksheets]);
 
     const roster = useMemo(
         () => sortClassRoster(students.data),
@@ -313,7 +349,13 @@ export default function Marksheets() {
     const canDelete = isAdmin || user?.role === 'main_teacher';
     const selectedClass = classOptions.find((c) => c.id === classId);
     const selectedSubject = subjectOptions.find((s) => s.id === subjectId);
-    const selectedTerm = (terms.data || []).find((t) => t.id === termId);
+    const selectedTerm = (terms.data || []).find((t) => String(t.id) === String(termId));
+    const selectedYearName = selectedTerm?.academicYearId
+        ? yearNameById.get(String(selectedTerm.academicYearId))
+        : null;
+    const selectedTermLabel = selectedTerm
+        ? `${selectedTerm.name}${selectedYearName ? ` (${selectedYearName})` : ''}`
+        : 'the selected term';
 
     // -------------------------------------------------------------------------
 
@@ -333,7 +375,7 @@ export default function Marksheets() {
                     : 'Enter and edit marks per class, subject and term. Grades are computed by the server.'}
             />
 
-            <DataState loading={scope.loading || terms.loading} error={scope.error || terms.error}>
+            <DataState loading={scope.loading || terms.loading || years.loading} error={scope.error || terms.error}>
                 <Card sx={{ p: 2, mb: 2.5 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                         <TextField
@@ -355,6 +397,7 @@ export default function Marksheets() {
 
                         <TextField
                             select label="Subject" size="small" sx={{ minWidth: 200 }}
+                            data-testid="marksheet-subject-select"
                             value={subjectId}
                             onChange={(e) => setSubjectId(e.target.value)}
                             disabled={!classId || dirtyIds.length > 0}
@@ -367,13 +410,21 @@ export default function Marksheets() {
 
                         <TextField
                             select label="Term" size="small" sx={{ minWidth: 170 }}
+                            data-testid="marksheet-term-select"
                             value={termId}
                             onChange={(e) => setTermId(e.target.value)}
                             disabled={dirtyIds.length > 0}
                         >
-                            {(terms.data || []).map((t) => (
-                                <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
-                            ))}
+                            {(terms.data || []).map((t) => {
+                                const yearName = t.academicYearId
+                                    ? yearNameById.get(String(t.academicYearId))
+                                    : null;
+                                return (
+                                    <MenuItem key={t.id} value={t.id}>
+                                        {t.name}{yearName ? ` · ${yearName}` : ''}
+                                    </MenuItem>
+                                );
+                            })}
                         </TextField>
 
                         {ready && (
@@ -423,6 +474,17 @@ export default function Marksheets() {
 
                 {ready && (
                     <DataState loading={students.loading || existing.loading} error={students.error || existing.error}>
+                        {!existing.loading && existing.data && selectedMarksheets.length === 0
+                            && otherTermMarkCounts.length > 0 && (
+                                <Alert severity="warning" sx={{ mb: 2 }} data-testid="marksheet-other-term-notice">
+                                    No marks are saved for {selectedSubject?.name || 'this subject'} in{' '}
+                                    {selectedTermLabel}. Existing results for this class
+                                    and subject are in{' '}
+                                    {otherTermMarkCounts.map((term) =>
+                                        `${term.name} (${term.count} result${term.count === 1 ? '' : 's'})`
+                                    ).join(', ')}. Select the matching term to view them. Nothing has been changed.
+                                </Alert>
+                            )}
                         {roster.length === 0 ? (
                             <Alert severity="info">
                                 No students in {selectedClass?.name || 'this class'} yet — place students

@@ -1,6 +1,8 @@
 // Subjects a main teacher may mark in the current Term 1 workflow.
+// The timetable migration supports both GLS (current) and GCT (legacy) for
+// Global Citizenship, so both codes must remain visible to the same teacher.
 // Spelling remains a timetable/teaching seat, but is not a marksheet subject.
-export const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS']);
+export const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS', 'GCT']);
 
 /**
  * Keep a marksheet subject picker aligned with the caller's teaching

@@ -68,6 +68,17 @@ most common daily action was three taps deep.
 
 Staff who cannot record attendance (store, library, clinic) do not see it.
 
+The web-app URL buttons use `/telegram-entry/<role>` rather than opening `/app`
+blindly. The entry point sends signed-out users to their role's sign-in, sends a
+matching signed-in user to their workspace, and automatically clears a different
+role's browser session before sending the user to the linked role's sign-in.
+This prevents a teacher's Telegram link from silently opening an administrator's
+cached web session or displaying the administrator login.
+
+Telegram cannot rewrite URL buttons in messages already sent. After rollout,
+tap `/menu` or `/start` once to get refreshed web-app links; callback buttons in
+older messages continue to work as before.
+
 ### 2 · Today — `today`
 
 ```

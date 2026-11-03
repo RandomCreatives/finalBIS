@@ -125,7 +125,39 @@ describe('navigation', () => {
         const rows = lastEdit().reply_markup.inline_keyboard;
         assert.deepEqual(rows[0].map((b) => b.callback_data), ['today', 'cls']);
         assert.deepEqual(rows[1].map((b) => b.callback_data), ['at', 'nt']);
-        assert.ok(rows[2][0].url, 'the web app is a URL button');
+        assert.equal(
+            rows[2][0].url,
+            `${publicWebOrigin()}/telegram-entry/main_teacher`,
+            'the web button carries the linked staff role instead of opening /app directly',
+        );
+    });
+
+    test('inline web links carry the linked role for teacher, subject-teacher, and admin accounts', async () => {
+        seed();
+        await press('menu');
+        let webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the web app');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/main_teacher`);
+
+        await press(`c:${CLASS_ID}`);
+        webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the class');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/main_teacher`);
+
+        await press(`ca:${CLASS_ID}`);
+        const registerLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the register');
+        assert.match(registerLink.url, /\/telegram-entry\/main_teacher\?next=/);
+        assert.match(registerLink.url, /classId%3D/);
+
+        seed();
+        rowsOf('users')[0].role = 'subject_teacher';
+        await press('menu');
+        webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the web app');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/subject_teacher`);
+
+        seed();
+        rowsOf('users')[0].role = 'admin';
+        await press('menu');
+        webLink = buttonsOf(lastEdit()).find((button) => button.text === '🌐 Open the web app');
+        assert.equal(webLink.url, `${publicWebOrigin()}/telegram-entry/admin`);
     });
 
     test('menu → classes → class → attendance → back, all on one message', async () => {
@@ -319,6 +351,24 @@ describe('old keyboards keep working', () => {
 
 describe('role-smart classes, weekday switcher, pupil card, inline register & proactive pushes', () => {
     const sentMessages = () => telegram.filter((c) => c.method === 'sendMessage').map((c) => c.body);
+
+    test('main teachers get a direct marksheet button for a legacy GCT Global Citizenship seat', async () => {
+        seed();
+        rowsOf('subjects').push({
+            id: 'subj-gct', school_id: SCHOOL, name: 'Global Citizenship', code: 'GCT',
+        });
+        rowsOf('class_subjects').push({
+            id: 'cs-gct', school_id: SCHOOL, academic_year_id: YEAR,
+            class_id: CLASS_ID, subject_id: 'subj-gct', teacher_id: TEACHER,
+        });
+
+        await press(`c:${CLASS_ID}`);
+
+        assert.match(lastEdit().text, /Subject: Global Citizenship/);
+        const marksheetBtn = buttonsOf(lastEdit()).find((b) => b.web_app?.url?.includes('/tma/marks'));
+        assert.ok(marksheetBtn, 'opens the Mini App marksheet');
+        assert.match(marksheetBtn.web_app.url, new RegExp(`classId=${CLASS_ID}&subjectId=subj-gct`));
+    });
 
     test('subject teachers see taught classes with subject labels and direct Mini App marksheet button', async () => {
         seed();

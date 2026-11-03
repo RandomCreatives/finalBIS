@@ -25,6 +25,7 @@ import SendIcon from '@mui/icons-material/Send';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
+import { loginPathForRole } from '../auth/roleRouting';
 import NotificationBell from './NotificationBell';
 import PwaInstallButton from './PwaInstallButton';
 import PwaBottomNav from './PwaBottomNav';
@@ -197,8 +198,9 @@ export default function AppLayout() {
             .filter((g) => g.items.length > 0);
 
     const signOut = () => {
+        const signInPath = loginPathForRole(user?.role);
         logout();
-        window.location.replace('/login');
+        window.location.replace(signInPath);
     };
 
     const caption = `${ROLE_CAPTION[user?.role] || 'Staff workspace'} · 2026/2027`;

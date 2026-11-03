@@ -34,7 +34,7 @@ export default function Login() {
     const [error, setError] = useState('');
 
     // One-time linking form state
-    const [mode, setMode] = useState<LinkMode>('staff');
+    const [mode, setMode] = useState<LinkMode | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [classPassword, setClassPassword] = useState('');
@@ -108,7 +108,7 @@ export default function Login() {
 
     const handleLinkSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (loading) return;
+        if (loading || !mode) return;
         setLoading(true);
         setError('');
 
@@ -132,11 +132,12 @@ export default function Login() {
     const canSubmitLink =
         insideTelegram &&
         !loading &&
+        Boolean(mode) &&
         (mode === 'class'
             ? classPassword.trim().length > 0
             : mode === 'subject'
                 ? Boolean(teacherId) && password.length > 0
-                : email.trim().length > 0 && password.length > 0);
+                : mode === 'staff' && email.trim().length > 0 && password.length > 0);
 
     const tgHandle =
         tgUser?.username
@@ -230,9 +231,9 @@ export default function Login() {
                         <div className="mt-4 grid grid-cols-3 gap-1 p-1 rounded-xl glass-subcard text-xs font-semibold">
                             {(
                                 [
-                                    ['staff', 'Admin / Staff'],
+                                    ['staff', 'Staff account'],
                                     ['class', 'Main Teacher'],
-                                    ['subject', 'Subject'],
+                                    ['subject', 'Subject Teacher'],
                                 ] as const
                             ).map(([key, label]) => (
                                 <button
@@ -242,6 +243,7 @@ export default function Login() {
                                         setMode(key);
                                         setError('');
                                     }}
+                                    aria-pressed={mode === key}
                                     className={`py-2 px-2 rounded-lg transition-all text-center ${
                                         mode === key
                                             ? 'glass-pill-active'
@@ -253,6 +255,7 @@ export default function Login() {
                             ))}
                         </div>
 
+                        {mode ? (
                         <form onSubmit={handleLinkSubmit} className="mt-4 space-y-3">
                             {mode === 'staff' && (
                                 <>
@@ -396,6 +399,11 @@ export default function Login() {
                                 {loading ? 'Linking & signing in…' : 'Link Telegram & Sign in'}
                             </button>
                         </form>
+                        ) : (
+                            <div className="mt-4 p-3 rounded-xl glass-subcard text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                                Choose the sign-in that matches your school role. No account form appears until you select one above.
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="mt-5">

@@ -16,7 +16,7 @@ describe('marksheet subject options', () => {
             user: { id: 'main-1', role: 'main_teacher' },
         });
 
-        expect([...MAIN_TEACHER_MARKSHEET_CODES]).toEqual(['MAT', 'SCI', 'GLS']);
+        expect([...MAIN_TEACHER_MARKSHEET_CODES].sort()).toEqual(['GCT', 'GLS', 'MAT', 'SCI']);
         expect(options.map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
         expect(options.map((subject) => subject.name)).not.toContain('Spelling');
         expect(options.map((subject) => subject.name)).not.toContain('English');
@@ -27,6 +27,19 @@ describe('marksheet subject options', () => {
         const options = mainTeacherMarksheetSubjectsFor(assignments, 'main-1');
 
         expect(options.map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
+    });
+
+    test('main teachers can see Global Citizenship when their assignment uses legacy code GCT', () => {
+        const legacyAssignment = [{
+            teacherId: 'main-1',
+            subject: { id: 'gct', code: 'GCT', name: 'Global Citizenship' },
+        }];
+
+        expect(marksheetSubjectsFor(legacyAssignment, {
+            user: { id: 'main-1', role: 'main_teacher' },
+        }).map((subject) => subject.code)).toEqual(['GCT']);
+        expect(mainTeacherMarksheetSubjectsFor(legacyAssignment, 'main-1')
+            .map((subject) => subject.code)).toEqual(['GCT']);
     });
 
     test('subject teachers see only their own assigned subjects', () => {

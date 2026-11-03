@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as RouterLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, CircularProgress,
     Stack, TextField, Typography, IconButton, InputAdornment
@@ -8,6 +8,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../auth/AuthContext';
+import { dashboardPathForUser, requestedPathFromState, roleLabel } from '../auth/roleRouting';
 
 /**
  * The single sign-in screen for all staff.
@@ -22,20 +23,14 @@ export default function Login() {
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    const { login } = useAuth();
+    const { login, logout, user, loading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [params] = useSearchParams();
 
     const expired = params.get('expired') === '1';
-    const requestedDestination = location.state?.from?.pathname;
-    const destination =
-        typeof requestedDestination === 'string' &&
-        requestedDestination.startsWith('/') &&
-        !requestedDestination.startsWith('//') &&
-        !requestedDestination.includes('\\')
-            ? requestedDestination
-            : '/app';
+    const expectedRole = location.state?.expectedRole;
+    const destination = requestedPathFromState(location.state);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -43,13 +38,42 @@ export default function Login() {
         setSubmitting(true);
         try {
             const profile = await login(email.trim(), password);
-            navigate(profile?.role === 'subject_teacher' ? '/subject-home' : destination, { replace: true });
+            if (expectedRole && profile?.role !== expectedRole) {
+                logout();
+                setError(`This account is for ${roleLabel(profile?.role)}, not ${roleLabel(expectedRole)}. Choose the sign-in for your role.`);
+                return;
+            }
+            const next = destination || dashboardPathForUser(profile);
+            navigate(next, { replace: true });
         } catch (err) {
             setError(err.message || 'Sign in failed. Please check your credentials.');
         } finally {
             setSubmitting(false);
         }
     };
+
+    if (loading) {
+        return (
+            <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+                <CircularProgress aria-label="Checking sign-in" />
+            </Box>
+        );
+    }
+
+    if (user) {
+        if (expectedRole && user.role !== expectedRole) {
+            return (
+                <Navigate
+                    to={{
+                        pathname: `/telegram-entry/${encodeURIComponent(expectedRole)}`,
+                        search: destination ? `?next=${encodeURIComponent(destination)}` : '',
+                    }}
+                    replace
+                />
+            );
+        }
+        return <Navigate to={destination || dashboardPathForUser(user)} replace />;
+    }
 
     return (
         <Box
@@ -81,7 +105,7 @@ export default function Login() {
                             <SchoolIcon sx={{ fontSize: 32 }} />
                         </Box>
                         <Typography variant="h5" textAlign="center" fontWeight={800} letterSpacing="-0.02em">
-                            BIS NOC Portal
+                            Staff Sign In
                         </Typography>
                         <Typography variant="body2" color="text.secondary" textAlign="center">
                             British International School — NOC Gerji Campus

@@ -1,18 +1,21 @@
 import { useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Alert, Box, Button, Card, CardContent, Container, IconButton, InputAdornment, Stack, TextField, Typography } from '@mui/material';
+import { Link as RouterLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, IconButton, InputAdornment, Stack, TextField, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SchoolIcon from '@mui/icons-material/School';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import LoginIcon from '@mui/icons-material/Login';
 import { authApi } from '../api/endpoints';
-import { setToken } from '../api/client';
 import { saveClassLogin } from '../data/classes';
+import { useAuth } from '../auth/AuthContext';
+import { dashboardPathForUser, requestedPathFromState } from '../auth/roleRouting';
 import { useColorScheme } from '../theme';
 
 export default function PwaMainTeacherLogin() {
     const navigate = useNavigate();
+    const location = useLocation();
+    const { user, loading: authLoading, loginWithToken } = useAuth();
     const { toggleColorScheme } = useColorScheme();
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -26,19 +29,36 @@ export default function PwaMainTeacherLogin() {
         setError('');
         try {
             const data = await authApi.classPasswordLogin(password);
-            setToken(data.token);
+            if (data.user?.role !== 'main_teacher') {
+                throw new Error('This class sign-in is for main teachers. Please choose the sign-in for your role.');
+            }
+            loginWithToken(data.token, data.user);
             saveClassLogin({ name: data.class.name, mainTeacher: data.user.name }, {
                 classId: data.class.id,
                 userId: data.user.id,
                 teacher: data.user.name,
             });
-            navigate(`/class-home/${data.class.name.toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')}`, { replace: true });
+            const next = requestedPathFromState(location.state);
+            const classHome = `/class-home/${data.class.name.toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')}`;
+            navigate(next || classHome, { replace: true });
         } catch (err) {
             setError(err.message || 'Incorrect class password');
         } finally {
             setSubmitting(false);
         }
     };
+
+    if (authLoading) {
+        return (
+            <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+                <CircularProgress aria-label="Checking sign-in" />
+            </Box>
+        );
+    }
+
+    if (user?.role === 'main_teacher') {
+        return <Navigate to={dashboardPathForUser(user)} replace />;
+    }
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>

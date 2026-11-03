@@ -22,7 +22,7 @@ export default function RequireAuth({ children, roles }) {
     }
 
     if (!user) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to="/pwa-sign-in" state={{ from: location }} replace />;
     }
 
     if (roles && !roles.includes(user.role)) {

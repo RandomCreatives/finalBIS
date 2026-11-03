@@ -1,19 +1,32 @@
-import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Card, CardContent, Container, Stack, Typography } from '@mui/material';
+import { Link as RouterLink, useLocation, useSearchParams } from 'react-router-dom';
+import { Alert, Box, Button, Card, CardContent, Container, Stack, Typography } from '@mui/material';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SchoolIcon from '@mui/icons-material/School';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import BadgeIcon from '@mui/icons-material/Badge';
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useColorScheme } from '../theme';
+import { requestedPathFromState, safeNextPath } from '../auth/roleRouting';
 
 const OPTIONS = [
-    { label: 'Admin', description: 'Coordinator and administrator sign-in', to: '/login', icon: <AdminPanelSettingsIcon /> },
-    { label: 'Main Teacher', description: 'Enter your class password', to: '/pwa-main-teacher-login', icon: <SchoolIcon /> },
-    { label: 'Subject Teacher', description: 'Subject teacher account sign-in', to: '/subject-login', icon: <MenuBookIcon /> },
+    { role: 'admin', label: 'Administrator', description: 'Administrator account sign-in', to: '/login', icon: <AdminPanelSettingsIcon /> },
+    { role: 'main_teacher', label: 'Main Teacher', description: 'Enter your class password', to: '/pwa-main-teacher-login', icon: <SchoolIcon /> },
+    { role: 'subject_teacher', label: 'Subject Teacher', description: 'Subject teacher account sign-in', to: '/subject-login', icon: <MenuBookIcon /> },
+    { role: 'assistant_teacher', label: 'Assistant Teacher', description: 'School email and password sign-in', to: '/login', icon: <BadgeIcon /> },
+    { role: 'librarian', label: 'Librarian', description: 'Library staff sign-in', to: '/librarian-login', icon: <LibraryBooksIcon /> },
+    { role: 'nurse', label: 'Nurse', description: 'Clinic staff sign-in', to: '/nurse-login', icon: <LocalHospitalIcon /> },
+    { role: 'store_manager', label: 'Store Manager', description: 'School email and password sign-in', to: '/login', icon: <StorefrontIcon /> },
 ];
 
 export default function PwaSignIn() {
     const { toggleColorScheme } = useColorScheme();
+    const location = useLocation();
+    const [params] = useSearchParams();
+    const returnTo = requestedPathFromState(location.state) || safeNextPath(params.get('next'));
+    const expired = params.get('expired') === '1';
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary', display: 'flex', flexDirection: 'column' }}>
@@ -30,15 +43,24 @@ export default function PwaSignIn() {
                     <Box component="img" src="/bis-logo.png" alt="BIS Gerji" sx={{ width: 220, maxWidth: '80%', height: 'auto', mb: 3 }} />
                     <Typography variant="h5" sx={{ fontWeight: 900 }}>Sign in</Typography>
                     <Typography color="text.secondary" sx={{ mt: 1 }}>
-                        Choose your school role to continue.
+                        Choose your school role to continue. Teachers will see their own sign-in, not the administrator form.
                     </Typography>
                 </Box>
+                {expired && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                        Your session expired. Choose your role to sign in again.
+                    </Alert>
+                )}
                 <Stack spacing={1.5}>
                     {OPTIONS.map((option) => (
                         <Card key={option.label} variant="outlined" sx={{ borderRadius: 2 }}>
                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                                 <Button
                                     fullWidth component={RouterLink} to={option.to}
+                                    state={{
+                                        expectedRole: option.role,
+                                        ...(returnTo ? { from: { path: returnTo } } : {}),
+                                    }}
                                     startIcon={option.icon}
                                     sx={{ justifyContent: 'flex-start', textAlign: 'left', textTransform: 'none', py: 1, fontWeight: 800 }}
                                 >

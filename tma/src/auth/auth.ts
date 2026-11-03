@@ -190,9 +190,16 @@ export function openExternalLink(url: string): void {
     window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-/** Open the BIS NOC full web portal at https://bis-gerji-primary2.vercel.app. */
+/**
+ * Open the web portal through its role-checking entry point. This avoids
+ * reusing a different staff member's cached browser session (for example an
+ * administrator session on a teacher's shared phone).
+ */
 export function openWebPortal(role?: string): void {
-    const path = role === 'subject_teacher' ? '/subject-home' : '/app';
+    const validRole = typeof role === 'string' && /^[a-z_]+$/.test(role);
+    const path = validRole
+        ? `/telegram-entry/${encodeURIComponent(role)}`
+        : '/pwa-sign-in';
     openExternalLink(`${PUBLIC_WEB_ORIGIN}${path}`);
 }
 
