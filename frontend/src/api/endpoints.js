@@ -226,6 +226,8 @@ export const attendanceApi = {
     submissions: (params) => client.get('/attendance/submissions', { params }).then((r) => r.data),
     reportCsv: (params) =>
         client.get('/attendance/report.csv', { params, responseType: 'blob' }).then((r) => r.data),
+    reportXlsx: (params) =>
+        client.get('/attendance/report.xlsx', { params, responseType: 'blob' }).then((r) => r.data),
 };
 
 export const assessmentApi = {

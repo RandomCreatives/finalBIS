@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
-const { normalizeStudentName } = require('../utils/studentRolls');
+const ExcelJS = require('exceljs');
+const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
 const { BadRequestError, NotFoundError, ForbiddenError, ConflictError, asyncHandler } = require('../utils/errors');
 const { notifyAdmins } = require('../utils/nudges');
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
@@ -181,18 +182,19 @@ const lastDayOf = (month) => {
 };
 
 /** Monday–Friday days of the month up to (and including) today. */
-const schoolDaysSoFar = (month, todayIso) => {
+const monthlySchoolDays = (month, todayIso) => {
     const [y, m] = month.split('-').map(Number);
-    const daysInMonth = lastDayOf(month);
-    let count = 0;
-    for (let d = 1; d <= daysInMonth; d += 1) {
+    const days = [];
+    for (let d = 1; d <= lastDayOf(month); d += 1) {
         const iso = `${month}-${String(d).padStart(2, '0')}`;
         if (iso > todayIso) break;
         const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-        if (dow >= 1 && dow <= 5) count += 1;
+        if (dow >= 1 && dow <= 5) days.push(iso);
     }
-    return count;
+    return days;
 };
+
+const schoolDaysSoFar = (month, todayIso) => monthlySchoolDays(month, todayIso).length;
 
 const getSubmission = async (classId, month) => {
     const { data, error } = await supabase
@@ -333,17 +335,7 @@ const getMonthlyGrid = asyncHandler(async (req, res) => {
     await assertClassAccess(req, classId);
 
     const daysInMonth = lastDayOf(month);
-    const todayIso = schoolTime.todayIso();
-    const [y, m] = month.split('-').map(Number);
-
-    // School days (Mon–Fri) up to today — future days have no data yet.
-    const days = [];
-    for (let d = 1; d <= daysInMonth; d += 1) {
-        const iso = `${month}-${String(d).padStart(2, '0')}`;
-        if (iso > todayIso) break;
-        const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-        if (dow >= 1 && dow <= 5) days.push(iso);
-    }
+    const days = monthlySchoolDays(month, schoolTime.todayIso());
 
     const [klassRes, rosterRes, attRes, submissionRes] = await Promise.all([
         supabase.from('classes').select('id, name').eq('id', classId)
@@ -552,6 +544,366 @@ const csvEscape = (v) => {
     const s = v === null || v === undefined ? '' : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
+
+const ATTENDANCE_EXPORT_STATUS = {
+    present: { symbol: '✓', label: 'Present', font: 'FF15803D', fill: 'FFEAF8EF' },
+    late: { symbol: 'L', label: 'Late', font: 'FFB45309', fill: 'FFFFF7E6' },
+    absent: { symbol: 'A', label: 'Absent', font: 'FFB91C1C', fill: 'FFFEECEC' },
+    excused: { symbol: 'E', label: 'Excused', font: 'FF0369A1', fill: 'FFEAF4FF' },
+    unmarked: { symbol: '·', label: 'Not recorded', font: 'FF6B7280', fill: 'FFF3F4F6' },
+};
+
+/**
+ * Shared data for the admin's monthly workbook. The roster and attendance
+ * queries are paged so a larger school never silently loses pupils or marks
+ * at Supabase's 1,000-row response limit.
+ */
+const buildMonthlyAttendanceReport = async (schoolId, month, classId = null) => {
+    const classRows = await selectAll('classes', 'id, name', (query) => {
+        let filtered = query.eq('school_id', schoolId);
+        if (classId) filtered = filtered.eq('id', classId);
+        return filtered;
+    }, { order: [['name', true], ['id', true]] });
+
+    if (classId && classRows.length === 0) throw new NotFoundError('Class not found');
+    if (classRows.length === 0) throw new NotFoundError('No classes are available for this report');
+
+    const classIds = classRows.map((klass) => klass.id);
+    const lastDay = lastDayOf(month);
+    const [rosterRows, attendanceRows, submissionRows] = await Promise.all([
+        selectAll('students', 'id, name, admission_no, roll_num, class_id', (query) => query
+            .eq('school_id', schoolId)
+            .eq('is_active', true)
+            .in('class_id', classIds)),
+        selectAll('attendance', 'student_id, class_id, date, status', (query) => query
+            .eq('school_id', schoolId)
+            .in('class_id', classIds)
+            .is('subject_id', null)
+            .gte('date', `${month}-01`)
+            .lte('date', `${month}-${String(lastDay).padStart(2, '0')}`)),
+        selectAll('attendance_submissions', 'class_id, status', (query) => query
+            .in('class_id', classIds)
+            .eq('month', month)),
+    ]);
+
+    const rostersByClass = new Map(classIds.map((id) => [id, []]));
+    const activeStudentIds = new Set();
+    for (const student of rosterRows) {
+        if (!rostersByClass.has(student.class_id)) continue;
+        rostersByClass.get(student.class_id).push(student);
+        activeStudentIds.add(student.id);
+    }
+
+    const marksByStudent = new Map();
+    const markedDatesByClass = new Map(classIds.map((id) => [id, new Set()]));
+    for (const row of attendanceRows) {
+        // Monthly grids, like the existing class review, use the active roster.
+        if (!activeStudentIds.has(row.student_id)) continue;
+        const marks = marksByStudent.get(row.student_id) || {};
+        marks[row.date] = row.status;
+        marksByStudent.set(row.student_id, marks);
+        markedDatesByClass.get(row.class_id)?.add(row.date);
+    }
+
+    const submissionsByClass = new Map(submissionRows.map((row) => [row.class_id, row.status]));
+    const todayIso = schoolTime.todayIso();
+    const weekdayDates = monthlySchoolDays(month, todayIso);
+    const workbookDates = new Set(weekdayDates);
+    // Keep any actual weekend/exceptional register visible as a date column too.
+    for (const marks of marksByStudent.values()) {
+        Object.keys(marks).forEach((date) => workbookDates.add(date));
+    }
+    const days = [...workbookDates].sort();
+
+    const classes = classRows.map((klass) => {
+        const students = sortStudentsCanonically(rostersByClass.get(klass.id) || []).map((student) => {
+            const marks = marksByStudent.get(student.id) || {};
+            const counts = { present: 0, late: 0, absent: 0, excused: 0 };
+            Object.values(marks).forEach((status) => {
+                if (Object.hasOwn(counts, status)) counts[status] += 1;
+            });
+            const markedDays = counts.present + counts.late + counts.absent + counts.excused;
+            const denominator = markedDays - counts.excused;
+            return {
+                id: student.id,
+                rollNum: student.roll_num,
+                admissionNo: student.admission_no,
+                name: normalizeStudentName(student.name),
+                marks,
+                ...counts,
+                markedDays,
+                attendanceRate: denominator > 0
+                    ? Number((((counts.present + counts.late) / denominator) * 100).toFixed(1))
+                    : null,
+            };
+        });
+
+        const totals = students.reduce((sum, student) => {
+            for (const status of ['present', 'late', 'absent', 'excused']) sum[status] += student[status];
+            return sum;
+        }, { present: 0, late: 0, absent: 0, excused: 0 });
+        const marked = totals.present + totals.late + totals.absent + totals.excused;
+        const denominator = marked - totals.excused;
+
+        return {
+            id: klass.id,
+            name: klass.name,
+            students,
+            days,
+            weekdays: weekdayDates.length,
+            daysMarked: markedDatesByClass.get(klass.id)?.size || 0,
+            ...totals,
+            attendanceRate: denominator > 0
+                ? Number((((totals.present + totals.late) / denominator) * 100).toFixed(1))
+                : null,
+            submission: submissionsByClass.get(klass.id) || 'pending',
+        };
+    });
+
+    return { month, classes };
+};
+
+const safeWorksheetName = (name, index, usedNames) => {
+    const cleaned = String(name || `Class ${index + 1}`)
+        .replace(/[\\/*?:\[\]]/g, ' ')
+        .replace(/^'+|'+$/g, '')
+        .trim();
+    const base = (cleaned || `Class ${index + 1}`).slice(0, 31);
+    let candidate = base;
+    let suffix = 2;
+    while (usedNames.has(candidate.toLowerCase())) {
+        const tail = ` (${suffix})`;
+        candidate = `${base.slice(0, 31 - tail.length)}${tail}`;
+        suffix += 1;
+    }
+    usedNames.add(candidate.toLowerCase());
+    return candidate;
+};
+
+const styleReportHeader = (row) => {
+    row.height = 24;
+    row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3B5B' } };
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        cell.border = { bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } };
+    });
+};
+
+const addReportLegend = (sheet, rowNumber, columnCount) => {
+    sheet.mergeCells(rowNumber, 1, rowNumber, columnCount);
+    const cell = sheet.getCell(rowNumber, 1);
+    cell.value = {
+        richText: [
+            { text: 'Key: ' },
+            { text: '✓ Present', font: { bold: true, color: { argb: ATTENDANCE_EXPORT_STATUS.present.font } } },
+            { text: '   ' },
+            { text: 'L Late', font: { bold: true, color: { argb: ATTENDANCE_EXPORT_STATUS.late.font } } },
+            { text: '   ' },
+            { text: 'A Absent', font: { bold: true, color: { argb: ATTENDANCE_EXPORT_STATUS.absent.font } } },
+            { text: '   ' },
+            { text: 'E Excused', font: { bold: true, color: { argb: ATTENDANCE_EXPORT_STATUS.excused.font } } },
+            { text: '   · Not recorded', font: { color: { argb: ATTENDANCE_EXPORT_STATUS.unmarked.font } } },
+        ],
+    };
+    cell.alignment = { vertical: 'middle', wrapText: true };
+    sheet.getRow(rowNumber).height = 24;
+};
+
+const addMonthlyAttendanceSheet = (workbook, reportClass, month, index, usedNames) => {
+    const sheet = workbook.addWorksheet(safeWorksheetName(reportClass.name, index, usedNames));
+    const lastColumn = 3 + reportClass.days.length + 6;
+    const dateStartColumn = 4;
+    const totalsStartColumn = dateStartColumn + reportClass.days.length;
+    const submissionLabel = reportClass.submission === 'submitted'
+        ? 'Submitted'
+        : reportClass.submission === 'returned' ? 'Returned for correction' : 'Not submitted';
+
+    sheet.properties.defaultRowHeight = 19;
+    sheet.columns = [
+        { width: 9 },
+        { width: 17 },
+        { width: 28 },
+        ...reportClass.days.map(() => ({ width: 12 })),
+        { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 14 },
+    ];
+
+    sheet.addRow([`Monthly Attendance Report — ${month}`]);
+    sheet.mergeCells(1, 1, 1, lastColumn);
+    sheet.getCell(1, 1).font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+    sheet.getCell(1, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF17324D' } };
+    sheet.getCell(1, 1).alignment = { vertical: 'middle' };
+    sheet.getRow(1).height = 32;
+
+    sheet.addRow([`${reportClass.name}  |  ${reportClass.students.length} active students  |  ${submissionLabel}`]);
+    sheet.mergeCells(2, 1, 2, lastColumn);
+    sheet.getCell(2, 1).font = { bold: true, color: { argb: 'FF334155' }, size: 11 };
+    sheet.getCell(2, 1).alignment = { vertical: 'middle' };
+    sheet.getRow(2).height = 23;
+    addReportLegend(sheet, 3, lastColumn);
+
+    const header = sheet.addRow([
+        'Roll no.', 'Admission no.', 'Student',
+        ...reportClass.days.map((date) => new Date(`${date}T00:00:00.000Z`)),
+        'Days marked', 'Present', 'Late', 'Absent', 'Excused', 'Attendance %',
+    ]);
+    styleReportHeader(header);
+    reportClass.days.forEach((_, index) => {
+        header.getCell(dateStartColumn + index).numFmt = 'ddd dd-mmm';
+    });
+
+    for (const [rowIndex, student] of reportClass.students.entries()) {
+        const values = [
+            student.rollNum ?? '',
+            student.admissionNo || '',
+            student.name,
+            ...reportClass.days.map((date) => {
+                const status = student.marks[date];
+                return ATTENDANCE_EXPORT_STATUS[status]?.symbol || ATTENDANCE_EXPORT_STATUS.unmarked.symbol;
+            }),
+            student.markedDays,
+            student.present,
+            student.late,
+            student.absent,
+            student.excused,
+            student.attendanceRate ?? '',
+        ];
+        const row = sheet.addRow(values);
+        row.height = 21;
+        row.eachCell((cell, columnNumber) => {
+            cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
+            if (columnNumber <= 3 && rowIndex % 2 === 1) {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+            }
+            if (columnNumber >= dateStartColumn) {
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            }
+        });
+        for (let dateIndex = 0; dateIndex < reportClass.days.length; dateIndex += 1) {
+            const status = student.marks[reportClass.days[dateIndex]];
+            const meta = ATTENDANCE_EXPORT_STATUS[status] || ATTENDANCE_EXPORT_STATUS.unmarked;
+            const cell = row.getCell(dateStartColumn + dateIndex);
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: meta.fill } };
+            cell.font = { bold: true, color: { argb: meta.font }, size: 11 };
+        }
+        row.getCell(totalsStartColumn + 5).numFmt = '0.0"%"';
+        row.getCell(3).font = { bold: true, color: { argb: 'FF0F172A' } };
+    }
+
+    if (reportClass.students.length > 0) {
+        sheet.autoFilter = {
+            from: { row: 4, column: 1 },
+            to: { row: 4 + reportClass.students.length, column: lastColumn },
+        };
+    } else {
+        const emptyRow = sheet.addRow(['No active students in this class for the report.']);
+        sheet.mergeCells(emptyRow.number, 1, emptyRow.number, lastColumn);
+        emptyRow.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+    }
+
+    sheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 4, topLeftCell: 'D5', activeCell: 'D5' }];
+    sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    sheet.pageSetup.margins = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
+    sheet.headerFooter.oddFooter = '&LMonthly attendance report&RPage &P of &N';
+    return sheet;
+};
+
+const addOverviewSheet = (workbook, report, usedNames) => {
+    const sheet = workbook.addWorksheet(safeWorksheetName('Overview', 0, usedNames), { properties: { tabColor: { argb: 'FF2563EB' } } });
+    const headers = [
+        'Class', 'Active students', 'Class-days marked', 'Weekdays in month',
+        'Present', 'Late', 'Absent', 'Excused', 'Attendance %', 'Submission',
+    ];
+    sheet.columns = [
+        { width: 28 }, { width: 16 }, { width: 19 }, { width: 18 },
+        { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 14 }, { width: 22 },
+    ];
+    sheet.addRow([`Monthly Attendance Overview — ${report.month}`]);
+    sheet.mergeCells(1, 1, 1, headers.length);
+    sheet.getCell(1, 1).font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+    sheet.getCell(1, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF17324D' } };
+    sheet.getCell(1, 1).alignment = { vertical: 'middle' };
+    sheet.getRow(1).height = 32;
+    addReportLegend(sheet, 2, headers.length);
+    const header = sheet.addRow(headers);
+    styleReportHeader(header);
+
+    for (const reportClass of report.classes) {
+        const row = sheet.addRow([
+            reportClass.name,
+            reportClass.students.length,
+            reportClass.daysMarked,
+            reportClass.weekdays,
+            reportClass.present,
+            reportClass.late,
+            reportClass.absent,
+            reportClass.excused,
+            reportClass.attendanceRate ?? '',
+            reportClass.submission === 'submitted'
+                ? 'Submitted'
+                : reportClass.submission === 'returned' ? 'Returned for correction' : 'Not submitted',
+        ]);
+        row.getCell(9).numFmt = '0.0"%"';
+        row.eachCell((cell) => {
+            cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
+        });
+    }
+
+    const allTotals = report.classes.reduce((sum, reportClass) => {
+        sum.students += reportClass.students.length;
+        for (const status of ['present', 'late', 'absent', 'excused']) sum[status] += reportClass[status];
+        sum.classDays += reportClass.daysMarked;
+        return sum;
+    }, { students: 0, classDays: 0, present: 0, late: 0, absent: 0, excused: 0 });
+    const marked = allTotals.present + allTotals.late + allTotals.absent + allTotals.excused;
+    const denominator = marked - allTotals.excused;
+    const overallRate = denominator > 0 ? Number((((allTotals.present + allTotals.late) / denominator) * 100).toFixed(1)) : null;
+    const totalRow = sheet.addRow([
+        'All classes', allTotals.students, allTotals.classDays, '—',
+        allTotals.present, allTotals.late, allTotals.absent, allTotals.excused,
+        overallRate ?? '', '—',
+    ]);
+    totalRow.font = { bold: true };
+    totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    totalRow.getCell(9).numFmt = '0.0"%"';
+    totalRow.eachCell((cell) => {
+        cell.border = { top: { style: 'thin', color: { argb: 'FF94A3B8' } } };
+    });
+
+    sheet.autoFilter = {
+        from: { row: 3, column: 1 },
+        to: { row: 2 + report.classes.length + 1, column: headers.length },
+    };
+    sheet.views = [{ state: 'frozen', ySplit: 3, topLeftCell: 'A4', activeCell: 'A4' }];
+    sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    return sheet;
+};
+
+/** GET /api/attendance/report.xlsx?classId=&month=YYYY-MM — admin only. */
+const exportMonthlyXlsx = asyncHandler(async (req, res) => {
+    const { classId, month } = req.query;
+    assertMonthFormat(month);
+    const report = await buildMonthlyAttendanceReport(req.user.school_id, month, classId || null);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'BIS NOC School Management';
+    workbook.created = new Date();
+    workbook.subject = 'Monthly homeroom attendance';
+    workbook.title = `Monthly attendance ${month}`;
+
+    const usedNames = new Set();
+    if (!classId) addOverviewSheet(workbook, report, usedNames);
+    report.classes.forEach((reportClass, index) =>
+        addMonthlyAttendanceSheet(workbook, reportClass, month, index, usedNames));
+
+    const classLabel = classId
+        ? (report.classes[0]?.name || 'class').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'class'
+        : 'all-classes';
+    const filename = `attendance_${classLabel}_${month}.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
+});
 
 /** GET /api/attendance/report.csv?classId=&month=YYYY-MM */
 const exportCsv = asyncHandler(async (req, res) => {
@@ -882,6 +1234,6 @@ const getDailyReport = asyncHandler(async (req, res) => {
 
 module.exports = {
     markAttendance, getClassAttendance, getStudentAttendance, getAttendanceSummary,
-    getMonthlySummary, getMonthlyGrid, submitMonth, returnMonth, listSubmissions, exportCsv,
+    getMonthlySummary, getMonthlyGrid, submitMonth, returnMonth, listSubmissions, exportCsv, exportMonthlyXlsx,
     getDailyReport, buildDailyReport, getWeekReport, buildWeekReport,
 };

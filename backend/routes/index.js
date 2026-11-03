@@ -646,6 +646,16 @@ router.get(
     attendance.exportCsv
 );
 
+router.get(
+    '/attendance/report.xlsx',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    query('classId').optional().isUUID().withMessage('classId must be a valid id'),
+    query('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    validate,
+    attendance.exportMonthlyXlsx
+);
+
 router.get('/attendance/student/:studentId', authenticate, uuid('studentId'), validate, attendance.getStudentAttendance);
 
 // =============================================================================
