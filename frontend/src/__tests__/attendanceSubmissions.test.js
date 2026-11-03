@@ -22,6 +22,7 @@ jest.mock('../api/endpoints', () => ({
         returnMonth: jest.fn(),
         submissions: jest.fn(),
         reportCsv: jest.fn(),
+        reportXlsx: jest.fn(),
     },
     classApi: { list: jest.fn() },
     studentApi: { list: jest.fn() },
@@ -119,11 +120,53 @@ describe('Attendance — admin monthly submissions', () => {
         expect(screen.getAllByRole('button', { name: /return for correction/i })).toHaveLength(1);
     });
 
+    test('the admin downloads a monthly workbook for a selected class', async () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin', name: 'Admin' }, isAdmin: true });
+        attendanceApi.reportXlsx.mockResolvedValue(new Blob(['xlsx']));
+
+        const createObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+        const revokeObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+        const createObjectURL = jest.fn(() => 'blob:attendance-report');
+        const revokeObjectURL = jest.fn();
+        Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+        Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+        const anchorClick = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+        try {
+            renderPage();
+            fireEvent.click(await screen.findByRole('button', { name: /download monthly report/i }));
+
+            const dialog = await screen.findByRole('dialog');
+            expect(within(dialog).getByText(/homeroom-attendance sheet for each class/i)).toBeInTheDocument();
+            fireEvent.change(within(dialog).getByLabelText(/Month/), { target: { value: '2025-01' } });
+
+            const classSelect = within(dialog).getByRole('combobox', { name: 'Class' });
+            fireEvent.mouseDown(classSelect);
+            fireEvent.click(await screen.findByRole('option', { name: 'Year 3 - Blue' }));
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Download report' }));
+
+            await waitFor(() => expect(attendanceApi.reportXlsx).toHaveBeenCalledWith({
+                month: '2025-01',
+                classId: 'c-blue',
+            }));
+            expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+            expect(anchorClick).toHaveBeenCalled();
+            expect(await screen.findByText('Monthly attendance report downloaded')).toBeInTheDocument();
+        } finally {
+            anchorClick.mockRestore();
+            if (createObjectURLDescriptor) Object.defineProperty(URL, 'createObjectURL', createObjectURLDescriptor);
+            else delete URL.createObjectURL;
+            if (revokeObjectURLDescriptor) Object.defineProperty(URL, 'revokeObjectURL', revokeObjectURLDescriptor);
+            else delete URL.revokeObjectURL;
+        }
+    });
+
     test('teachers keep the plain register with no tabs', async () => {
         useAuth.mockReturnValue({ user: { id: 't1', role: 'main_teacher', name: 'Meron' } });
         renderPage();
 
         expect(await screen.findByText(/Choose a class to begin/)).toBeInTheDocument();
         expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /download monthly report/i })).not.toBeInTheDocument();
     });
 });

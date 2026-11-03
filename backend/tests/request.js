@@ -41,17 +41,19 @@ function request(app) {
                             },
                         },
                         (res) => {
-                            let raw = '';
-                            res.on('data', (c) => (raw += c));
+                            const chunks = [];
+                            res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
                             res.on('end', () => {
                                 server.close();
+                                const buffer = Buffer.concat(chunks);
+                                const raw = buffer.toString('utf8');
                                 let body = {};
                                 try {
                                     body = raw ? JSON.parse(raw) : {};
                                 } catch {
                                     body = { raw };
                                 }
-                                resolve({ status: res.statusCode, body, headers: res.headers });
+                                resolve({ status: res.statusCode, body, headers: res.headers, buffer });
                             });
                         }
                     );

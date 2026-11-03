@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { reset, rowsOf, supabaseStub } = require('./helpers');
 const request = require('./request');
 const app = require('../app');
+const ExcelJS = require('exceljs');
 const { signToken } = require('../middleware/auth');
 
 // A fully past month — school days are deterministic (Jan 2025: 23 weekdays).
@@ -248,6 +249,68 @@ describe('GET /api/attendance/report.csv', () => {
             .auth(tokenFor(MAIN_A));
 
         assert.equal(res.status, 403);
+    });
+});
+
+describe('GET /api/attendance/report.xlsx', () => {
+    test('admin can download one workbook with a styled attendance sheet per class', async () => {
+        const res = await request(app)
+            .get(`/api/attendance/report.xlsx?month=${MONTH}`)
+            .auth(tokenFor(ADMIN));
+
+        assert.equal(res.status, 200);
+        assert.match(res.headers['content-type'], /spreadsheetml\.sheet/);
+        assert.match(res.headers['content-disposition'], /attendance_all-classes_2025-01\.xlsx/);
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(res.buffer);
+        assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ['Overview', 'Year 3A', 'Year 3B']);
+
+        const sheet = workbook.getWorksheet('Year 3A');
+        assert.match(String(sheet.getCell(1, 1).value), /Monthly Attendance Report — 2025-01/);
+        assert.match(String(sheet.getCell(2, 1).value), /Year 3A/);
+        assert.ok(sheet.getCell(3, 1).value.richText.some((fragment) => fragment.text.includes('Present')));
+        assert.equal(sheet.getRow(4).getCell(3).value, 'Student');
+
+        const dateColumns = new Map();
+        sheet.getRow(4).eachCell((cell, column) => {
+            if (cell.value instanceof Date) dateColumns.set(cell.value.toISOString().slice(0, 10), column);
+        });
+        let attendancePercentColumn = 0;
+        sheet.getRow(4).eachCell((cell, column) => {
+            if (cell.value === 'Attendance %') attendancePercentColumn = column;
+        });
+        const abel = sheet.getRow(5);
+        assert.equal(abel.getCell(3).value, 'Abel T');
+        assert.equal(abel.getCell(dateColumns.get(D1)).value, '✓');
+        assert.equal(abel.getCell(dateColumns.get(D1)).font.color.argb, 'FF15803D');
+        assert.equal(abel.getCell(dateColumns.get(D2)).value, 'L');
+        assert.equal(abel.getCell(dateColumns.get(D3)).value, 'A');
+        assert.equal(abel.getCell(dateColumns.get(D3)).font.color.argb, 'FFB91C1C');
+
+        const sara = sheet.getRow(6);
+        assert.equal(sara.getCell(3).value, 'Sara K');
+        assert.equal(sara.getCell(dateColumns.get(D2)).value, 'E');
+        assert.equal(abel.getCell(attendancePercentColumn).value, 66.7);
+
+        const overview = workbook.getWorksheet('Overview');
+        assert.equal(overview.getCell(4, 1).value, 'Year 3A');
+        assert.equal(overview.getCell(5, 1).value, 'Year 3B');
+    });
+
+    test('an admin can request just one class sheet and non-admins are denied', async () => {
+        const singleClass = await request(app)
+            .get(`/api/attendance/report.xlsx?classId=${CLASS_A}&month=${MONTH}`)
+            .auth(tokenFor(ADMIN));
+        assert.equal(singleClass.status, 200);
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(singleClass.buffer);
+        assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ['Year 3A']);
+
+        const denied = await request(app)
+            .get(`/api/attendance/report.xlsx?classId=${CLASS_A}&month=${MONTH}`)
+            .auth(tokenFor(MAIN_A));
+        assert.equal(denied.status, 403);
     });
 });
 

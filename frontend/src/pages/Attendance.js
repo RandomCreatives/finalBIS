@@ -10,6 +10,7 @@ import TodayIcon from '@mui/icons-material/Today';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import InsightsIcon from '@mui/icons-material/Insights';
 import DateRangeIcon from '@mui/icons-material/DateRange';
+import DownloadIcon from '@mui/icons-material/Download';
 import { attendanceApi, classApi, studentApi, subjectApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import useLiveApi from '../hooks/useLiveApi';
@@ -233,6 +234,11 @@ export default function Attendance() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
+    const [reportDialogOpen, setReportDialogOpen] = useState(false);
+    const [reportMonth, setReportMonth] = useState(schoolMonth());
+    const [reportClassId, setReportClassId] = useState('all');
+    const [downloadingReport, setDownloadingReport] = useState(false);
+    const [reportError, setReportError] = useState('');
 
     const classes = useApi(() => classApi.list(), []);
     const subjects = useApi(
@@ -297,6 +303,39 @@ export default function Attendance() {
         }
     };
 
+    const handleDownloadMonthlyReport = async () => {
+        if (!reportMonth) {
+            setReportError('Choose a month for the attendance report.');
+            return;
+        }
+
+        setDownloadingReport(true);
+        setReportError('');
+        try {
+            const params = { month: reportMonth };
+            if (reportClassId !== 'all') params.classId = reportClassId;
+            const blob = await attendanceApi.reportXlsx(params);
+            const objectUrl = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            const selectedClass = (classes.data || []).find((klass) => klass.id === reportClassId);
+            const classLabel = reportClassId === 'all'
+                ? 'all-classes'
+                : (selectedClass?.name || 'class').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'class';
+            anchor.href = objectUrl;
+            anchor.download = `attendance_${classLabel}_${reportMonth}.xlsx`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+            setReportDialogOpen(false);
+            setToast('Monthly attendance report downloaded');
+        } catch (err) {
+            setReportError(err.message || 'Could not download the monthly report.');
+        } finally {
+            setDownloadingReport(false);
+        }
+    };
+
     // From the daily or weekly report: open one class's register for one day.
     const openRegister = (id, day) => {
         setClassId(id);
@@ -322,7 +361,81 @@ export default function Attendance() {
                         ? 'Today\u2019s registers as they come in, every class\u2019s register, and monthly submissions.'
                         : 'Record homeroom or subject attendance for a class.'
                 }
+                action={isAdmin && (
+                    <Button
+                        variant="contained"
+                        startIcon={<DownloadIcon />}
+                        onClick={() => {
+                            setReportError('');
+                            setReportDialogOpen(true);
+                        }}
+                        sx={{ fontWeight: 700, textTransform: 'none' }}
+                    >
+                        Download monthly report
+                    </Button>
+                )}
             />
+
+            {isAdmin && (
+                <Dialog
+                    open={reportDialogOpen}
+                    onClose={() => { if (!downloadingReport) setReportDialogOpen(false); }}
+                    maxWidth="sm"
+                    fullWidth
+                >
+                    <DialogTitle>Download monthly attendance</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{ mt: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Download a formatted Excel workbook with a monthly homeroom-attendance sheet for each class. Present is a green ✓, late is L, absent is a red A, excused is E, and an unmarked day is shown as a dot.
+                            </Typography>
+                            {reportError && <Alert severity="error">{reportError}</Alert>}
+                            {classes.error && (
+                                <Alert severity="warning">
+                                    The class list could not be loaded. You can still choose all classes and download the report.
+                                </Alert>
+                            )}
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                <TextField
+                                    label="Month"
+                                    type="month"
+                                    value={reportMonth}
+                                    onChange={(event) => setReportMonth(event.target.value)}
+                                    InputLabelProps={{ shrink: true }}
+                                    fullWidth
+                                    required
+                                />
+                                <TextField
+                                    select
+                                    label="Class"
+                                    value={reportClassId}
+                                    onChange={(event) => setReportClassId(event.target.value)}
+                                    fullWidth
+                                    disabled={classes.loading}
+                                >
+                                    <MenuItem value="all">All classes</MenuItem>
+                                    {(classes.data || []).map((klass) => (
+                                        <MenuItem key={klass.id} value={klass.id}>{klass.name}</MenuItem>
+                                    ))}
+                                </TextField>
+                            </Stack>
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button onClick={() => setReportDialogOpen(false)} disabled={downloadingReport}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<DownloadIcon />}
+                            onClick={handleDownloadMonthlyReport}
+                            disabled={downloadingReport || !reportMonth}
+                        >
+                            {downloadingReport ? 'Preparing report…' : 'Download report'}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            )}
 
             {isAdmin && (
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} aria-label="Attendance views"
