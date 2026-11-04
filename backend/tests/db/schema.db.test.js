@@ -38,7 +38,7 @@ describe('schema applies and enforces its rules', () => {
         for (const expected of [
             'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
             'subjects', 'class_subjects', 'timetable_slots', 'students',
-            'student_transfers', 'attendance', 'marksheets', 'library_loans',
+            'student_transfers', 'attendance', 'marksheets', 'settling_in_report_sections', 'library_loans',
             'clinic_visits', 'schemes_of_work', 'scheme_weeks', 'lesson_plans',
             'calendar_events', 'threads', 'thread_participants', 'messages',
             'tasks', 'notices', 'notice_receipts',
@@ -60,6 +60,40 @@ describe('schema applies and enforces its rules', () => {
     test('no permissive policies exist, so anon can read nothing', async () => {
         const { rows } = await t.query(`SELECT policyname FROM pg_policies WHERE schemaname = 'public'`);
         assert.equal(rows.length, 0, 'unexpected RLS policy present');
+    });
+
+    test('settling-in sections store a versioned per-student subject rating snapshot', async () => {
+        const { rows: [student] } = await t.query(
+            `INSERT INTO students (school_id, class_id, admission_no, name)
+             VALUES ($1, $2, 'Y3-001', 'Year Three Student') RETURNING id`,
+            [ids.schoolId, ids.classAId]
+        );
+        const { rows: [section] } = await t.query(
+            `INSERT INTO settling_in_report_sections (
+                 school_id, class_id, student_id, term_id, grade_level, subject_key,
+                 template_version, criteria_snapshot, ratings, saved_by
+             ) VALUES (
+                 $1, $2, $3, $4, 3, 'english', 'settling-in-year-3-2026-27-v1',
+                 '[{"id":"y3-english-01","text":"Learning objective"}]'::jsonb,
+                 '{"y3-english-01":"WT"}'::jsonb, $5
+             ) RETURNING id, grade_level, subject_key, ratings`,
+            [ids.schoolId, ids.classAId, student.id, ids.termId, ids.adminId]
+        );
+        assert.ok(section.id);
+        assert.equal(section.grade_level, 3);
+        assert.equal(section.subject_key, 'english');
+        assert.equal(section.ratings['y3-english-01'], 'WT');
+
+        const invalidGrade = await t.expectFailure(
+            `INSERT INTO settling_in_report_sections (
+                 school_id, class_id, student_id, term_id, grade_level, subject_key,
+                 template_version, criteria_snapshot, ratings
+             ) VALUES (
+                 $1, $2, $3, $4, 5, 'amharic', 'invalid', '[]'::jsonb, '{}'::jsonb
+             )`,
+            [ids.schoolId, ids.classAId, student.id, ids.termId]
+        );
+        assert.match(invalidGrade || '', /check constraint/i);
     });
 
     test('updated_at is maintained by trigger', async () => {

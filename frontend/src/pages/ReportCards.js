@@ -14,6 +14,8 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 import { buildReportCards } from '../utils/reportCards';
 import { formatDay } from '../utils/schoolTime';
+import { useAuth } from '../auth/AuthContext';
+import SettlingInReports from './SettlingInReports';
 
 /*
  * Term report cards — one printable sheet per student, straight from the
@@ -322,7 +324,7 @@ function BISReportPreview({ card, className, termName, term, yearName, homeroomT
     );
 }
 
-export default function ReportCards() {
+function TermReportCards() {
     const [classId, setClassId] = useState('');
     const [termId, setTermId] = useState('');
     const [view, setView] = useState('grid');
@@ -530,6 +532,39 @@ export default function ReportCards() {
                     )}
                 </DataState>
             )}
+        </>
+    );
+}
+
+export default function ReportCards() {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const [reportType, setReportType] = useState('report-card');
+
+    useEffect(() => {
+        if (!isAdmin) setReportType('report-card');
+    }, [isAdmin]);
+
+    return (
+        <>
+            <Card sx={{ p: 1, mb: 2 }}>
+                <ToggleButtonGroup
+                    exclusive size="small" value={reportType}
+                    onChange={(_, value) => value && setReportType(value)}
+                    aria-label="Report type"
+                    data-testid="report-type-toggle"
+                >
+                    <ToggleButton value="report-card" sx={{ textTransform: 'none', fontWeight: 700 }}>
+                        Report Card
+                    </ToggleButton>
+                    {isAdmin && (
+                        <ToggleButton value="settling-in" sx={{ textTransform: 'none', fontWeight: 700 }}>
+                            Settling In Report
+                        </ToggleButton>
+                    )}
+                </ToggleButtonGroup>
+            </Card>
+            {isAdmin && reportType === 'settling-in' ? <SettlingInReports /> : <TermReportCards />}
         </>
     );
 }

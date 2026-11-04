@@ -17,6 +17,7 @@ jest.mock('../api/endpoints', () => ({
     academicYearApi: { list: jest.fn() },
     classApi: { list: jest.fn() },
     marksheetApi: { list: jest.fn() },
+    settlingInApi: { classReport: jest.fn(), saveSection: jest.fn() },
     studentApi: { list: jest.fn() },
     subjectApi: { list: jest.fn() },
     termApi: { list: jest.fn(), current: jest.fn() },
@@ -110,6 +111,20 @@ describe('buildReportCards', () => {
 });
 
 describe('Report cards page', () => {
+    test('keeps Settling In Reports admin-only while teachers retain Report Cards', () => {
+        useAuth.mockReturnValue({ user: { id: 'u-main', name: 'Main Teacher', role: 'main_teacher' } });
+        render(
+            <ThemeProvider>
+                <BrowserRouter>
+                    <ReportCards />
+                </BrowserRouter>
+            </ThemeProvider>,
+        );
+
+        expect(screen.getByRole('button', { name: 'Report Card' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Settling In Report' })).not.toBeInTheDocument();
+    });
+
     test('asks for a class, then shows the summary grid', async () => {
         renderPage();
         expect(screen.getByText(/Choose a class to build/)).toBeInTheDocument();

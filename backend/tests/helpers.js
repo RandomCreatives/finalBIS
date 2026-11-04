@@ -129,7 +129,7 @@ const resolveEmbeds = (row, embeds, parentTable) => {
 };
 
 /** Minimal thenable query builder mirroring supabase-js semantics. */
-function createQuery(table, { mode = 'select', payload = null, count = null } = {}) {
+function createQuery(table, { mode = 'select', payload = null, count = null, onConflict = null } = {}) {
     const filters = [];
     let single = false;
     let maybe = false;
@@ -169,6 +169,21 @@ function createQuery(table, { mode = 'select', payload = null, count = null } = 
                 }));
                 all.push(...created);
                 result = created;
+            } else if (mode === 'upsert') {
+                const incoming = Array.isArray(payload) ? payload : [payload];
+                const columns = (onConflict || 'id').split(',').map((column) => column.trim()).filter(Boolean);
+                result = incoming.map((r) => {
+                    const existing = all.find((row) => columns.every((column) =>
+                        row[column] !== undefined && String(row[column]) === String(r[column])
+                    ));
+                    if (existing) {
+                        Object.assign(existing, r);
+                        return existing;
+                    }
+                    const created = { id: r.id || `generated-${all.length + 1}`, ...r };
+                    all.push(created);
+                    return created;
+                });
             } else if (mode === 'update') {
                 const target = all.filter((r) => matches(r, filters));
                 target.forEach((r) => Object.assign(r, payload));
@@ -229,7 +244,9 @@ const supabaseStub = {
             select: (cols, opts) => createQuery(table).select(cols, opts),
             insert: (payload) => createQuery(table, { mode: 'insert', payload }),
             update: (payload) => createQuery(table, { mode: 'update', payload }),
-            upsert: (payload) => createQuery(table, { mode: 'insert', payload }),
+            upsert: (payload, options = {}) => createQuery(table, {
+                mode: 'upsert', payload, onConflict: options.onConflict,
+            }),
             delete: () => createQuery(table, { mode: 'delete' }),
         };
     },

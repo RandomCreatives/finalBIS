@@ -247,6 +247,11 @@ export const marksheetApi = {
     remove: (id) => client.delete(`/marksheets/${id}`).then((r) => r.data).then(syncAfter(['assessments'])),
 };
 
+export const settlingInApi = {
+    classReport: (classId, termId) => client.get(`/settling-in/classes/${classId}`, { params: { termId } }).then((r) => r.data),
+    saveSection: (payload) => client.put('/settling-in/sections', payload).then((r) => r.data.section),
+};
+
 export const libraryApi = {
     students: () => client.get('/library/students').then((r) => r.data.students),
     loans: (params) => client.get('/library/loans', { params }).then((r) => r.data.loans),
