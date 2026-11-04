@@ -134,6 +134,7 @@ export const assignmentApi = {
 export const timetableApi = {
     get: (params) => client.get('/timetable', { params }).then((r) => r.data.slots),
     myWeek: () => client.get('/timetable/my-week').then((r) => r.data.slots),
+    myCurrent: () => client.get('/timetable/my-current').then((r) => r.data),
     roster: (classId) => client.get(`/timetable/class/${classId}/roster`).then((r) => r.data),
     create: (payload) => client.post('/timetable', payload).then((r) => r.data.slot),
     update: (id, payload) => client.patch(`/timetable/${id}`, payload).then((r) => r.data.slot),

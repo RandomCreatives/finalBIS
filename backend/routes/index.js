@@ -925,6 +925,7 @@ router.delete('/calendar/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_T
 // =============================================================================
 router.get('/timetable', authenticate, timetable.getTimetable);
 router.get('/timetable/my-week', authenticate, timetable.getMyWeek);
+router.get('/timetable/my-current', authenticate, timetable.getMyCurrent);
 
 router.get(
     '/timetable/class/:classId/roster',

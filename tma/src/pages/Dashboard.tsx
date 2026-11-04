@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     ArrowRight,
@@ -44,6 +44,24 @@ interface OpenTask {
     isOverdue?: boolean;
 }
 
+interface CurrentPeriod extends TodaySlot {
+    periodNumber?: number | null;
+    isRegistration?: boolean;
+}
+
+interface CurrentPeriodResponse {
+    current?: CurrentPeriod | null;
+    next?: CurrentPeriod | null;
+}
+
+interface StaffAlert {
+    id: string;
+    title: string;
+    body?: string;
+    readAt?: string | null;
+    type?: string;
+}
+
 interface MySummary {
     term?: { id?: string; name: string; currentWeek?: number | null } | null;
     homerooms?: { position: string; class?: { id: string; name: string } | null }[];
@@ -82,6 +100,11 @@ export default function Dashboard() {
     const [sendingBotMenu, setSendingBotMenu] = useState(false);
     const [botMenuNotice, setBotMenuNotice] = useState('');
     const [botMenuError, setBotMenuError] = useState('');
+    const [currentPeriod, setCurrentPeriod] = useState<CurrentPeriodResponse | null>(null);
+    const [periodNotice, setPeriodNotice] = useState<CurrentPeriod | null>(null);
+    const [staffAlerts, setStaffAlerts] = useState<StaffAlert[]>([]);
+    const seenCurrentPeriod = useRef<string | null | undefined>(undefined);
+    const periodNoticeTimeout = useRef<number | null>(null);
 
     const handleSendBotMenu = async () => {
         setSendingBotMenu(true);
@@ -110,6 +133,56 @@ export default function Dashboard() {
             .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your dashboard'))
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => {
+        let active = true;
+        const refresh = () => {
+            api.get('/timetable/my-current')
+                .then((data: CurrentPeriodResponse) => {
+                    if (!active) return;
+                    const current = data.current || null;
+                    const currentId = current?.id || null;
+                    if (current && seenCurrentPeriod.current !== undefined && currentId !== seenCurrentPeriod.current) {
+                        setPeriodNotice(current);
+                        if (periodNoticeTimeout.current !== null) window.clearTimeout(periodNoticeTimeout.current);
+                        periodNoticeTimeout.current = window.setTimeout(() => setPeriodNotice(null), 8_000);
+                    }
+                    seenCurrentPeriod.current = currentId;
+                    setCurrentPeriod(data);
+                })
+                .catch(() => { /* keep the last live card if a refresh is offline */ });
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 30_000);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+            if (periodNoticeTimeout.current !== null) window.clearTimeout(periodNoticeTimeout.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        const refresh = () => {
+            api.get('/notifications')
+                .then((data: { notifications?: StaffAlert[] }) => {
+                    if (!active) return;
+                    setStaffAlerts((data.notifications || [])
+                        .filter((item) => item.type === 'nudge' && !item.readAt)
+                        .slice(0, 3));
+                })
+                .catch(() => { /* alert preview is best-effort */ });
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 60_000);
+        return () => { active = false; window.clearInterval(timer); };
+    }, []);
+
+    const openAlertInPortal = async (alert: StaffAlert) => {
+        try { await api.post(`/notifications/${encodeURIComponent(alert.id)}/read`, {}); } catch { /* best effort */ }
+        setStaffAlerts((previous) => previous.filter((item) => item.id !== alert.id));
+        openWebPortal(user?.role);
+    };
 
     const teachingPairs = useMemo(() => {
         const list = (stats?.teachingSubjects || []).filter(
@@ -188,6 +261,34 @@ export default function Dashboard() {
 
     return (
         <div className="p-4 space-y-4">
+            {periodNotice && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className="fixed top-14 left-4 right-4 z-[100] mx-auto max-w-lg rounded-2xl border border-blue-400/40 bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95"
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">Your class is starting</p>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                {periodNotice.subject?.name || 'Registration'} — {periodNotice.class?.name || 'Class'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                {periodNotice.isRegistration ? 'Registration' : periodNotice.periodNumber ? `Period ${periodNotice.periodNumber}` : 'Lesson'}
+                                {' · '}{String(periodNotice.startsAt || '').slice(0, 5)}–{String(periodNotice.endsAt || '').slice(0, 5)}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            aria-label="Dismiss class notification"
+                            onClick={() => setPeriodNotice(null)}
+                            className="text-xs font-semibold text-slate-500"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
             {/* Hero Greeting Card */}
             <GlassCard className="relative overflow-hidden">
                 <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
@@ -288,6 +389,89 @@ export default function Dashboard() {
             {error && (
                 <GlassCard className="border-rose-500/30">
                     <p className="text-xs font-medium text-rose-700 dark:text-rose-300">{error}</p>
+                </GlassCard>
+            )}
+
+            {/* Live class / period card for the current school clock */}
+            <GlassCard className={currentPeriod?.current ? 'border-blue-500/40' : ''}>
+                <SectionTitle
+                    right={(
+                        <button
+                            type="button"
+                            onClick={() => navigate('/timetable')}
+                            className="text-[11px] font-semibold text-blue-600 dark:text-blue-300"
+                        >
+                            Full timetable →
+                        </button>
+                    )}
+                >
+                    Class / period
+                </SectionTitle>
+                {currentPeriod?.current ? (
+                    <div className="p-3 glass-subcard rounded-xl" aria-live="polite">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            Happening now · {currentPeriod.current.isRegistration
+                                ? 'Registration'
+                                : currentPeriod.current.periodNumber
+                                    ? `Period ${currentPeriod.current.periodNumber}`
+                                    : 'Lesson'}
+                        </span>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                            {currentPeriod.current.subject?.name || 'Registration'} — {currentPeriod.current.class?.name || 'Class'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {String(currentPeriod.current.startsAt || '').slice(0, 5)}–{String(currentPeriod.current.endsAt || '').slice(0, 5)}
+                            {currentPeriod.current.room ? ` · ${currentPeriod.current.room}` : ''}
+                        </p>
+                        {currentPeriod.next && (
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                Up next: {currentPeriod.next.subject?.name || 'Lesson'} — {currentPeriod.next.class?.name || 'Class'} at {String(currentPeriod.next.startsAt || '').slice(0, 5)}
+                            </p>
+                        )}
+                    </div>
+                ) : currentPeriod?.next ? (
+                    <div className="p-3 glass-subcard rounded-xl" aria-live="polite">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                            Up next · {currentPeriod.next.isRegistration
+                                ? 'Registration'
+                                : currentPeriod.next.periodNumber
+                                    ? `Period ${currentPeriod.next.periodNumber}`
+                                    : 'Lesson'}
+                        </span>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                            {currentPeriod.next.subject?.name || 'Lesson'} — {currentPeriod.next.class?.name || 'Class'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {String(currentPeriod.next.startsAt || '').slice(0, 5)}–{String(currentPeriod.next.endsAt || '').slice(0, 5)}
+                            {currentPeriod.next.room ? ` · ${currentPeriod.next.room}` : ''}
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-3">
+                        No current or upcoming lesson on your timetable.
+                    </p>
+                )}
+            </GlassCard>
+
+            {staffAlerts.length > 0 && (
+                <GlassCard className="border-amber-500/30">
+                    <SectionTitle>New staff alerts</SectionTitle>
+                    <div className="space-y-2">
+                        {staffAlerts.map((alert) => (
+                            <div key={alert.id} className="p-2.5 glass-subcard rounded-xl">
+                                <p className="text-xs font-bold text-slate-900 dark:text-white">{alert.title}</p>
+                                {alert.body && <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{alert.body}</p>}
+                                <button
+                                    type="button"
+                                    onClick={() => { void openAlertInPortal(alert); }}
+                                    className="mt-1.5 text-[11px] font-bold text-blue-600 dark:text-blue-300"
+                                >
+                                    Open in staff portal →
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </GlassCard>
             )}
 

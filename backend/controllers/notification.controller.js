@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { NotFoundError, asyncHandler } = require('../utils/errors');
 const { maybeRunAttendanceReminders } = require('../services/attendanceReminders');
+const { maybeRunTeacherReminders } = require('../services/teacherReminders');
 
 /**
  * The notification bell feed.
@@ -61,6 +62,7 @@ const listNotifications = asyncHandler(async (req, res) => {
     // due, the first refresh sends them (deduped, throttled, never throws),
     // and this response already includes the caller's own reminder.
     await maybeRunAttendanceReminders(req.user.school_id);
+    await maybeRunTeacherReminders(req.user.school_id);
 
     // Announcements addressed to this user (same targeting as /api/notices).
     const { data: notices, error: noticesError } = await supabase

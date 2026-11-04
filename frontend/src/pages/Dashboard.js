@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, Navigate } from 'react-router-dom';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem,
-    ListItemText, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography,
+    ListItemText, Snackbar, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ClassIcon from '@mui/icons-material/Class';
@@ -17,7 +17,7 @@ import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import SyncAltIcon from '@mui/icons-material/SyncAlt';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
-import { attendanceApi, dashboardApi, termApi } from '../api/endpoints';
+import { attendanceApi, dashboardApi, termApi, timetableApi } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import useLiveApi from '../hooks/useLiveApi';
 import LiveStatus from '../components/LiveStatus';
@@ -414,15 +414,103 @@ function AdminDashboard() {
     );
 }
 
+/** Live current/next lesson card for every teaching role. */
+function TeacherScheduleCard() {
+    const { data, loading, error } = useLiveApi(() => timetableApi.myCurrent(), [], { intervalMs: 30_000 });
+    const [popupOpen, setPopupOpen] = useState(false);
+    const seenCurrent = useRef(undefined);
+
+    useEffect(() => {
+        if (!data) return;
+        const currentId = data.current?.id || null;
+        if (seenCurrent.current !== undefined && currentId && currentId !== seenCurrent.current) {
+            setPopupOpen(true);
+        }
+        seenCurrent.current = currentId;
+    }, [data]);
+
+    const current = data?.current;
+    const next = data?.next;
+    const currentLabel = current?.isRegistration
+        ? 'Registration'
+        : current?.periodNumber ? `Period ${current.periodNumber}` : 'Class in progress';
+    const slotText = (slot) => `${slot.subject?.name || (slot.isRegistration ? 'Registration' : 'Lesson')} — ${slot.class?.name || 'Class'}`;
+    const slotTime = (slot) => `${String(slot.startsAt || '').slice(0, 5)}–${String(slot.endsAt || '').slice(0, 5)}`;
+
+    return (
+        <>
+            <Grid item xs={12}>
+                <Card sx={{
+                    overflow: 'hidden',
+                    border: '1px solid rgba(37, 99, 235, 0.2)',
+                    background: 'linear-gradient(135deg, rgba(239,246,255,.96), rgba(240,253,250,.94))',
+                }}>
+                    <CardContent>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5}>
+                            <Box>
+                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 800 }}>Your class / period</Typography>
+                                    {current && <Chip size="small" color="success" label="Happening now" />}
+                                    {!current && next && <Chip size="small" color="primary" label="Up next" />}
+                                </Stack>
+                                {loading && !data ? (
+                                    <Typography variant="body2" color="text.secondary">Checking your timetable…</Typography>
+                                ) : error && !data ? (
+                                    <Typography variant="body2" color="text.secondary">Your live timetable card is temporarily unavailable.</Typography>
+                                ) : current ? (
+                                    <>
+                                        <Typography variant="body1" sx={{ fontWeight: 700 }}>{slotText(current)}</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {currentLabel} · {slotTime(current)}{current.room ? ` · ${current.room}` : ''}
+                                        </Typography>
+                                        {next && (
+                                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                                Up next: {slotText(next)} · {slotTime(next)}
+                                            </Typography>
+                                        )}
+                                    </>
+                                ) : next ? (
+                                    <>
+                                        <Typography variant="body1" sx={{ fontWeight: 700 }}>{slotText(next)}</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {next.isRegistration ? 'Registration' : next.periodNumber ? `Period ${next.periodNumber}` : 'Next lesson'} · {slotTime(next)}{next.room ? ` · ${next.room}` : ''}
+                                        </Typography>
+                                    </>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No current or upcoming lesson on your timetable.
+                                    </Typography>
+                                )}
+                            </Box>
+                            <Button size="small" component={RouterLink} to="/app/timetable" sx={{ fontWeight: 800, flexShrink: 0 }}>
+                                Open timetable
+                            </Button>
+                        </Stack>
+                    </CardContent>
+                </Card>
+            </Grid>
+            <Snackbar open={popupOpen} autoHideDuration={9000} onClose={() => setPopupOpen(false)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+                <Alert onClose={() => setPopupOpen(false)} severity="info" variant="filled" sx={{ width: '100%' }}>
+                    {current ? `${currentLabel}: ${slotText(current)} · ${slotTime(current)}` : 'Your lesson has changed.'}
+                </Alert>
+            </Snackbar>
+        </>
+    );
+}
+
 /** Personal view for teaching staff: my classes, my day, my work. */
 function TeacherDashboard() {
     // "Attendance not yet recorded" clears itself once the register is in.
     const { data, loading, error } = useLiveApi(() => dashboardApi.me(), [], { intervalMs: 60_000 });
 
     return (
-        <DataState loading={loading} error={error}>
-            {data && (
-                <Grid container spacing={2.5}>
+        <>
+            <Grid container spacing={2.5}>
+                <TeacherScheduleCard />
+            </Grid>
+            <DataState loading={loading} error={error}>
+                {data && (
+                    <Grid container spacing={2.5}>
                     {data.attendanceOutstanding.length > 0 && (
                         <Grid item xs={12}>
                             <Alert
@@ -605,9 +693,10 @@ function TeacherDashboard() {
                             </CardContent>
                         </Card>
                     </Grid>
-                </Grid>
-            )}
-        </DataState>
+                    </Grid>
+                )}
+            </DataState>
+        </>
     );
 }
 

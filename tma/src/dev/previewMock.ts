@@ -125,6 +125,20 @@ export function handleDevPreviewRequest(token: string, path: string, method: str
             ],
         };
     }
+    if (path === '/timetable/my-current') {
+        return {
+            date: '2026-11-03', time: '08:15', timeZone: 'Africa/Addis_Ababa', current: null,
+            next: {
+                id: 'preview-current-slot', periodNumber: 1, isRegistration: false,
+                startsAt: '08:30:00', endsAt: '09:20:00', room: 'B-204',
+                subject: isSubj ? { id: 'subj-fra', name: 'French', code: 'FRA' } : { id: 'subj-mat', name: 'Mathematics', code: 'MAT' },
+                class: CLASSES['cls-y4m'],
+            },
+        };
+    }
+    if (path === '/notifications') {
+        return { notifications: [], unreadCount: 0 };
+    }
     if (path.startsWith('/timetable/my-week')) {
         return {
             slots: isSubj

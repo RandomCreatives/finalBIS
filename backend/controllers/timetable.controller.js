@@ -1,8 +1,10 @@
 const supabase = require('../config/supabase');
+const schoolTime = require('../utils/schoolTime');
 const { resolveYearId } = require('./academicYear.controller');
 const { NotFoundError, ConflictError, ForbiddenError, asyncHandler } = require('../utils/errors');
 const { isFixtureSubject } = require('../utils/subjects');
 const { normalizeStudentName, sortStudentsCanonically } = require('../utils/studentRolls');
+const { LESSON_PERIODS } = require('../utils/timetableGenerator');
 
 /**
  * Weekly timetable.
@@ -111,6 +113,64 @@ const getMyWeek = asyncHandler(async (req, res) => {
     if (error) throw error;
 
     res.json({ academicYearId: yearId, slots: data.map(shape) });
+});
+
+/**
+ * GET /api/timetable/my-current
+ * Live class/period card data for the signed-in teacher. The response uses
+ * the Addis Ababa clock, so a browser's local timezone cannot shift the day.
+ */
+const getMyCurrent = asyncHandler(async (req, res) => {
+    const yearId = await resolveYearId(req);
+    const now = schoolTime.clock.now();
+    const date = schoolTime.todayIso(now);
+    const time = schoolTime.timeNow(now);
+    const day = schoolTime.weekdayToday(now);
+
+    if (day > 5) {
+        return res.json({ academicYearId: yearId, date, time, timeZone: schoolTime.SCHOOL_TIME_ZONE, current: null, next: null });
+    }
+
+    // Main and assistant teachers follow the timetable for the class they
+    // run/support. Subject teachers follow their own lessons. This means the
+    // card remains useful for assistants, who are not normally assigned as a
+    // subject teacher on each timetable slot.
+    const ownedClassIds = ['main_teacher', 'assistant_teacher'].includes(req.user.role)
+        ? await myClassIds(req.user.id, yearId)
+        : [];
+    let query = supabase
+        .from('timetable_slots')
+        .select(SELECT)
+        .eq('school_id', req.user.school_id)
+        .eq('academic_year_id', yearId)
+        .eq('day_of_week', day)
+        .order('starts_at');
+    query = ownedClassIds.length
+        ? query.in('class_id', ownedClassIds)
+        : query.eq('teacher_id', req.user.id);
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    const slots = (data || []).map(shape);
+    const numbered = slots.map((slot) => {
+        const isRegistration = slot.subject?.code === 'REG';
+        const periodIndex = LESSON_PERIODS.findIndex(([startsAt]) => startsAt === String(slot.startsAt || '').slice(0, 5));
+        return {
+            ...slot,
+            periodNumber: isRegistration || periodIndex < 0 ? null : periodIndex + 1,
+            isRegistration,
+        };
+    });
+    const nowMinutes = schoolTime.minutesOf(time);
+    const isCurrent = (slot) =>
+        schoolTime.minutesOf(slot.startsAt) <= nowMinutes && nowMinutes < schoolTime.minutesOf(slot.endsAt);
+    const currentSlots = numbered.filter(isCurrent);
+    const nextSlots = numbered.filter((slot) => schoolTime.minutesOf(slot.startsAt) > nowMinutes);
+    const current = currentSlots.find((slot) => slot.teacherId === req.user.id) || currentSlots[0] || null;
+    const next = nextSlots.find((slot) => slot.teacherId === req.user.id) || nextSlots[0] || null;
+
+    res.json({ academicYearId: yearId, date, time, timeZone: schoolTime.SCHOOL_TIME_ZONE, current, next });
 });
 
 /**
@@ -287,6 +347,6 @@ const deleteSlot = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-    getTimetable, getMyWeek, getClassRoster, createSlot, updateSlot, deleteSlot,
+    getTimetable, getMyWeek, getMyCurrent, getClassRoster, createSlot, updateSlot, deleteSlot,
     myClassIds, ForbiddenError,
 };
