@@ -24,6 +24,7 @@ const studentRequests = require('../controllers/studentRequest.controller');
 const payments = require('../controllers/payment.controller');
 const attendance = require('../controllers/attendance.controller');
 const marksheets = require('../controllers/marksheet.controller');
+const settlingInReports = require('../controllers/settlingInReport.controller');
 const assessments = require('../controllers/assessment.controller');
 const library = require('../controllers/library.controller');
 const clinic = require('../controllers/clinic.controller');
@@ -694,6 +695,35 @@ router.post(
 );
 router.get('/marksheets/student/:studentId', authenticate, authorize(...TEACHING), uuid('studentId'), validate, marksheets.getStudentMarksheet);
 router.delete('/marksheets/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, marksheets.deleteMarksheet);
+
+// =============================================================================
+// SETTLING IN REPORTS — admin-only first phase. The year-specific template
+// is resolved from the selected class on the server; clients cannot submit a
+// Year 3 criterion against a Year 4 class (or vice versa).
+// =============================================================================
+router.get(
+    '/settling-in/classes/:classId',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    uuid('classId'),
+    query('termId').isUUID().withMessage('termId is required'),
+    validate,
+    settlingInReports.getClassReport
+);
+
+router.put(
+    '/settling-in/sections',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    body('classId').isUUID(),
+    body('studentId').isUUID(),
+    body('termId').isUUID(),
+    body('subjectKey').isString().trim().notEmpty(),
+    body('ratings').custom((value) => value && typeof value === 'object' && !Array.isArray(value))
+        .withMessage('Ratings must be an object'),
+    validate,
+    settlingInReports.saveSection
+);
 
 // =============================================================================
 // ASSESSMENTS — multiple marked components per subject (Quiz 1, Classwork…)
