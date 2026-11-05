@@ -10,7 +10,7 @@ const { sendPush, subscriptionsForUsers, vapidConfigured } = require('./webpush'
  *
  * Defaults chosen for the supplied rota:
  *   - class/period card: the dashboard shows the live or next lesson;
- *   - weekly briefing and missing lesson-plan reminder: Monday 08:00;
+ *   - weekly briefing and missing lesson-plan reminder: Monday 09:55, five minutes before the 10:00 briefing;
  *   - snack/lunch/home-time duty alerts: five minutes before the duty starts;
  *   - no morning-duty alerts.
  *
@@ -20,7 +20,7 @@ const { sendPush, subscriptionsForUsers, vapidConfigured } = require('./webpush'
  * sweep while staff are using the app.
  */
 
-const SCHOOL_WEEKLY_BRIEFING_TIME = '08:00';
+const WEEKLY_BRIEFING_REMINDER_TIME = '09:55';
 const REMINDER_WINDOW_MINUTES = 5;
 const SWEEP_EVERY_MS = 60 * 1000;
 const TEACHER_ROLES = new Set(['main_teacher', 'assistant_teacher', 'subject_teacher']);
@@ -159,7 +159,7 @@ const isWithinMinuteWindow = (time, targetTime, windowMinutes = REMINDER_WINDOW_
 const minuteOfDay = (time) => schoolTime.minutesOf(time);
 
 const weeklyBriefingDue = (date, time) =>
-    schoolTime.isoWeekday(date) === 1 && isWithinMinuteWindow(time, SCHOOL_WEEKLY_BRIEFING_TIME);
+    schoolTime.isoWeekday(date) === 1 && isWithinMinuteWindow(time, WEEKLY_BRIEFING_REMINDER_TIME);
 
 const schoolIsOpen = async (schoolId, date) => {
     if (schoolTime.isoWeekday(date) > 5) return { open: false, reason: 'weekend' };
