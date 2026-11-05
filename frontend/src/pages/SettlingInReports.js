@@ -414,52 +414,6 @@ export default function SettlingInReports() {
                         <Alert severity="info">There are no active students in this class.</Alert>
                     ) : mode === 'assess' ? (
                         <Stack spacing={2}>
-                            <Card sx={{ p: 1.5, overflowX: 'auto' }}>
-                                <Typography variant="h6" sx={{ mb: 1 }}>Class progress · {report.class.name}</Typography>
-                                <Table size="small" data-testid="settling-in-progress-table">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell sx={{ fontWeight: 800 }}>Student</TableCell>
-                                            {report.template.subjects.map((subject) => (
-                                                <TableCell key={subject.key} align="center" sx={{ fontWeight: 800, minWidth: 125 }}>
-                                                    {subject.label}
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {students.map((student) => (
-                                            <TableRow key={student.id} hover selected={student.id === studentId}>
-                                                <TableCell>
-                                                    <Button
-                                                        size="small"
-                                                        onClick={() => setStudentId(student.id)}
-                                                        sx={{ textTransform: 'none', fontWeight: 700, justifyContent: 'flex-start' }}
-                                                    >
-                                                        {student.rollNum ? `${student.rollNum}. ` : ''}{student.name}
-                                                    </Button>
-                                                </TableCell>
-                                                {report.template.subjects.map((subject) => (
-                                                    <TableCell key={subject.key} align="center">
-                                                        <Tooltip title={`Open ${subject.label} criteria for ${student.name}`}>
-                                                            <Button
-                                                                size="small"
-                                                                color={countRatings(subject.criteria, student.sections?.[subject.key]?.ratings) === subject.criteria.length ? 'success' : 'primary'}
-                                                                variant={student.id === studentId && subject.key === subjectKey ? 'contained' : 'outlined'}
-                                                                onClick={() => startAssessment(student.id, subject.key)}
-                                                                data-testid={`settling-in-open-${student.id}-${subject.key}`}
-                                                            >
-                                                                {countRatings(subject.criteria, student.sections?.[subject.key]?.ratings)}/{subject.criteria.length}
-                                                            </Button>
-                                                        </Tooltip>
-                                                    </TableCell>
-                                                ))}
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </Card>
-
                             <Card sx={{ p: { xs: 1.5, md: 2 } }} data-testid="settling-in-assessment-editor">
                                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }} sx={{ mb: 1.5 }}>
                                     <TextField
@@ -569,6 +523,52 @@ export default function SettlingInReports() {
                                         </Stack>
                                     </>
                                 ) : <Alert severity="info">Select a student and subject to assess.</Alert>}
+                            </Card>
+
+                            <Card sx={{ p: 1.5, overflowX: 'auto' }}>
+                                <Typography variant="h6" sx={{ mb: 1 }}>Class progress · {report.class.name}</Typography>
+                                <Table size="small" data-testid="settling-in-progress-table">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ fontWeight: 800 }}>Student</TableCell>
+                                            {report.template.subjects.map((subject) => (
+                                                <TableCell key={subject.key} align="center" sx={{ fontWeight: 800, minWidth: 125 }}>
+                                                    {subject.label}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {students.map((student) => (
+                                            <TableRow key={student.id} hover selected={student.id === studentId}>
+                                                <TableCell>
+                                                    <Button
+                                                        size="small"
+                                                        onClick={() => setStudentId(student.id)}
+                                                        sx={{ textTransform: 'none', fontWeight: 700, justifyContent: 'flex-start' }}
+                                                    >
+                                                        {student.rollNum ? `${student.rollNum}. ` : ''}{student.name}
+                                                    </Button>
+                                                </TableCell>
+                                                {report.template.subjects.map((subject) => (
+                                                    <TableCell key={subject.key} align="center">
+                                                        <Tooltip title={`Open ${subject.label} criteria for ${student.name}`}>
+                                                            <Button
+                                                                size="small"
+                                                                color={countRatings(subject.criteria, student.sections?.[subject.key]?.ratings) === subject.criteria.length ? 'success' : 'primary'}
+                                                                variant={student.id === studentId && subject.key === subjectKey ? 'contained' : 'outlined'}
+                                                                onClick={() => startAssessment(student.id, subject.key)}
+                                                                data-testid={`settling-in-open-${student.id}-${subject.key}`}
+                                                            >
+                                                                {countRatings(subject.criteria, student.sections?.[subject.key]?.ratings)}/{subject.criteria.length}
+                                                            </Button>
+                                                        </Tooltip>
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </Card>
                         </Stack>
                     ) : (

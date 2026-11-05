@@ -128,6 +128,25 @@ describe('Settling In Report admin workspace', () => {
         expect(screen.queryByRole('option', { name: /Year 5/ })).not.toBeInTheDocument();
     });
 
+    test('places selectors and the criteria editor above class progress', async () => {
+        renderPage();
+        await screen.findByTestId('settling-in-progress-table');
+
+        const workspaceOrder = Array.from(document.querySelectorAll(
+            '[data-testid="settling-in-year-select"], [data-testid="settling-in-term-select"], '
+            + '[data-testid="settling-in-class-select"], [data-testid="settling-in-assessment-editor"], '
+            + '[data-testid="settling-in-progress-table"]',
+        )).map((element) => element.getAttribute('data-testid'));
+
+        expect(workspaceOrder).toEqual([
+            'settling-in-year-select',
+            'settling-in-term-select',
+            'settling-in-class-select',
+            'settling-in-assessment-editor',
+            'settling-in-progress-table',
+        ]);
+    });
+
     test('academic year is selected separately and filters the available terms', async () => {
         renderPage();
         await screen.findByTestId('settling-in-grade-badge');
