@@ -1,5 +1,7 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 
 const { reset, rowsOf, supabaseStub } = require('./helpers');
 const request = require('./request');
@@ -117,9 +119,9 @@ afterEach(() => {
 const nudges = (kind) => rowsOf('notifications').filter((row) => !kind || row.kind === kind);
 
 describe('weekly teacher briefing and lesson-plan reminders', () => {
-    test('Monday 08:00 sends role-scoped deadlines and missing plans once', async () => {
+    test('Monday 09:55 briefing reminder sends role-scoped deadlines and missing plans once', async () => {
         seed({ users: [MERON, MICHAEL, ASSISTANT] });
-        const result = await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '08:02') });
+        const result = await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '09:56') });
         assert.equal(result.due, true);
         assert.equal(result.schools[0].briefings, 2);
         assert.equal(result.schools[0].lessonPlanReminders, 1);
@@ -141,14 +143,14 @@ describe('weekly teacher briefing and lesson-plan reminders', () => {
         assert.doesNotMatch(planReminder[0].body, /Registration/);
         assert.equal(telegramCalls.length, 3, 'linked staff receive one Telegram for each new in-app alert');
 
-        await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '08:03') });
+        await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '09:57') });
         assert.equal(nudges().length, 3, 'retry is deduplicated');
         assert.equal(telegramCalls.length, 3, 'no duplicate Telegram messages');
     });
 
-    test('outside the Monday briefing window it sends no weekly reminder', async () => {
-        const early = await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '07:59') });
-        const late = await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '08:05') });
+    test('outside the Monday briefing reminder window it sends no weekly reminder', async () => {
+        const early = await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '09:54') });
+        const late = await reminders.runTeacherReminders({ now: schoolAt(MONDAY, '10:00') });
         assert.equal(early.due, false);
         assert.equal(late.due, false);
         assert.equal(nudges().length, 0);
@@ -230,11 +232,28 @@ describe('teacher-reminder cron endpoint', () => {
         assert.equal((await request(app).get('/api/cron/teacher-reminders')).status, 401);
         assert.equal((await request(app).get('/api/cron/teacher-reminders').auth('wrong')).status, 401);
 
-        schoolTime.clock.now = () => schoolAt(MONDAY, '08:02');
+        schoolTime.clock.now = () => schoolAt(MONDAY, '09:56');
         const response = await request(app).get('/api/cron/teacher-reminders').auth('cron-secret-for-tests');
         assert.equal(response.status, 200);
         assert.equal(response.body.status, 'ok');
         assert.equal(response.body.schools[0].briefings, 2);
         assert.doesNotMatch(JSON.stringify(response.body), /Meron|Michael|Year 3/);
+    });
+});
+
+describe('Vercel teacher-reminder schedule', () => {
+    test('invokes only at the briefing and duty reminder windows', () => {
+        const configPath = path.join(__dirname, '..', '..', 'vercel.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const schedules = config.crons
+            .filter((cron) => cron.path === '/api/cron/teacher-reminders')
+            .map((cron) => cron.schedule);
+
+        assert.deepEqual(schedules, [
+            '55 6 * * 1',
+            '5 7 * * 1-5',
+            '15 9 * * 1-5',
+            '5 12 * * 1-5',
+        ]);
     });
 });

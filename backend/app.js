@@ -175,9 +175,11 @@ app.get('/api/cron/attendance-reminders', async (req, res) => {
 });
 
 /**
- * Teacher deadlines and duty reminders. Vercel calls this every five minutes
- * during the school day (08:00–16:55 Addis Ababa time); each action is
- * time-gated and idempotent, and the response contains counts only.
+ * Teacher deadlines and duty reminders. The UTC cron schedules in vercel.json
+ * map to the exact reminder windows (09:55, 10:05, 12:15 and 15:05 Addis
+ * Ababa time); the notification feed also runs a throttled sweep while staff
+ * are using the app.
+ * Each action is time-gated and idempotent, and the response contains counts only.
  */
 app.get('/api/cron/teacher-reminders', async (req, res) => {
     const secret = process.env.CRON_SECRET;

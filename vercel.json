@@ -11,7 +11,19 @@
     },
     {
       "path": "/api/cron/teacher-reminders",
-      "schedule": "*/5 5-13 * * 1-5"
+      "schedule": "55 6 * * 1"
+    },
+    {
+      "path": "/api/cron/teacher-reminders",
+      "schedule": "5 7 * * 1-5"
+    },
+    {
+      "path": "/api/cron/teacher-reminders",
+      "schedule": "15 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/teacher-reminders",
+      "schedule": "5 12 * * 1-5"
     }
   ],
   "builds": [
