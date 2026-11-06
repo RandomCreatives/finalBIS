@@ -32,10 +32,11 @@ const user = (id, role, name) => ({
 const ADMIN = user('b7180a79-119a-4dfb-9934-aa683058abf6', 'admin', 'Admin');
 const MAIN = user('82e61fbc-9942-415c-909c-f408360a2ef4', 'main_teacher', 'Meron');
 const SUBJECT = user('343d1a63-716b-492c-88ca-f466c50aea97', 'subject_teacher', 'Dawit');
+const SUBJECT_Y4 = user('b7a7809e-0f0c-4d5a-8f10-6b7c8d9e0f12', 'subject_teacher', 'Mekdes');
 const tokenFor = (account) => signToken(account);
 
 const tables = () => ({
-    users: [ADMIN, MAIN, SUBJECT],
+    users: [ADMIN, MAIN, SUBJECT, SUBJECT_Y4],
     classes: [
         { id: CLASS_Y3, school_id: SCHOOL, name: 'Year 3 - Blue', year_level: 3 },
         { id: CLASS_Y4, school_id: SCHOOL, name: 'Year 4 - Green', year_level: 4 },
@@ -50,6 +51,15 @@ const tables = () => ({
         user_id: MAIN.id,
         position: 'main',
     }],
+    subjects: [
+        { id: 'subject-english', school_id: SCHOOL, name: 'English', code: 'ENG' },
+        { id: 'subject-amharic', school_id: SCHOOL, name: 'Amharic', code: 'AMH' },
+    ],
+    class_subjects: [
+        { id: 'assignment-english-y3', school_id: SCHOOL, academic_year_id: ACADEMIC_YEAR, class_id: CLASS_Y3, subject_id: 'subject-english', teacher_id: SUBJECT.id },
+        { id: 'assignment-amharic-y3', school_id: SCHOOL, academic_year_id: ACADEMIC_YEAR, class_id: CLASS_Y3, subject_id: 'subject-amharic', teacher_id: SUBJECT.id },
+        { id: 'assignment-english-y4', school_id: SCHOOL, academic_year_id: ACADEMIC_YEAR, class_id: CLASS_Y4, subject_id: 'subject-english', teacher_id: SUBJECT_Y4.id },
+    ],
     students: [
         { id: STU_Y3, school_id: SCHOOL, name: 'Abel Tesfaye', admission_no: 'BIS-301', roll_num: 1, class_id: CLASS_Y3, is_active: true },
         { id: STU_Y4, school_id: SCHOOL, name: 'Bethlehem Adera', admission_no: 'BIS-401', roll_num: 1, class_id: CLASS_Y4, is_active: true },
@@ -68,6 +78,10 @@ beforeEach(() => {
 
 const getReport = (classId, token = tokenFor(ADMIN)) => request(app)
     .get(`/api/settling-in/classes/${classId}?termId=${TERM_1}`)
+    .auth(token);
+
+const getSubjectReport = (classId, subjectKey, studentId = STU_Y3, token = tokenFor(SUBJECT)) => request(app)
+    .get(`/api/settling-in/subject-reports/${classId}?termId=${TERM_1}&subjectKey=${subjectKey}&studentId=${studentId}`)
     .auth(token);
 
 const saveSection = (payload, token = tokenFor(ADMIN)) => request(app)
@@ -158,6 +172,103 @@ describe('Settling In Report class templates', () => {
             .get(`/api/settling-in/classes/${CLASS_Y3}?termId=${foreignTermId}`)
             .auth(tokenFor(ADMIN));
         assert.equal(foreignTerm.status, 404);
+    });
+});
+
+describe('Subject-teacher individual Settling In reports', () => {
+    test('English access returns only the selected student’s saved English section', async () => {
+        const template = getSettlingInTemplate(3);
+        const english = template.subjects.find((subject) => subject.key === 'english');
+        const amharic = template.subjects.find((subject) => subject.key === 'amharic');
+        rowsOf('settling_in_report_sections').push(
+            {
+                id: 'saved-english', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+                term_id: TERM_1, grade_level: 3, subject_key: 'english',
+                ratings: { [english.criteria[0].id]: 'WW', conduct: 'pleasing', 'amharic-secret': 'WA' }, criteria_snapshot: english.criteria,
+                template_version: template.version, saved_by: SUBJECT.id, updated_at: '2026-11-01T00:00:00.000Z',
+            },
+            {
+                id: 'saved-amharic', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+                term_id: TERM_1, grade_level: 3, subject_key: 'amharic',
+                ratings: { [amharic.criteria[0].id]: 'WA' }, criteria_snapshot: amharic.criteria,
+                template_version: template.version, saved_by: SUBJECT.id, updated_at: '2026-11-01T00:00:00.000Z',
+            },
+        );
+        rowsOf('settling_in_report_main_sections').push({
+            id: 'saved-main-teacher', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+            term_id: TERM_1, grade_level: 3,
+            ratings: { conduct: 'pleasing', organisation: 'satisfactory', attendance: 'pleasing' },
+        });
+
+        const res = await getSubjectReport(CLASS_Y3, 'english');
+        assert.equal(res.status, 200);
+        assert.equal(res.body.subject.key, 'english');
+        assert.deepEqual(res.body.template.subjects.map((subject) => subject.key), ['english']);
+        assert.equal(res.body.template.mainTeacherSection, undefined);
+        assert.equal(res.body.student.id, STU_Y3);
+        assert.equal(res.body.students, undefined);
+        assert.deepEqual(Object.keys(res.body.student.sections), ['english']);
+        assert.equal(res.body.student.sections.english.ratings[english.criteria[0].id], 'WW');
+        assert.equal(res.body.student.sections.english.ratings.conduct, undefined);
+        assert.equal(res.body.student.sections.english.ratings['amharic-secret'], undefined);
+        assert.equal(JSON.stringify(res.body).includes('Amharic'), false);
+        assert.equal(JSON.stringify(res.body).includes('Conduct'), false);
+    });
+
+    test('Amharic assignments can read only the selected student’s Amharic criteria and ratings', async () => {
+        const amharic = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'amharic');
+        rowsOf('settling_in_report_sections').push({
+            id: 'saved-amharic', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+            term_id: TERM_1, grade_level: 3, subject_key: 'amharic',
+            ratings: { [amharic.criteria[1].id]: 'WA' }, criteria_snapshot: amharic.criteria,
+            template_version: getSettlingInTemplate(3).version, saved_by: SUBJECT.id,
+        });
+
+        const res = await getSubjectReport(CLASS_Y3, 'amharic');
+        assert.equal(res.status, 200);
+        assert.equal(res.body.subject.key, 'amharic');
+        assert.deepEqual(res.body.template.subjects.map((subject) => subject.key), ['amharic']);
+        assert.deepEqual(Object.keys(res.body.student.sections), ['amharic']);
+        assert.equal(res.body.student.sections.amharic.ratings[amharic.criteria[1].id], 'WA');
+    });
+
+    test('Year 4 subject reports retain their own criteria and rating-column order', async () => {
+        const year3English = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'english');
+        const year4English = getSettlingInTemplate(4).subjects.find((subject) => subject.key === 'english');
+        const res = await getSubjectReport(CLASS_Y4, 'english', STU_Y4, tokenFor(SUBJECT_Y4));
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.template.yearLevel, 4);
+        assert.deepEqual(res.body.template.ratingOrder, ['WA', 'WW', 'WT']);
+        assert.deepEqual(res.body.template.subjects.map((subject) => subject.key), ['english']);
+        assert.notEqual(res.body.template.subjects[0].criteria[0].text, year3English.criteria[0].text);
+        assert.equal(res.body.student.sections.english, undefined);
+        assert.equal(year4English.criteria.length, 5);
+    });
+
+    test('assignment, subject, role, and student ownership are enforced server-side', async () => {
+        const unassignedClass = await getSubjectReport(CLASS_Y4, 'english', STU_Y4);
+        assert.equal(unassignedClass.status, 403);
+        const unassignedSubject = await getSubjectReport(CLASS_Y4, 'amharic', STU_Y4, tokenFor(SUBJECT_Y4));
+        assert.equal(unassignedSubject.status, 403);
+
+        const otherSubject = await getSubjectReport(CLASS_Y3, 'mathematics');
+        assert.equal(otherSubject.status, 400);
+
+        const admin = await getSubjectReport(CLASS_Y3, 'english', STU_Y3, tokenFor(ADMIN));
+        assert.equal(admin.status, 403);
+
+        const fullReport = await getReport(CLASS_Y3, tokenFor(SUBJECT));
+        assert.equal(fullReport.status, 403);
+
+        const wrongClassStudent = await getSubjectReport(CLASS_Y3, 'english', STU_Y4);
+        assert.equal(wrongClassStudent.status, 400);
+        const foreignStudent = await getSubjectReport(CLASS_Y3, 'english', STU_OTHER_SCHOOL);
+        assert.equal(foreignStudent.status, 404);
+
+        rowsOf('students').find((student) => student.id === STU_Y3).is_active = false;
+        const inactiveStudent = await getSubjectReport(CLASS_Y3, 'english', STU_Y3);
+        assert.equal(inactiveStudent.status, 400);
     });
 });
 

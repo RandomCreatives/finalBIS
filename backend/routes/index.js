@@ -698,6 +698,20 @@ router.delete('/marksheets/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN
 
 // =============================================================================
 // SETTLING IN REPORTS — admins and assigned main teachers may open a class.
+// Subject teachers have a separate read-only route for only their assigned
+// English or Amharic section. Do not grant them access to the full class report.
+router.get(
+    '/settling-in/subject-reports/:classId',
+    authenticate,
+    authorize(ROLES.SUBJECT_TEACHER),
+    uuid('classId'),
+    query('termId').isUUID().withMessage('termId is required'),
+    query('studentId').isUUID().withMessage('studentId is required'),
+    query('subjectKey').isIn(['english', 'amharic']).withMessage('Only English and Amharic reports are available'),
+    validate,
+    settlingInReports.getSubjectTeacherReport
+);
+
 // Main teachers can save their own section and Maths, Science, or Global
 // Citizenship; subject-teacher sections remain read-only for them. Criteria
 // are resolved from the class on the server, so Year 3 and Year 4 stay distinct.

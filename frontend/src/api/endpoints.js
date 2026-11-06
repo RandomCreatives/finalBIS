@@ -249,6 +249,9 @@ export const marksheetApi = {
 
 export const settlingInApi = {
     classReport: (classId, termId) => client.get(`/settling-in/classes/${classId}`, { params: { termId } }).then((r) => r.data),
+    subjectReport: (classId, termId, subjectKey, studentId) => client.get(`/settling-in/subject-reports/${classId}`, {
+        params: { termId, subjectKey, studentId },
+    }).then((r) => r.data),
     saveSection: (payload) => client.put('/settling-in/sections', payload).then((r) => r.data.section),
     saveMainTeacherSection: (payload) => client.put('/settling-in/main-teacher', payload).then((r) => r.data.section),
 };
