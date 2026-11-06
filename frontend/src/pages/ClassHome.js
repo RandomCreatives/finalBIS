@@ -1631,6 +1631,12 @@ export default function ClassHome() {
     const klass = classBySlug(slug);
     const session = readClassLogin();
     const [section, setSection] = useState('overview');
+    const reportClass = useMemo(() => (klass && session?.classId ? ({
+        id: session.classId,
+        name: session.className || klass.name,
+        yearLevel: klass.yearLevel,
+        mainTeacher: { id: session.userId, name: session.teacher || klass.mainTeacher },
+    }) : null), [klass, session?.classId, session?.className, session?.teacher, session?.userId]);
 
     // Live roster from the school database. The class login stored the class
     // id plus a real JWT for the class's main teacher, which the API client
@@ -1857,7 +1863,7 @@ export default function ClassHome() {
                         {section === 'calendar' && <CalendarBoard />}
                         {section === 'reportCards' && (
                             <Box data-testid="class-home-report-cards-section">
-                                <ReportCards initialClassId={session.classId} />
+                                <ReportCards initialClass={reportClass} />
                             </Box>
                         )}
                         {section === 'students' && (

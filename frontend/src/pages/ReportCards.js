@@ -324,8 +324,8 @@ function BISReportPreview({ card, className, termName, term, yearName, homeroomT
     );
 }
 
-function TermReportCards({ initialClassId = '' }) {
-    const [classId, setClassId] = useState(() => String(initialClassId || ''));
+function TermReportCards() {
+    const [classId, setClassId] = useState('');
     const [termId, setTermId] = useState('');
     const [view, setView] = useState('grid');
     const [previewStudentId, setPreviewStudentId] = useState('');
@@ -336,13 +336,6 @@ function TermReportCards({ initialClassId = '' }) {
     const years = useApi(() => academicYearApi.list(), []);
     const current = useApi(() => termApi.current(), []);
     const resolvedTermId = termId || current.data?.term?.id || '';
-
-    useEffect(() => {
-        if (classes.loading) return;
-        if (classId && !(classes.data || []).some((klass) => String(klass.id) === String(classId))) {
-            setClassId('');
-        }
-    }, [classes.data, classes.loading, classId]);
 
     const students = useApi(
         () => (classId ? studentApi.list({ classId }) : Promise.resolve([])),
@@ -543,12 +536,13 @@ function TermReportCards({ initialClassId = '' }) {
     );
 }
 
-export default function ReportCards({ initialClassId = '' } = {}) {
+export default function ReportCards({ initialClass = null } = {}) {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
     const isMainTeacher = user?.role === 'main_teacher';
     const canAccessSettlingIn = isAdmin || isMainTeacher;
     const [reportType, setReportType] = useState(isMainTeacher ? 'settling-in' : 'report-card');
+    const activeReportType = isMainTeacher ? 'settling-in' : reportType;
 
     useEffect(() => {
         if (isMainTeacher) setReportType('settling-in');
@@ -559,12 +553,13 @@ export default function ReportCards({ initialClassId = '' } = {}) {
         <>
             <Card sx={{ p: 1, mb: 2 }}>
                 <ToggleButtonGroup
-                    exclusive size="small" value={reportType}
+                    exclusive size="small" value={activeReportType}
                     onChange={(_, value) => value && setReportType(value)}
                     aria-label="Report type"
                     data-testid="report-type-toggle"
                 >
-                    <ToggleButton value="report-card" sx={{ textTransform: 'none', fontWeight: 700 }}>
+                    <ToggleButton value="report-card" disabled={isMainTeacher}
+                        sx={{ textTransform: 'none', fontWeight: 700 }}>
                         Report Card
                     </ToggleButton>
                     {canAccessSettlingIn && (
@@ -574,9 +569,9 @@ export default function ReportCards({ initialClassId = '' } = {}) {
                     )}
                 </ToggleButtonGroup>
             </Card>
-            {canAccessSettlingIn && reportType === 'settling-in'
-                ? <SettlingInReports initialClassId={initialClassId} />
-                : <TermReportCards initialClassId={initialClassId} />}
+            {canAccessSettlingIn && activeReportType === 'settling-in'
+                ? <SettlingInReports initialClass={initialClass} />
+                : <TermReportCards />}
         </>
     );
 }

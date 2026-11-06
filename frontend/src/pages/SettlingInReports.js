@@ -300,12 +300,17 @@ function PrintReportSide({ student, report, classRecord, yearName, side, isLast 
     );
 }
 
-export default function SettlingInReports({ initialClassId = '' } = {}) {
+export default function SettlingInReports({ initialClass = null } = {}) {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
     const isMainTeacher = user?.role === 'main_teacher';
+    const loginClass = useMemo(() => (initialClass?.id ? {
+        ...initialClass,
+        id: String(initialClass.id),
+    } : null), [initialClass]);
+    const hasLoginClassContext = isMainTeacher && Boolean(loginClass);
     const [academicYearId, setAcademicYearId] = useState('');
-    const [classId, setClassId] = useState(() => String(initialClassId || ''));
+    const [classId, setClassId] = useState(() => String(loginClass?.id || ''));
     const [termId, setTermId] = useState('');
     const [studentId, setStudentId] = useState('');
     const [subjectKey, setSubjectKey] = useState('english');
@@ -320,10 +325,12 @@ export default function SettlingInReports({ initialClassId = '' } = {}) {
     const [mainTeacherSaveSuccess, setMainTeacherSaveSuccess] = useState('');
 
     const classes = useApi(
-        () => classApi.list(isMainTeacher
-            ? { mine: true, ...(academicYearId ? { academicYearId } : {}) }
-            : undefined),
-        [isMainTeacher, academicYearId],
+        () => (hasLoginClassContext
+            ? Promise.resolve([loginClass])
+            : classApi.list(isMainTeacher
+                ? { mine: true, ...(academicYearId ? { academicYearId } : {}) }
+                : undefined)),
+        [hasLoginClassContext, isMainTeacher, academicYearId, loginClass],
     );
     const terms = useApi(() => termApi.list(), []);
     const years = useApi(() => academicYearApi.list(), []);
@@ -345,9 +352,14 @@ export default function SettlingInReports({ initialClassId = '' } = {}) {
             || '';
 
     const supportedClasses = useMemo(
-        () => (classes.data || []).filter((item) => isSupportedClass(item)
-            && (isAdmin || (isMainTeacher && item.mainTeacher?.id === user?.id))),
-        [classes.data, isAdmin, isMainTeacher, user?.id],
+        () => {
+            if (hasLoginClassContext) {
+                return isSupportedClass(loginClass) ? [loginClass] : [];
+            }
+            return (classes.data || []).filter((item) => isSupportedClass(item)
+                && (isAdmin || (isMainTeacher && item.mainTeacher?.id === user?.id)));
+        },
+        [classes.data, hasLoginClassContext, loginClass, isAdmin, isMainTeacher, user?.id],
     );
     const selectedClass = supportedClasses.find((item) => String(item.id) === String(classId)) || null;
     const reportState = useApi(
@@ -390,11 +402,11 @@ export default function SettlingInReports({ initialClassId = '' } = {}) {
         if (classes.loading) return;
         if (!supportedClasses.some((item) => String(item.id) === String(classId))) {
             const preferredClass = supportedClasses.find(
-                (item) => String(item.id) === String(initialClassId),
+                (item) => String(item.id) === String(loginClass?.id),
             );
             setClassId(String(preferredClass?.id || supportedClasses[0]?.id || ''));
         }
-    }, [classes.loading, supportedClasses, classId, initialClassId]);
+    }, [classes.loading, supportedClasses, classId, loginClass?.id]);
 
     useEffect(() => {
         if (editableSubjects.length && !editableSubjects.some((item) => item.key === subjectKey)) {
@@ -580,10 +592,12 @@ export default function SettlingInReports({ initialClassId = '' } = {}) {
                         }}
                         data-testid="settling-in-class-select"
                     >
-                        <MenuItem value=""><em>Choose a Year 3 or Year 4 class…</em></MenuItem>
+                        {!hasLoginClassContext && (
+                            <MenuItem value=""><em>Choose a Year 3 or Year 4 class…</em></MenuItem>
+                        )}
                         {supportedClasses.map((klass) => (
                             <MenuItem key={klass.id} value={klass.id}>
-                                {klass.name} · Year {klass.yearLevel}
+                                {hasLoginClassContext ? klass.name : `${klass.name} · Year ${klass.yearLevel}`}
                             </MenuItem>
                         ))}
                     </TextField>
