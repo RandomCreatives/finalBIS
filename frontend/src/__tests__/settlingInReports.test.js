@@ -8,7 +8,7 @@ import { academicYearApi, classApi, settlingInApi, termApi } from '../api/endpoi
 jest.mock('../api/endpoints', () => ({
     academicYearApi: { list: jest.fn() },
     classApi: { list: jest.fn() },
-    settlingInApi: { classReport: jest.fn(), saveSection: jest.fn() },
+    settlingInApi: { classReport: jest.fn(), saveSection: jest.fn(), saveMainTeacherSection: jest.fn() },
     termApi: { list: jest.fn(), current: jest.fn() },
 }));
 
@@ -26,6 +26,20 @@ const YEAR_3_TEMPLATE = {
     label: 'Year 3',
     version: 'settling-in-year-3-2026-27-v1',
     ratingOrder: ['WT', 'WW', 'WA'],
+    mainTeacherSection: {
+        version: 'settling-in-main-teacher-2026-27-v1',
+        categories: [
+            { key: 'conduct', label: 'Conduct' },
+            { key: 'organisation', label: 'Organisation' },
+            { key: 'attendance', label: 'Attendance' },
+        ],
+        ratingOrder: ['pleasing', 'satisfactory', 'cause_for_concern'],
+        ratings: {
+            pleasing: 'Pleasing',
+            satisfactory: 'Satisfactory',
+            cause_for_concern: 'Cause for Concern',
+        },
+    },
     subjects: [
         { key: 'english', label: 'English', criteria: [
             { id: 'y3-english-01', text: 'To make predictions using clues from the text.' },
@@ -68,6 +82,7 @@ const makeReport = (classId = CLASS_Y3, template = YEAR_3_TEMPLATE, termId = TER
         rollNum: 1,
         gender: 'male',
         sections: {},
+        mainTeacherSection: null,
     }],
 });
 
@@ -112,6 +127,9 @@ beforeEach(() => {
         subjectKey: 'english',
         ratings: { 'y3-english-01': 'WT', 'y3-english-02': null },
     });
+    settlingInApi.saveMainTeacherSection.mockResolvedValue({
+        ratings: { conduct: 'pleasing', organisation: 'satisfactory', attendance: null },
+    });
 });
 
 describe('Settling In Report admin workspace', () => {
@@ -135,7 +153,7 @@ describe('Settling In Report admin workspace', () => {
         const workspaceOrder = Array.from(document.querySelectorAll(
             '[data-testid="settling-in-year-select"], [data-testid="settling-in-term-select"], '
             + '[data-testid="settling-in-class-select"], [data-testid="settling-in-assessment-editor"], '
-            + '[data-testid="settling-in-progress-table"]',
+            + '[data-testid="settling-in-main-teacher-editor"], [data-testid="settling-in-progress-table"]',
         )).map((element) => element.getAttribute('data-testid'));
 
         expect(workspaceOrder).toEqual([
@@ -143,6 +161,7 @@ describe('Settling In Report admin workspace', () => {
             'settling-in-term-select',
             'settling-in-class-select',
             'settling-in-assessment-editor',
+            'settling-in-main-teacher-editor',
             'settling-in-progress-table',
         ]);
     });
@@ -215,16 +234,44 @@ describe('Settling In Report admin workspace', () => {
         expect(await screen.findByText(/English saved for Abel Tesfaye/)).toBeInTheDocument();
     });
 
-    test('allows previewing two landscape pages and printing all students in the class', async () => {
+    test('saves the main-teacher conduct, organisation and attendance ratings per student and term', async () => {
+        renderPage();
+        const editor = await screen.findByTestId('settling-in-main-teacher-editor');
+
+        fireEvent.mouseDown(within(screen.getByTestId('settling-in-main-rating-conduct')).getByRole('combobox'));
+        fireEvent.click(await screen.findByRole('option', { name: 'Pleasing' }));
+        fireEvent.mouseDown(within(screen.getByTestId('settling-in-main-rating-organisation')).getByRole('combobox'));
+        fireEvent.click(await screen.findByRole('option', { name: 'Satisfactory' }));
+        fireEvent.click(screen.getByTestId('settling-in-save-main-teacher'));
+
+        await waitFor(() => expect(settlingInApi.saveMainTeacherSection).toHaveBeenCalledWith({
+            classId: CLASS_Y3,
+            studentId: STUDENT_1,
+            termId: TERM_1,
+            ratings: { conduct: 'pleasing', organisation: 'satisfactory', attendance: null },
+        }));
+        expect(await within(editor).findByText(/Main teacher section saved for Abel Tesfaye/)).toBeInTheDocument();
+    });
+
+    test('previews the four A5 booklet panels on two A4 duplex sides and prints the class', async () => {
         const printSpy = jest.spyOn(window, 'print').mockImplementation(() => {});
         renderPage();
         await screen.findByTestId('settling-in-grade-badge');
 
         fireEvent.click(screen.getByText('Preview / print'));
         const preview = screen.getByTestId('settling-in-selected-preview');
-        expect(await within(preview).findByTestId(`settling-in-page-${STUDENT_1}-1`)).toBeInTheDocument();
-        expect(within(preview).getByTestId(`settling-in-page-${STUDENT_1}-2`)).toBeInTheDocument();
-        expect(within(preview).getAllByText(/Form tutor:/)).toHaveLength(2);
+        expect(await within(preview).findByTestId(`settling-in-side-${STUDENT_1}-outside`)).toBeInTheDocument();
+        expect(within(preview).getByTestId(`settling-in-side-${STUDENT_1}-inside`)).toBeInTheDocument();
+        [1, 2, 3, 4].forEach((pageNumber) => {
+            expect(within(preview).getByTestId(`settling-in-page-${STUDENT_1}-${pageNumber}`)).toBeInTheDocument();
+        });
+        expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-2`)).toHaveTextContent('English');
+        expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-2`)).toHaveTextContent('Science');
+        expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-3`)).toHaveTextContent('Global Citizenship');
+        expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-3`)).toHaveTextContent('Amharic');
+        expect(within(preview).getAllByText(/Form Tutor:/i)).toHaveLength(1);
+        expect(within(preview).getByText('2026-27')).toBeInTheDocument();
+        expect(within(preview).getByText('P. O. Box 5583')).toBeInTheDocument();
 
         fireEvent.click(screen.getByTestId('settling-in-print-button'));
         expect(printSpy).toHaveBeenCalled();

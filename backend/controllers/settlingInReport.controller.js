@@ -9,15 +9,20 @@ const { normalizeStudentName, sortStudentsCanonically } = require('../utils/stud
 const {
     getSettlingInTemplate,
     getSubjectForYear,
+    MAIN_TEACHER_CATEGORIES,
+    MAIN_TEACHER_RATING_ORDER,
+    MAIN_TEACHER_TEMPLATE_VERSION,
 } = require('../config/settlingInCriteria');
 
 const SECTION_TABLE = 'settling_in_report_sections';
+const MAIN_SECTION_TABLE = 'settling_in_report_main_sections';
 const RATING_VALUES = new Set(['WT', 'WW', 'WA']);
+const MAIN_TEACHER_RATING_VALUES = new Set(MAIN_TEACHER_RATING_ORDER);
 
 const throwSettlingInStorageError = (error) => {
     if (['PGRST205', '42P01'].includes(error?.code)) {
         throw new ServiceUnavailableError(
-            'Settling In Reports are not initialized. Apply supabase/migrations/034_settling_in_reports.sql first.',
+            'Settling In Reports are not initialized. Apply supabase/migrations/034_settling_in_reports.sql and supabase/migrations/035_settling_in_main_teacher_sections.sql first.',
         );
     }
     throw error;
@@ -92,6 +97,46 @@ const shapeSection = (row, template) => {
     };
 };
 
+const normalizeMainTeacherRatings = (ratings) => {
+    if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) {
+        throw new BadRequestError('Main teacher ratings must be an object keyed by category');
+    }
+
+    const categoryKeys = new Set(MAIN_TEACHER_CATEGORIES.map(({ key }) => key));
+    const unknownKeys = Object.keys(ratings).filter((key) => !categoryKeys.has(key));
+    if (unknownKeys.length > 0) {
+        throw new BadRequestError('Main teacher ratings include an unknown category');
+    }
+
+    return Object.fromEntries(MAIN_TEACHER_CATEGORIES.map(({ key }) => {
+        const value = ratings[key] === '' || ratings[key] === undefined ? null : ratings[key];
+        if (value !== null && !MAIN_TEACHER_RATING_VALUES.has(value)) {
+            throw new BadRequestError('Each main teacher rating must be Pleasing, Satisfactory, Cause for Concern, or left blank');
+        }
+        return [key, value];
+    }));
+};
+
+const shapeMainTeacherSection = (row) => {
+    if (!row) return null;
+    const sourceRatings = row.ratings && typeof row.ratings === 'object' && !Array.isArray(row.ratings)
+        ? row.ratings
+        : {};
+    const ratings = Object.fromEntries(MAIN_TEACHER_CATEGORIES.map(({ key }) => [key, sourceRatings[key] || null]));
+    const ratedCount = MAIN_TEACHER_CATEGORIES.filter(({ key }) => MAIN_TEACHER_RATING_VALUES.has(ratings[key])).length;
+
+    return {
+        id: row.id,
+        ratings,
+        templateVersion: row.template_version,
+        savedBy: row.saved_by,
+        updatedAt: row.updated_at,
+        ratedCount,
+        totalCount: MAIN_TEACHER_CATEGORIES.length,
+        complete: ratedCount === MAIN_TEACHER_CATEGORIES.length,
+    };
+};
+
 /**
  * GET /api/settling-in/classes/:classId?termId=...
  * Admin-only class workspace, with grade-specific criteria and saved sections.
@@ -103,7 +148,11 @@ const getClassReport = asyncHandler(async (req, res) => {
         req.query.termId,
     );
 
-    const [{ data: students, error: studentError }, { data: savedSections, error: sectionError }] = await Promise.all([
+    const [
+        { data: students, error: studentError },
+        { data: savedSections, error: sectionError },
+        { data: savedMainSections, error: mainSectionError },
+    ] = await Promise.all([
         supabase
             .from('students')
             .select('id, name, admission_no, roll_num, date_of_birth, gender, class_id, is_active')
@@ -118,16 +167,27 @@ const getClassReport = asyncHandler(async (req, res) => {
             .eq('school_id', req.user.school_id)
             .eq('class_id', classRecord.id)
             .eq('term_id', termRecord.id),
+        supabase
+            .from(MAIN_SECTION_TABLE)
+            .select('id, student_id, ratings, template_version, saved_by, updated_at')
+            .eq('school_id', req.user.school_id)
+            .eq('class_id', classRecord.id)
+            .eq('term_id', termRecord.id),
     ]);
 
     if (studentError) throw studentError;
     if (sectionError) throwSettlingInStorageError(sectionError);
+    if (mainSectionError) throwSettlingInStorageError(mainSectionError);
 
     const sectionsByStudent = new Map();
     (savedSections || []).forEach((row) => {
         if (!sectionsByStudent.has(row.student_id)) sectionsByStudent.set(row.student_id, {});
         sectionsByStudent.get(row.student_id)[row.subject_key] = shapeSection(row, template);
     });
+    const mainSectionsByStudent = new Map((savedMainSections || []).map((row) => [
+        row.student_id,
+        shapeMainTeacherSection(row),
+    ]));
 
     const orderedStudents = sortStudentsCanonically(students || []);
     res.json({
@@ -150,6 +210,7 @@ const getClassReport = asyncHandler(async (req, res) => {
             dateOfBirth: student.date_of_birth,
             gender: student.gender,
             sections: sectionsByStudent.get(student.id) || {},
+            mainTeacherSection: mainSectionsByStudent.get(student.id) || null,
         })),
     });
 });
@@ -241,9 +302,59 @@ const saveSection = asyncHandler(async (req, res) => {
     res.json({ section: shapeSection(data, template) });
 });
 
+/**
+ * PUT /api/settling-in/main-teacher
+ * Save the three form-tutor ratings separately from subject attainment.
+ * Admins manage this in the initial phase; main-teacher editing can be enabled
+ * once the system is opened to all staff.
+ */
+const saveMainTeacherSection = asyncHandler(async (req, res) => {
+    const { classId, studentId, termId, ratings } = req.body;
+    const { classRecord, termRecord, template } = await requireClassAndTerm(req, classId, termId);
+
+    const student = await requireOwnedRecord(
+        'students',
+        studentId,
+        'id, class_id, is_active',
+        req.user.school_id,
+        'Student',
+    );
+    if (student.class_id !== classRecord.id) {
+        throw new BadRequestError('Student is not enrolled in the selected class');
+    }
+    if (!student.is_active) {
+        throw new BadRequestError('Inactive students cannot be assessed in the current class report');
+    }
+
+    const normalizedRatings = normalizeMainTeacherRatings(ratings);
+    const payload = {
+        school_id: req.user.school_id,
+        class_id: classRecord.id,
+        student_id: student.id,
+        term_id: termRecord.id,
+        grade_level: template.yearLevel,
+        template_version: MAIN_TEACHER_TEMPLATE_VERSION,
+        ratings: normalizedRatings,
+        saved_by: req.user.id,
+        updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase
+        .from(MAIN_SECTION_TABLE)
+        .upsert(payload, {
+            onConflict: 'school_id,class_id,student_id,term_id',
+        })
+        .select('id, ratings, template_version, saved_by, updated_at')
+        .single();
+
+    if (error) throwSettlingInStorageError(error);
+    res.json({ section: shapeMainTeacherSection(data) });
+});
+
 module.exports = {
     getClassReport,
     saveSection,
+    saveMainTeacherSection,
     gradeForClass,
     normalizeRatings,
+    normalizeMainTeacherRatings,
 };

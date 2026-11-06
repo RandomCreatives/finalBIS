@@ -725,6 +725,19 @@ router.put(
     settlingInReports.saveSection
 );
 
+router.put(
+    '/settling-in/main-teacher',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    body('classId').isUUID(),
+    body('studentId').isUUID(),
+    body('termId').isUUID(),
+    body('ratings').custom((value) => value && typeof value === 'object' && !Array.isArray(value))
+        .withMessage('Main teacher ratings must be an object'),
+    validate,
+    settlingInReports.saveMainTeacherSection
+);
+
 // =============================================================================
 // ASSESSMENTS — multiple marked components per subject (Quiz 1, Classwork…)
 // =============================================================================
