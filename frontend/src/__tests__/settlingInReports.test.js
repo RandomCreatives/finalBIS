@@ -23,6 +23,7 @@ const TERM_PREVIOUS = 'term-previous-year';
 const YEAR_CURRENT = 'year-id';
 const YEAR_PREVIOUS = 'year-previous-id';
 const STUDENT_1 = 'student-1';
+const STUDENT_2 = 'student-2';
 
 const YEAR_3_TEMPLATE = {
     yearLevel: 3,
@@ -332,6 +333,35 @@ describe('Settling In Report workspace', () => {
 
         fireEvent.click(screen.getByTestId('settling-in-print-button'));
         expect(printSpy).toHaveBeenCalled();
+        printSpy.mockRestore();
+    });
+
+    test('prints only the selected student from the class report preview', async () => {
+        const report = makeReport();
+        settlingInApi.classReport.mockResolvedValue({
+            ...report,
+            students: [
+                ...report.students,
+                { ...report.students[0], id: STUDENT_2, name: 'Bethlehem Adera', rollNum: 2 },
+            ],
+        });
+        const printSpy = jest.spyOn(window, 'print').mockImplementation(() => {});
+        renderPage();
+        await screen.findByTestId('settling-in-grade-badge');
+
+        fireEvent.click(screen.getByText('Preview / print'));
+        const studentPicker = within(screen.getByTestId('settling-in-preview-student-select'))
+            .getByRole('combobox');
+        fireEvent.mouseDown(studentPicker);
+        fireEvent.click(await screen.findByRole('option', { name: 'Bethlehem Adera' }));
+        fireEvent.click(screen.getByTestId('settling-in-print-student-button'));
+
+        await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
+        const printArea = screen.getByTestId('settling-in-print-area');
+        expect(within(printArea).getByTestId(`settling-in-side-${STUDENT_2}-outside`)).toBeInTheDocument();
+        expect(within(printArea).getByTestId(`settling-in-side-${STUDENT_2}-inside`)).toBeInTheDocument();
+        expect(within(printArea).queryByTestId(`settling-in-side-${STUDENT_1}-outside`)).not.toBeInTheDocument();
+        expect(within(printArea).getAllByTestId(/^settling-in-side-/)).toHaveLength(2);
         printSpy.mockRestore();
     });
 });

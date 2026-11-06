@@ -317,6 +317,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const [draftRatings, setDraftRatings] = useState({});
     const [draftMainTeacherRatings, setDraftMainTeacherRatings] = useState({});
     const [mode, setMode] = useState('assess');
+    const [printRequest, setPrintRequest] = useState(null);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
     const [saveSuccess, setSaveSuccess] = useState('');
@@ -440,8 +441,18 @@ export default function SettlingInReports({ initialClass = null } = {}) {
         setMainTeacherSaveSuccess('');
     }, [classId, resolvedTermId, studentId, mainTeacherTemplate, savedMainTeacherRatings, savedMainTeacherUpdatedAt]);
 
+    useEffect(() => {
+        if (!printRequest) return undefined;
+        const handleAfterPrint = () => setPrintRequest(null);
+        window.addEventListener('afterprint', handleAfterPrint, { once: true });
+        window.print();
+        return () => window.removeEventListener('afterprint', handleAfterPrint);
+    }, [printRequest]);
+
     const formTutorClass = selectedClass || (report ? { name: report.class.name } : null);
-    const printStudents = students;
+    const printStudents = printRequest?.studentId
+        ? students.filter((student) => String(student.id) === String(printRequest.studentId))
+        : students;
 
     const saveCurrentSection = async () => {
         if (!selectedStudent || !selectedSubject || !classId || !resolvedTermId) return;
@@ -543,14 +554,25 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     ? 'Main-teacher pilot · assigned classes only · edit Maths, Science, Global Citizenship and the main-teacher section; English and Amharic are read-only.'
                     : 'Subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet.'}
                 action={mode === 'preview' && report && (
-                    <Button
-                        variant="contained"
-                        startIcon={<PrintIcon />}
-                        onClick={() => window.print()}
-                        data-testid="settling-in-print-button"
-                    >
-                        Print class reports
-                    </Button>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        <Button
+                            variant="contained"
+                            startIcon={<PrintIcon />}
+                            onClick={() => setPrintRequest({ studentId: null })}
+                            data-testid="settling-in-print-button"
+                        >
+                            Print class reports
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<PrintIcon />}
+                            disabled={!selectedStudent}
+                            onClick={() => setPrintRequest({ studentId: selectedStudent?.id ?? null })}
+                            data-testid="settling-in-print-student-button"
+                        >
+                            Print selected student
+                        </Button>
+                    </Stack>
                 )}
             />
 
@@ -918,7 +940,12 @@ export default function SettlingInReports({ initialClass = null } = {}) {
             )}
 
             {report && printStudents.length > 0 && (
-                <Box id="settling-in-print-area" className="settling-in-print-only" aria-hidden="true">
+                <Box
+                    id="settling-in-print-area"
+                    data-testid="settling-in-print-area"
+                    className="settling-in-print-only"
+                    aria-hidden="true"
+                >
                     {printStudents.flatMap((student, studentIndex) => PRINT_SIDES.map((side, sideIndex) => {
                         const isLast = studentIndex === printStudents.length - 1
                             && sideIndex === PRINT_SIDES.length - 1;
