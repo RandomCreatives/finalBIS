@@ -14,6 +14,7 @@ import {
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
+import { useAuth } from '../auth/AuthContext';
 
 const INPUT_RATING_ORDER = ['WT', 'WW', 'WA'];
 const PRINT_SUBJECT_PANELS = [
@@ -48,7 +49,6 @@ const RATING_LABELS = {
 };
 
 const isSupportedClass = (klass) => [3, 4].includes(Number(klass?.yearLevel));
-const nameForSubject = (template, key) => template?.subjects?.find((item) => item.key === key);
 const DEFAULT_MAIN_TEACHER_TEMPLATE = {
     version: 'settling-in-main-teacher-2026-27-v1',
     categories: DEFAULT_MAIN_TEACHER_CATEGORIES,
@@ -301,6 +301,9 @@ function PrintReportSide({ student, report, classRecord, yearName, side, isLast 
 }
 
 export default function SettlingInReports() {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const isMainTeacher = user?.role === 'main_teacher';
     const [academicYearId, setAcademicYearId] = useState('');
     const [classId, setClassId] = useState('');
     const [termId, setTermId] = useState('');
@@ -316,7 +319,12 @@ export default function SettlingInReports() {
     const [mainTeacherSaveError, setMainTeacherSaveError] = useState('');
     const [mainTeacherSaveSuccess, setMainTeacherSaveSuccess] = useState('');
 
-    const classes = useApi(() => classApi.list(), []);
+    const classes = useApi(
+        () => classApi.list(isMainTeacher
+            ? { mine: true, ...(academicYearId ? { academicYearId } : {}) }
+            : undefined),
+        [isMainTeacher, academicYearId],
+    );
     const terms = useApi(() => termApi.list(), []);
     const years = useApi(() => academicYearApi.list(), []);
     const current = useApi(() => termApi.current(), []);
@@ -337,8 +345,9 @@ export default function SettlingInReports() {
             || '';
 
     const supportedClasses = useMemo(
-        () => (classes.data || []).filter(isSupportedClass),
-        [classes.data],
+        () => (classes.data || []).filter((item) => isSupportedClass(item)
+            && (isAdmin || (isMainTeacher && item.mainTeacher?.id === user?.id))),
+        [classes.data, isAdmin, isMainTeacher, user?.id],
     );
     const selectedClass = supportedClasses.find((item) => String(item.id) === String(classId)) || null;
     const reportState = useApi(
@@ -354,7 +363,14 @@ export default function SettlingInReports() {
         : null;
     const students = useMemo(() => report?.students || [], [report?.students]);
     const selectedStudent = students.find((item) => String(item.id) === String(studentId)) || null;
-    const selectedSubject = nameForSubject(report?.template, subjectKey) || report?.template?.subjects?.[0] || null;
+    const editableSubjects = useMemo(
+        () => (report?.template?.subjects || []).filter((subject) => isAdmin
+            || (isMainTeacher && subject.assessorRole === 'main_teacher')),
+        [report?.template?.subjects, isAdmin, isMainTeacher],
+    );
+    const selectedSubject = editableSubjects.find((item) => item.key === subjectKey)
+        || editableSubjects[0]
+        || null;
     const selectedSection = selectedStudent?.sections?.[selectedSubject?.key] || null;
     const savedRatings = selectedSection?.ratings;
     const savedSectionUpdatedAt = selectedSection?.updatedAt;
@@ -371,10 +387,16 @@ export default function SettlingInReports() {
     }, [resolvedTermId, termId]);
 
     useEffect(() => {
-        if (supportedClasses.length && !supportedClasses.some((item) => String(item.id) === String(classId))) {
-            setClassId(supportedClasses[0].id);
+        if (!supportedClasses.some((item) => String(item.id) === String(classId))) {
+            setClassId(supportedClasses[0]?.id || '');
         }
     }, [supportedClasses, classId]);
+
+    useEffect(() => {
+        if (editableSubjects.length && !editableSubjects.some((item) => item.key === subjectKey)) {
+            setSubjectKey(editableSubjects[0].key);
+        }
+    }, [editableSubjects, subjectKey]);
 
     useEffect(() => {
         if (!students.length) {
@@ -501,7 +523,9 @@ export default function SettlingInReports() {
 
             <PageHeader
                 title="Settling In Report"
-                subtitle="Admin-managed at launch · subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet."
+                subtitle={isMainTeacher
+                    ? 'Main-teacher pilot · assigned classes only · edit Maths, Science, Global Citizenship and the main-teacher section; English and Amharic are read-only.'
+                    : 'Subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet.'}
                 action={mode === 'preview' && report && (
                     <Button
                         variant="contained"
@@ -578,7 +602,9 @@ export default function SettlingInReports() {
                     </ToggleButtonGroup>
                 </Stack>
                 <Alert severity="info" sx={{ mt: 1.5 }}>
-                    Year 3 and Year 4 use different teacher-provided criteria. Ratings start blank and are not copied from sample ticks. The main-teacher section is admin-managed for the initial phase; main teachers will take responsibility when the system opens to all staff.
+                    Year 3 and Year 4 use different teacher-provided criteria. Ratings start blank and are not copied from sample ticks. {isMainTeacher
+                        ? 'This pilot is limited to your assigned classes. You can edit Maths, Science, Global Citizenship, and Conduct, Organisation, and Attendance. English and Amharic remain subject-teacher sections and are read-only; admins can make corrections.'
+                        : 'Admins can edit every section. Main teachers are limited to their assigned classes and cannot edit the English or Amharic subject-teacher sections.'}
                 </Alert>
             </Card>
 
@@ -617,7 +643,7 @@ export default function SettlingInReports() {
                                         data-testid="settling-in-subject-select"
                                         sx={{ flexWrap: 'wrap' }}
                                     >
-                                        {report.template.subjects.map((subject) => (
+                                        {editableSubjects.map((subject) => (
                                             <ToggleButton key={subject.key} value={subject.key} sx={{ textTransform: 'none', fontWeight: 700 }}>
                                                 {subject.label}
                                             </ToggleButton>
@@ -806,21 +832,31 @@ export default function SettlingInReports() {
                                                         );
                                                     })()}
                                                 </TableCell>
-                                                {report.template.subjects.map((subject) => (
-                                                    <TableCell key={subject.key} align="center">
-                                                        <Tooltip title={`Open ${subject.label} criteria for ${student.name}`}>
-                                                            <Button
-                                                                size="small"
-                                                                color={countRatings(subject.criteria, student.sections?.[subject.key]?.ratings) === subject.criteria.length ? 'success' : 'primary'}
-                                                                variant={student.id === studentId && subject.key === subjectKey ? 'contained' : 'outlined'}
-                                                                onClick={() => startAssessment(student.id, subject.key)}
-                                                                data-testid={`settling-in-open-${student.id}-${subject.key}`}
-                                                            >
-                                                                {countRatings(subject.criteria, student.sections?.[subject.key]?.ratings)}/{subject.criteria.length}
-                                                            </Button>
-                                                        </Tooltip>
-                                                    </TableCell>
-                                                ))}
+                                                {report.template.subjects.map((subject) => {
+                                                    const canEditSubject = isAdmin
+                                                        || (isMainTeacher && subject.assessorRole === 'main_teacher');
+                                                    const tooltip = canEditSubject
+                                                        ? `Open ${subject.label} criteria for ${student.name}`
+                                                        : `${subject.label} is a subject-teacher section and is read-only for main teachers`;
+                                                    return (
+                                                        <TableCell key={subject.key} align="center">
+                                                            <Tooltip title={tooltip}>
+                                                                <span>
+                                                                    <Button
+                                                                        size="small"
+                                                                        disabled={!canEditSubject}
+                                                                        color={countRatings(subject.criteria, student.sections?.[subject.key]?.ratings) === subject.criteria.length ? 'success' : 'primary'}
+                                                                        variant={student.id === studentId && subject.key === selectedSubject?.key ? 'contained' : 'outlined'}
+                                                                        onClick={() => startAssessment(student.id, subject.key)}
+                                                                        data-testid={`settling-in-open-${student.id}-${subject.key}`}
+                                                                    >
+                                                                        {countRatings(subject.criteria, student.sections?.[subject.key]?.ratings)}/{subject.criteria.length}
+                                                                    </Button>
+                                                                </span>
+                                                            </Tooltip>
+                                                        </TableCell>
+                                                    );
+                                                })}
                                             </TableRow>
                                         ))}
                                     </TableBody>

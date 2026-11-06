@@ -192,7 +192,7 @@ export const paymentApi = {
 };
 
 export const classApi = {
-    list: () => client.get('/classes').then((r) => r.data.classes),
+    list: (params) => client.get('/classes', { params }).then((r) => r.data.classes),
     get: (id) => client.get(`/classes/${id}`).then((r) => r.data.class),
     create: (payload) => client.post('/classes', payload).then((r) => r.data.class).then(syncAfter(['assignments', 'students'])),
     update: (id, payload) => client.patch(`/classes/${id}`, payload).then((r) => r.data.class).then(syncAfter(['assignments', 'students'])),

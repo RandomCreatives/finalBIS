@@ -111,8 +111,22 @@ describe('buildReportCards', () => {
 });
 
 describe('Report cards page', () => {
-    test('keeps Settling In Reports admin-only while teachers retain Report Cards', () => {
+    test('exposes Settling In Report to main teachers while retaining Report Cards', () => {
         useAuth.mockReturnValue({ user: { id: 'u-main', name: 'Main Teacher', role: 'main_teacher' } });
+        render(
+            <ThemeProvider>
+                <BrowserRouter>
+                    <ReportCards />
+                </BrowserRouter>
+            </ThemeProvider>,
+        );
+
+        expect(screen.getByRole('button', { name: 'Report Card' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Settling In Report' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    test('does not expose Settling In Report to subject teachers', () => {
+        useAuth.mockReturnValue({ user: { id: 'u-subject', name: 'Subject Teacher', role: 'subject_teacher' } });
         render(
             <ThemeProvider>
                 <BrowserRouter>
