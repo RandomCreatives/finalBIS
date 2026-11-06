@@ -10,6 +10,7 @@ const { getSettlingInTemplate } = require('../config/settlingInCriteria');
 const SCHOOL = '0a5eae91-5307-4125-b24f-876bb3f529b8';
 const OTHER_SCHOOL = '9f8e7d6c-5b4a-4321-9876-543210fedcba';
 const TERM_1 = '6b2f4d08-3b7a-4a5e-9d2c-1f8e6a4b0c93';
+const ACADEMIC_YEAR = 'f1c9d3e2-4b7a-4c81-9d6e-5a2f8b3c1d40';
 const CLASS_Y3 = '713bfeaa-d141-44f0-864a-cee594efb105';
 const CLASS_Y4 = '2c4e6a80-1f3d-4b5c-8e7a-9d0f1b2c3e45';
 const CLASS_Y5 = 'd76f2027-0e2b-4e65-9937-c2705ddf0314';
@@ -40,7 +41,15 @@ const tables = () => ({
         { id: CLASS_Y4, school_id: SCHOOL, name: 'Year 4 - Green', year_level: 4 },
         { id: CLASS_Y5, school_id: SCHOOL, name: 'Year 5 - Blue', year_level: 5 },
     ],
-    terms: [{ id: TERM_1, school_id: SCHOOL, academic_year_id: 'f1c9d3e2-4b7a-4c81-9d6e-5a2f8b3c1d40', name: 'Term 1' }],
+    terms: [{ id: TERM_1, school_id: SCHOOL, academic_year_id: ACADEMIC_YEAR, name: 'Term 1' }],
+    class_staff: [{
+        id: 'main-seat-year-3',
+        school_id: SCHOOL,
+        academic_year_id: ACADEMIC_YEAR,
+        class_id: CLASS_Y3,
+        user_id: MAIN.id,
+        position: 'main',
+    }],
     students: [
         { id: STU_Y3, school_id: SCHOOL, name: 'Abel Tesfaye', admission_no: 'BIS-301', roll_num: 1, class_id: CLASS_Y3, is_active: true },
         { id: STU_Y4, school_id: SCHOOL, name: 'Bethlehem Adera', admission_no: 'BIS-401', roll_num: 1, class_id: CLASS_Y4, is_active: true },
@@ -305,21 +314,72 @@ describe('Settling In Report save and data isolation', () => {
         assert.match(res.body.message, /Inactive students/);
     });
 
-    test('teacher and non-teaching roles are blocked by the admin-only first phase', async () => {
-        const subjectTeacherGet = await getReport(CLASS_Y3, tokenFor(SUBJECT));
-        const mainTeacherSave = await saveSection(sectionPayload(), tokenFor(MAIN));
-        const mainTeacherBehaviorSave = await saveMainTeacherSection({
+    test('main teachers can read only classes assigned to them as the main teacher', async () => {
+        const assignedClass = await getReport(CLASS_Y3, tokenFor(MAIN));
+        const unassignedClass = await getReport(CLASS_Y4, tokenFor(MAIN));
+        const subjectTeacher = await getReport(CLASS_Y3, tokenFor(SUBJECT));
+
+        assert.equal(assignedClass.status, 200);
+        assert.equal(unassignedClass.status, 403);
+        assert.equal(subjectTeacher.status, 403);
+    });
+
+    test('main teachers can save their sections and main-taught subjects, but cannot change English or Amharic', async () => {
+        const english = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'english');
+        const mathematics = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'mathematics');
+        const savedEnglish = {
+            id: 'english-assessment-existing',
+            school_id: SCHOOL,
+            class_id: CLASS_Y3,
+            student_id: STU_Y3,
+            term_id: TERM_1,
+            grade_level: 3,
+            subject_key: 'english',
+            ratings: { 'y3-english-01': 'WW' },
+            criteria_snapshot: english.criteria,
+            template_version: getSettlingInTemplate(3).version,
+            saved_by: SUBJECT.id,
+            updated_at: '2026-11-01T00:00:00.000Z',
+        };
+        rowsOf('settling_in_report_sections').push(savedEnglish);
+
+        const visibleReport = await getReport(CLASS_Y3, tokenFor(MAIN));
+        assert.equal(visibleReport.status, 200);
+        assert.equal(visibleReport.body.students[0].sections.english.ratings['y3-english-01'], 'WW');
+
+        const mainSubjectSave = await saveSection({
             classId: CLASS_Y3,
             studentId: STU_Y3,
             termId: TERM_1,
-            ratings: { conduct: 'pleasing', organisation: null, attendance: null },
+            subjectKey: 'mathematics',
+            ratings: { [mathematics.criteria[0].id]: 'WA' },
         }, tokenFor(MAIN));
+        assert.equal(mainSubjectSave.status, 200);
+        assert.equal(mainSubjectSave.body.section.subjectKey, 'mathematics');
+        assert.equal(rowsOf('settling_in_report_sections').find((row) => row.subject_key === 'mathematics').saved_by, MAIN.id);
 
-        assert.equal(subjectTeacherGet.status, 403);
-        assert.equal(mainTeacherSave.status, 403);
-        assert.equal(mainTeacherBehaviorSave.status, 403);
-        assert.equal(rowsOf('settling_in_report_sections').length, 0);
-        assert.equal(rowsOf('settling_in_report_main_sections').length, 0);
+        const englishEdit = await saveSection(sectionPayload({ ratings: { 'y3-english-01': 'WT' } }), tokenFor(MAIN));
+        const amharic = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'amharic');
+        const amharicEdit = await saveSection({
+            classId: CLASS_Y3,
+            studentId: STU_Y3,
+            termId: TERM_1,
+            subjectKey: 'amharic',
+            ratings: { [amharic.criteria[0].id]: 'WW' },
+        }, tokenFor(MAIN));
+        assert.equal(englishEdit.status, 403);
+        assert.equal(amharicEdit.status, 403);
+        assert.equal(savedEnglish.ratings['y3-english-01'], 'WW');
+
+        const mainTeacherSection = await saveMainTeacherSection({
+            classId: CLASS_Y3,
+            studentId: STU_Y3,
+            termId: TERM_1,
+            ratings: { conduct: 'pleasing', organisation: 'satisfactory', attendance: null },
+        }, tokenFor(MAIN));
+        assert.equal(mainTeacherSection.status, 200);
+        assert.equal(rowsOf('settling_in_report_main_sections')[0].saved_by, MAIN.id);
+        assert.equal(rowsOf('settling_in_report_sections').length, 2);
     });
 
     test('missing authentication and malformed request values are rejected', async () => {

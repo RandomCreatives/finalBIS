@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const {
     BadRequestError,
+    ForbiddenError,
     NotFoundError,
     ServiceUnavailableError,
     asyncHandler,
@@ -73,6 +74,29 @@ const requireClassAndTerm = async (req, classId, termId) => {
     };
 };
 
+/** Main teachers may only access classes where they hold the main seat. */
+const assertMainTeacherClassAccess = async (req, classRecord, termRecord) => {
+    if (req.user.role === 'admin') return;
+    if (req.user.role !== 'main_teacher') {
+        throw new ForbiddenError('Only admins and assigned main teachers may access Settling In Reports');
+    }
+
+    const { data, error } = await supabase
+        .from('class_staff')
+        .select('id')
+        .eq('school_id', req.user.school_id)
+        .eq('academic_year_id', termRecord.academic_year_id)
+        .eq('class_id', classRecord.id)
+        .eq('user_id', req.user.id)
+        .eq('position', 'main')
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+        throw new ForbiddenError('This class is not assigned to you as its main teacher');
+    }
+};
+
 const shapeSection = (row, template) => {
     const subject = template.subjects.find((item) => item.key === row.subject_key);
     const criteria = Array.isArray(row.criteria_snapshot) && row.criteria_snapshot.length
@@ -139,7 +163,8 @@ const shapeMainTeacherSection = (row) => {
 
 /**
  * GET /api/settling-in/classes/:classId?termId=...
- * Admin-only class workspace, with grade-specific criteria and saved sections.
+ * Admin and assigned main-teacher workspace, with grade-specific criteria
+ * and saved subject and main-teacher sections.
  */
 const getClassReport = asyncHandler(async (req, res) => {
     const { classRecord, termRecord, template } = await requireClassAndTerm(
@@ -147,6 +172,7 @@ const getClassReport = asyncHandler(async (req, res) => {
         req.params.classId,
         req.query.termId,
     );
+    await assertMainTeacherClassAccess(req, classRecord, termRecord);
 
     const [
         { data: students, error: studentError },
@@ -255,9 +281,14 @@ const saveSection = asyncHandler(async (req, res) => {
         classId,
         termId,
     );
+    await assertMainTeacherClassAccess(req, classRecord, termRecord);
+
     const subject = getSubjectForYear(template.yearLevel, subjectKey);
     if (!subject) {
         throw new BadRequestError('That subject is not part of the selected Year settling-in report');
+    }
+    if (req.user.role === 'main_teacher' && subject.assessorRole !== 'main_teacher') {
+        throw new ForbiddenError('Main teachers cannot edit English or Amharic subject-teacher sections');
     }
 
     const student = await requireOwnedRecord(
@@ -305,12 +336,12 @@ const saveSection = asyncHandler(async (req, res) => {
 /**
  * PUT /api/settling-in/main-teacher
  * Save the three form-tutor ratings separately from subject attainment.
- * Admins manage this in the initial phase; main-teacher editing can be enabled
- * once the system is opened to all staff.
+ * Admins may correct any section; assigned main teachers may save their own.
  */
 const saveMainTeacherSection = asyncHandler(async (req, res) => {
     const { classId, studentId, termId, ratings } = req.body;
     const { classRecord, termRecord, template } = await requireClassAndTerm(req, classId, termId);
+    await assertMainTeacherClassAccess(req, classRecord, termRecord);
 
     const student = await requireOwnedRecord(
         'students',

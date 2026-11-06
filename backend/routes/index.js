@@ -697,14 +697,15 @@ router.get('/marksheets/student/:studentId', authenticate, authorize(...TEACHING
 router.delete('/marksheets/:id', authenticate, authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER), uuid('id'), validate, marksheets.deleteMarksheet);
 
 // =============================================================================
-// SETTLING IN REPORTS — admin-only first phase. The year-specific template
-// is resolved from the selected class on the server; clients cannot submit a
-// Year 3 criterion against a Year 4 class (or vice versa).
+// SETTLING IN REPORTS — admins and assigned main teachers may open a class.
+// Main teachers can save their own section and Maths, Science, or Global
+// Citizenship; subject-teacher sections remain read-only for them. Criteria
+// are resolved from the class on the server, so Year 3 and Year 4 stay distinct.
 // =============================================================================
 router.get(
     '/settling-in/classes/:classId',
     authenticate,
-    authorize(ROLES.ADMIN),
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
     uuid('classId'),
     query('termId').isUUID().withMessage('termId is required'),
     validate,
@@ -714,7 +715,7 @@ router.get(
 router.put(
     '/settling-in/sections',
     authenticate,
-    authorize(ROLES.ADMIN),
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
     body('classId').isUUID(),
     body('studentId').isUUID(),
     body('termId').isUUID(),
@@ -728,7 +729,7 @@ router.put(
 router.put(
     '/settling-in/main-teacher',
     authenticate,
-    authorize(ROLES.ADMIN),
+    authorize(ROLES.ADMIN, ROLES.MAIN_TEACHER),
     body('classId').isUUID(),
     body('studentId').isUUID(),
     body('termId').isUUID(),

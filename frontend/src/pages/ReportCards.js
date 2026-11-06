@@ -539,11 +539,14 @@ function TermReportCards() {
 export default function ReportCards() {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
-    const [reportType, setReportType] = useState('report-card');
+    const isMainTeacher = user?.role === 'main_teacher';
+    const canAccessSettlingIn = isAdmin || isMainTeacher;
+    const [reportType, setReportType] = useState(isMainTeacher ? 'settling-in' : 'report-card');
 
     useEffect(() => {
-        if (!isAdmin) setReportType('report-card');
-    }, [isAdmin]);
+        if (isMainTeacher) setReportType('settling-in');
+        else if (!isAdmin) setReportType('report-card');
+    }, [isAdmin, isMainTeacher]);
 
     return (
         <>
@@ -557,14 +560,16 @@ export default function ReportCards() {
                     <ToggleButton value="report-card" sx={{ textTransform: 'none', fontWeight: 700 }}>
                         Report Card
                     </ToggleButton>
-                    {isAdmin && (
+                    {canAccessSettlingIn && (
                         <ToggleButton value="settling-in" sx={{ textTransform: 'none', fontWeight: 700 }}>
                             Settling In Report
                         </ToggleButton>
                     )}
                 </ToggleButtonGroup>
             </Card>
-            {isAdmin && reportType === 'settling-in' ? <SettlingInReports /> : <TermReportCards />}
+            {canAccessSettlingIn && reportType === 'settling-in'
+                ? <SettlingInReports />
+                : <TermReportCards />}
         </>
     );
 }

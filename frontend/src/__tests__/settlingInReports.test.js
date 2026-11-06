@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '../theme';
 import SettlingInReports from '../pages/SettlingInReports';
 import { academicYearApi, classApi, settlingInApi, termApi } from '../api/endpoints';
+import { useAuth } from '../auth/AuthContext';
+
+jest.mock('../auth/AuthContext', () => ({ useAuth: jest.fn() }));
 
 jest.mock('../api/endpoints', () => ({
     academicYearApi: { list: jest.fn() },
@@ -41,14 +44,14 @@ const YEAR_3_TEMPLATE = {
         },
     },
     subjects: [
-        { key: 'english', label: 'English', criteria: [
+        { key: 'english', label: 'English', assessorRole: 'subject_teacher', criteria: [
             { id: 'y3-english-01', text: 'To make predictions using clues from the text.' },
             { id: 'y3-english-02', text: 'To identify adjectives.' },
         ] },
-        { key: 'mathematics', label: 'Maths', criteria: [{ id: 'y3-mathematics-01', text: 'Three-digit place value.' }] },
-        { key: 'science', label: 'Science', criteria: [{ id: 'y3-science-01', text: 'Animal habitats.' }] },
-        { key: 'global_citizenship', label: 'Global Citizenship', criteria: [{ id: 'y3-global_citizenship-01', text: 'Justice and fairness.' }] },
-        { key: 'amharic', label: 'Amharic', criteria: [{ id: 'y3-amharic-01', text: 'Letter families.' }] },
+        { key: 'mathematics', label: 'Maths', assessorRole: 'main_teacher', criteria: [{ id: 'y3-mathematics-01', text: 'Three-digit place value.' }] },
+        { key: 'science', label: 'Science', assessorRole: 'main_teacher', criteria: [{ id: 'y3-science-01', text: 'Animal habitats.' }] },
+        { key: 'global_citizenship', label: 'Global Citizenship', assessorRole: 'main_teacher', criteria: [{ id: 'y3-global_citizenship-01', text: 'Justice and fairness.' }] },
+        { key: 'amharic', label: 'Amharic', assessorRole: 'subject_teacher', criteria: [{ id: 'y3-amharic-01', text: 'Letter families.' }] },
     ],
 };
 const YEAR_4_TEMPLATE = {
@@ -96,9 +99,10 @@ const renderPage = () => render(
 
 beforeEach(() => {
     jest.clearAllMocks();
+    useAuth.mockReturnValue({ user: { id: 'admin-user', role: 'admin' } });
     classApi.list.mockResolvedValue([
-        { id: CLASS_Y3, name: 'Year 3 - Blue', yearLevel: 3, mainTeacher: { name: 'Kalkidan Z.' } },
-        { id: CLASS_Y4, name: 'Year 4 - Green', yearLevel: 4, mainTeacher: { name: 'Samrawit E.' } },
+        { id: CLASS_Y3, name: 'Year 3 - Blue', yearLevel: 3, mainTeacher: { id: 'main-teacher-3', name: 'Kalkidan Z.' } },
+        { id: CLASS_Y4, name: 'Year 4 - Green', yearLevel: 4, mainTeacher: { id: 'main-teacher-4', name: 'Samrawit E.' } },
         { id: 'class-year-5', name: 'Year 5 - Blue', yearLevel: 5 },
     ]);
     termApi.list.mockResolvedValue([
@@ -132,7 +136,32 @@ beforeEach(() => {
     });
 });
 
-describe('Settling In Report admin workspace', () => {
+describe('Settling In Report workspace', () => {
+    test('main-teacher pilot scopes the class and keeps subject-teacher sections read-only', async () => {
+        useAuth.mockReturnValue({ user: { id: 'main-teacher-3', role: 'main_teacher' } });
+        renderPage();
+
+        expect(await screen.findByTestId('settling-in-grade-badge')).toHaveTextContent('Year 3 criteria');
+        expect(classApi.list).toHaveBeenCalledWith({ mine: true });
+        expect(screen.getByTestId('settling-in-class-select')).toHaveTextContent('Year 3 - Blue');
+        expect(screen.getByTestId('settling-in-class-select')).not.toHaveTextContent('Year 4 - Green');
+
+        const editor = screen.getByTestId('settling-in-assessment-editor');
+        const subjectPicker = within(editor).getByTestId('settling-in-subject-select');
+        expect(within(subjectPicker).getByRole('button', { name: 'Maths' })).toBeInTheDocument();
+        expect(within(subjectPicker).getByRole('button', { name: 'Science' })).toBeInTheDocument();
+        expect(within(subjectPicker).getByRole('button', { name: 'Global Citizenship' })).toBeInTheDocument();
+        expect(within(subjectPicker).queryByRole('button', { name: 'English' })).not.toBeInTheDocument();
+        expect(within(subjectPicker).queryByRole('button', { name: 'Amharic' })).not.toBeInTheDocument();
+        expect(screen.getByText('Three-digit place value.')).toBeInTheDocument();
+        expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-mathematics`)).toBeEnabled();
+        expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-science`)).toBeEnabled();
+        expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-global_citizenship`)).toBeEnabled();
+        expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-english`)).toBeDisabled();
+        expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-amharic`)).toBeDisabled();
+        expect(screen.getByTestId('settling-in-main-teacher-editor')).toBeInTheDocument();
+    });
+
     test('loads the Year 3 template from the selected class and excludes unsupported years', async () => {
         renderPage();
 
