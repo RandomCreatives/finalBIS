@@ -38,7 +38,7 @@ describe('schema applies and enforces its rules', () => {
         for (const expected of [
             'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
             'subjects', 'class_subjects', 'timetable_slots', 'students',
-            'student_transfers', 'attendance', 'marksheets', 'settling_in_report_sections', 'library_loans',
+            'student_transfers', 'attendance', 'marksheets', 'settling_in_report_sections', 'settling_in_report_main_sections', 'library_loans',
             'clinic_visits', 'schemes_of_work', 'scheme_weeks', 'lesson_plans',
             'calendar_events', 'threads', 'thread_participants', 'messages',
             'tasks', 'notices', 'notice_receipts',
@@ -94,6 +94,39 @@ describe('schema applies and enforces its rules', () => {
             [ids.schoolId, ids.classAId, student.id, ids.termId]
         );
         assert.match(invalidGrade || '', /check constraint/i);
+    });
+
+    test('settling-in main-teacher sections store saved per-student behavior ratings', async () => {
+        const { rows: [student] } = await t.query(
+            `INSERT INTO students (school_id, class_id, admission_no, name)
+             VALUES ($1, $2, 'Y3-MAIN-001', 'Main Section Student') RETURNING id`,
+            [ids.schoolId, ids.classAId]
+        );
+        const { rows: [section] } = await t.query(
+            `INSERT INTO settling_in_report_main_sections (
+                 school_id, class_id, student_id, term_id, grade_level,
+                 template_version, ratings, saved_by
+             ) VALUES (
+                 $1, $2, $3, $4, 3, 'settling-in-main-teacher-2026-27-v1',
+                 '{"conduct":"pleasing","organisation":"satisfactory","attendance":null}'::jsonb,
+                 $5
+             ) RETURNING id, grade_level, ratings`,
+            [ids.schoolId, ids.classAId, student.id, ids.termId, ids.adminId]
+        );
+        assert.ok(section.id);
+        assert.equal(section.grade_level, 3);
+        assert.equal(section.ratings.conduct, 'pleasing');
+        assert.equal(section.ratings.organisation, 'satisfactory');
+        assert.equal(section.ratings.attendance, null);
+
+        const invalidRatings = await t.expectFailure(
+            `INSERT INTO settling_in_report_main_sections (
+                 school_id, class_id, student_id, term_id, grade_level,
+                 template_version, ratings
+             ) VALUES ($1, $2, $3, $4, 3, 'invalid', '[]'::jsonb)`,
+            [ids.schoolId, ids.classAId, student.id, ids.termId]
+        );
+        assert.match(invalidRatings || '', /check constraint/i);
     });
 
     test('updated_at is maintained by trigger', async () => {

@@ -594,6 +594,32 @@ CREATE INDEX IF NOT EXISTS idx_settling_in_sections_student
 
 
 -- ---------------------------------------------------------------------------
+-- settling_in_report_main_sections — saved form-tutor conduct, organisation,
+-- and attendance ratings. Admin-only in the initial phase; main teachers can
+-- own the section when the report system opens to all staff.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS settling_in_report_main_sections (
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id         UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    class_id          UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    student_id        UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    term_id           UUID NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+    grade_level       SMALLINT NOT NULL CHECK (grade_level IN (3, 4)),
+    template_version TEXT NOT NULL,
+    ratings           JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(ratings) = 'object'),
+    saved_by          UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (school_id, class_id, student_id, term_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_settling_in_main_sections_class_term
+    ON settling_in_report_main_sections(school_id, class_id, term_id);
+CREATE INDEX IF NOT EXISTS idx_settling_in_main_sections_student
+    ON settling_in_report_main_sections(student_id, term_id);
+
+
+-- ---------------------------------------------------------------------------
 -- library_loans
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS library_loans (
@@ -982,7 +1008,7 @@ BEGIN
     FOREACH t IN ARRAY ARRAY[
         'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'attendance',
-        'marksheets', 'settling_in_report_sections', 'library_loans', 'clinic_visits', 'schemes_of_work',
+        'marksheets', 'settling_in_report_sections', 'settling_in_report_main_sections', 'library_loans', 'clinic_visits', 'schemes_of_work',
         'scheme_weeks', 'lesson_plans',         'calendar_events', 'threads', 'tasks', 'notices',
         'store_requests', 'permission_requests', 'conduct_reports', 'push_subscriptions'
     ] LOOP
@@ -1015,7 +1041,7 @@ BEGIN
     FOREACH t IN ARRAY ARRAY[
         'schools', 'academic_years', 'terms', 'users', 'classes', 'class_staff',
         'subjects', 'class_subjects', 'timetable_slots', 'students', 'student_transfers',
-        'attendance', 'marksheets', 'settling_in_report_sections', 'library_loans', 'clinic_visits',
+        'attendance', 'marksheets', 'settling_in_report_sections', 'settling_in_report_main_sections', 'library_loans', 'clinic_visits',
         'schemes_of_work', 'scheme_weeks', 'lesson_plans', 'calendar_events',
         'threads', 'thread_participants', 'messages', 'tasks', 'notices', 'notice_receipts',
         'store_requests', 'permission_requests', 'conduct_reports', 'push_subscriptions',

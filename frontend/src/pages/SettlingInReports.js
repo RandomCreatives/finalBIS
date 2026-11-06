@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-    Alert, Box, Button, Card, Chip, Divider, MenuItem, Paper, Stack, Table,
+    Alert, Box, Button, Card, Chip, MenuItem, Paper, Stack, Table,
     TableBody, TableCell, TableHead, TableRow, TextField, ToggleButton,
     ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
@@ -16,9 +16,30 @@ import PageHeader from '../components/PageHeader';
 import DataState from '../components/DataState';
 
 const INPUT_RATING_ORDER = ['WT', 'WW', 'WA'];
-const PRINT_SUBJECT_COLUMNS = [
-    { left: ['english'], right: ['mathematics'] },
-    { left: ['science', 'amharic'], right: ['global_citizenship'] },
+const PRINT_SUBJECT_PANELS = [
+    { pageNumber: 2, subjectKeys: ['english', 'mathematics', 'science'] },
+    { pageNumber: 3, subjectKeys: ['global_citizenship', 'amharic'] },
+];
+const PRINT_SIDES = ['outside', 'inside'];
+const MAIN_TEACHER_RATING_ORDER = ['pleasing', 'satisfactory', 'cause_for_concern'];
+const MAIN_TEACHER_RATING_LABELS = {
+    pleasing: 'Pleasing',
+    satisfactory: 'Satisfactory',
+    cause_for_concern: 'Cause for Concern',
+};
+const DEFAULT_MAIN_TEACHER_CATEGORIES = [
+    { key: 'conduct', label: 'Conduct' },
+    { key: 'organisation', label: 'Organisation' },
+    { key: 'attendance', label: 'Attendance' },
+];
+const SCHOOL_ADDRESS = [
+    'British International School P.L.C.',
+    'Sherif Building,',
+    'Bole Ring Road,',
+    'P. O. Box 5583',
+    'Addis Ababa, Ethiopia',
+    'Telephone 011-663-0707',
+    'Fax: 011-661-4098',
 ];
 const RATING_LABELS = {
     WT: 'Working Towards',
@@ -28,51 +49,84 @@ const RATING_LABELS = {
 
 const isSupportedClass = (klass) => [3, 4].includes(Number(klass?.yearLevel));
 const nameForSubject = (template, key) => template?.subjects?.find((item) => item.key === key);
+const DEFAULT_MAIN_TEACHER_TEMPLATE = {
+    version: 'settling-in-main-teacher-2026-27-v1',
+    categories: DEFAULT_MAIN_TEACHER_CATEGORIES,
+    ratingOrder: MAIN_TEACHER_RATING_ORDER,
+    ratings: MAIN_TEACHER_RATING_LABELS,
+};
+const getMainTeacherTemplate = (template) => template?.mainTeacherSection
+    || (template?.categories ? template : DEFAULT_MAIN_TEACHER_TEMPLATE);
 const countRatings = (criteria = [], ratings = {}) => criteria.filter(
     ({ id }) => ['WT', 'WW', 'WA'].includes(ratings?.[id]),
 ).length;
 const cleanRatings = (criteria = [], ratings = {}) => Object.fromEntries(
     criteria.map(({ id }) => [id, ratings?.[id] || null]),
 );
+const cleanMainTeacherRatings = (template, ratings = {}) => Object.fromEntries(
+    getMainTeacherTemplate(template).categories.map(({ key }) => [key, ratings?.[key] || null]),
+);
+const formatPrintAcademicYear = (name) => {
+    const match = String(name || '').match(/^(\d{4})\s*[-/]\s*(\d{2}|\d{4})$/);
+    return match ? `${match[1]}-${match[2].slice(-2)}` : (name || '');
+};
+const countMainTeacherRatings = (template, ratings = {}) => getMainTeacherTemplate(template).categories.filter(
+    ({ key }) => MAIN_TEACHER_RATING_ORDER.includes(ratings?.[key]),
+).length;
 
-function ReportSubjectTable({ subject, ratings = {}, ratingOrder = INPUT_RATING_ORDER, compact = false }) {
+function PrintSubjectPanel({ student, report, subjectKeys, pageNumber }) {
+    const subjectMap = new Map(report.template.subjects.map((subject) => [subject.key, subject]));
+    const subjects = subjectKeys.map((key) => subjectMap.get(key)).filter(Boolean);
+    const ratingOrder = report.template.ratingOrder;
+
     return (
-        <Box sx={{ mb: compact ? 1.2 : 2 }}>
-            <Typography sx={{ fontWeight: 900, fontSize: compact ? 10 : 15, mb: 0.5, fontFamily: '"Times New Roman", Georgia, serif' }}>
-                {subject.label}
-            </Typography>
-            <Table size="small" sx={{
+        <Box className="settling-in-panel settling-in-subject-panel" data-testid={`settling-in-page-${student.id}-${pageNumber}`}>
+            <Table size="small" data-testid={`settling-in-subject-panel-${student.id}-${pageNumber}`} sx={{
+                width: '100%',
                 tableLayout: 'fixed',
+                borderCollapse: 'collapse',
                 '& th, & td': {
-                    border: '1px solid #64748b',
+                    border: '0.6pt solid #333',
                     fontFamily: '"Times New Roman", Georgia, serif',
-                    fontSize: compact ? 8.5 : 12,
-                    lineHeight: compact ? 1.14 : 1.35,
-                    px: compact ? 0.45 : 1,
-                    py: compact ? 0.3 : 0.7,
+                    fontSize: '7.4pt',
+                    lineHeight: 1.08,
+                    px: '0.55mm',
+                    py: '0.35mm',
                     verticalAlign: 'top',
                 },
-                '& th': { bgcolor: '#e2e8f0', fontWeight: 900 },
-                '& .rating-cell': { width: compact ? 26 : 46, textAlign: 'center', verticalAlign: 'middle' },
+                '& .criterion-cell': { width: '76%', overflowWrap: 'anywhere' },
+                '& .rating-cell': { width: '8%', textAlign: 'center', verticalAlign: 'middle', px: 0 },
             }}>
-                <TableHead>
-                    <TableRow>
-                        <TableCell>Learning objective</TableCell>
-                        {ratingOrder.map((rating) => (
-                            <TableCell key={rating} className="rating-cell">{rating}</TableCell>
-                        ))}
-                    </TableRow>
-                </TableHead>
                 <TableBody>
-                    {subject.criteria.map((criterion) => (
-                        <TableRow key={criterion.id}>
-                            <TableCell sx={{ overflowWrap: 'anywhere' }}>{criterion.text}</TableCell>
-                            {ratingOrder.map((rating) => (
-                                <TableCell key={rating} className="rating-cell">
-                                    {ratings?.[criterion.id] === rating ? '✓' : '□'}
+                    {subjects.map((subject, subjectIndex) => (
+                        <Fragment key={subject.key}>
+                            <TableRow>
+                                <TableCell className="criterion-cell" sx={{ fontWeight: 900, bgcolor: '#d6d6d6', fontSize: '8pt' }}>
+                                    {subject.label}
                                 </TableCell>
+                                {ratingOrder.map((rating) => (
+                                    <TableCell
+                                        key={rating}
+                                        className="rating-cell"
+                                        sx={subjectIndex === 0
+                                            ? { fontWeight: 900, bgcolor: '#d6d6d6', verticalAlign: 'middle' }
+                                            : { bgcolor: '#4a4a4a', color: '#fff' }}
+                                    >
+                                        {subjectIndex === 0 ? rating : ''}
+                                    </TableCell>
+                                ))}
+                            </TableRow>
+                            {subject.criteria.map((criterion) => (
+                                <TableRow key={criterion.id}>
+                                    <TableCell className="criterion-cell">{criterion.text}</TableCell>
+                                    {ratingOrder.map((rating) => (
+                                        <TableCell key={rating} className="rating-cell">
+                                            {student.sections?.[subject.key]?.ratings?.[criterion.id] === rating ? '✓' : ''}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
                             ))}
-                        </TableRow>
+                        </Fragment>
                     ))}
                 </TableBody>
             </Table>
@@ -80,89 +134,167 @@ function ReportSubjectTable({ subject, ratings = {}, ratingOrder = INPUT_RATING_
     );
 }
 
-function ReportIdentity({ student, report, classRecord, yearName, continuation = false }) {
-    const formTutor = classRecord?.mainTeacher?.name || '—';
+function PageFourPanel({ student, report }) {
+    const mainTeacherTemplate = getMainTeacherTemplate(report.template);
+    const ratings = student.mainTeacherSection?.ratings || {};
+    const attainmentKey = ['WT', 'WW', 'WA'];
+
     return (
-        <>
-            <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 0.6 }}>
-                <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
-                    sx={{ width: 78, height: 'auto', objectFit: 'contain' }} />
-                <Box sx={{ flexGrow: 1 }}>
-                    <Typography sx={{ fontWeight: 900, fontSize: 13, lineHeight: 1.1, fontFamily: '"Times New Roman", Georgia, serif' }}>
-                        British International School · Gerji Campus
+        <Box className="settling-in-panel settling-in-page-four" data-testid={`settling-in-page-${student.id}-4`}>
+            <Table size="small" data-testid={`settling-in-main-teacher-print-${student.id}`} sx={{
+                width: '100%',
+                tableLayout: 'fixed',
+                borderCollapse: 'collapse',
+                '& th, & td': {
+                    border: '0.6pt solid #333',
+                    fontFamily: '"Times New Roman", Georgia, serif',
+                    fontSize: '7.4pt',
+                    lineHeight: 1.08,
+                    px: '0.55mm',
+                    py: '1mm',
+                    textAlign: 'center',
+                    verticalAlign: 'middle',
+                },
+                '& th:first-of-type, & td:first-of-type': { width: '27%', textAlign: 'left', fontWeight: 700 },
+            }}>
+                <TableHead>
+                    <TableRow>
+                        <TableCell />
+                        {mainTeacherTemplate.ratingOrder.map((rating) => (
+                            <TableCell key={rating} sx={{ fontWeight: 700 }}>
+                                {mainTeacherTemplate.ratings[rating]}
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {mainTeacherTemplate.categories.map((category) => (
+                        <TableRow key={category.key}>
+                            <TableCell>{category.label}</TableCell>
+                            {mainTeacherTemplate.ratingOrder.map((rating) => (
+                                <TableCell key={rating}>
+                                    {ratings[category.key] === rating ? '✓' : ''}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+
+            <Table size="small" sx={{
+                width: '100%',
+                tableLayout: 'fixed',
+                borderCollapse: 'collapse',
+                mt: '24mm',
+                '& th, & td': {
+                    border: '0.6pt solid #333',
+                    fontFamily: '"Times New Roman", Georgia, serif',
+                    fontSize: '7.2pt',
+                    lineHeight: 1.08,
+                    px: '1mm',
+                    py: '0.75mm',
+                    verticalAlign: 'middle',
+                },
+                '& th:first-of-type, & td:first-of-type': { width: '27%', fontWeight: 900 },
+            }}>
+                <TableBody>
+                    <TableRow>
+                        <TableCell sx={{ bgcolor: '#666', color: '#fff' }}>Letter Grade</TableCell>
+                        <TableCell colSpan={3} sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '9pt' }}>
+                            Curriculum Attainment
+                        </TableCell>
+                    </TableRow>
+                    {attainmentKey.map((rating) => (
+                        <TableRow key={rating}>
+                            <TableCell sx={{ bgcolor: '#666', color: '#fff', fontWeight: 900 }}>{rating}</TableCell>
+                            <TableCell colSpan={3} sx={{ bgcolor: '#d1d1d1', fontWeight: 700 }}>
+                                {RATING_LABELS[rating]}:- the expected level for the grade.
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+
+            <Box sx={{ mt: 'auto', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
+                {SCHOOL_ADDRESS.map((line, index) => (
+                    <Typography key={line} sx={{ fontFamily: 'inherit', fontStyle: 'italic', fontSize: index === 0 ? '10pt' : '8.6pt', fontWeight: index === 0 ? 700 : 500, lineHeight: 1.28 }}>
+                        {line}
                     </Typography>
-                    <Typography sx={{ fontSize: 9, color: '#334155', fontFamily: '"Times New Roman", Georgia, serif' }}>
-                        SETTLING IN REPORT {continuation ? '· CONTINUED' : ''}
-                    </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                    <Typography sx={{ fontWeight: 900, fontSize: 11, fontFamily: '"Times New Roman", Georgia, serif' }}>
-                        {report.term?.name || 'Term'} · {yearName || 'Academic year'}
-                    </Typography>
-                    <Typography sx={{ fontSize: 9, fontFamily: '"Times New Roman", Georgia, serif' }}>
-                        {report.template.label} · Page {continuation ? '2' : '1'} of 2
-                    </Typography>
-                </Box>
-            </Stack>
-            <Divider sx={{ borderColor: '#1e3a8a', mb: 0.8 }} />
-            <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 1, fontFamily: '"Times New Roman", Georgia, serif' }}>
-                <Typography sx={{ fontSize: 10, fontFamily: 'inherit' }}><b>Name:</b> {student.name}</Typography>
-                <Typography sx={{ fontSize: 10, fontFamily: 'inherit' }}><b>Class:</b> {classRecord.name}</Typography>
-                <Typography sx={{ fontSize: 10, fontFamily: 'inherit' }}><b>Form tutor:</b> {formTutor}</Typography>
-                {student.admissionNo && <Typography sx={{ fontSize: 10, fontFamily: 'inherit' }}><b>Admission no.:</b> {student.admissionNo}</Typography>}
-            </Stack>
-        </>
+                ))}
+            </Box>
+        </Box>
     );
 }
 
-function PrintReportPage({ student, report, classRecord, yearName, pageIndex, isLast }) {
-    const columns = PRINT_SUBJECT_COLUMNS[pageIndex];
-    const subjectMap = new Map(report.template.subjects.map((subject) => [subject.key, subject]));
-    const sectionRatings = (key) => student.sections?.[key]?.ratings || {};
+function PageOnePanel({ student, report, classRecord, yearName }) {
+    const formTutor = classRecord?.mainTeacher?.name || '—';
+    return (
+        <Box className="settling-in-panel settling-in-page-one" data-testid={`settling-in-page-${student.id}-1`}>
+            <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
+                sx={{ width: '100%', height: '36%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
+            <Box sx={{ textAlign: 'center', mt: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '17pt', lineHeight: 1.4 }}>
+                    {report.term?.name || 'Term'}
+                </Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '17pt', lineHeight: 1.4 }}>
+                    {formatPrintAcademicYear(yearName)}
+                </Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '16pt', mt: '13%', lineHeight: 1.25 }}>
+                    SETTLING IN REPORT
+                </Typography>
+            </Box>
+            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '18%', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '10pt' }}><b>Name:</b> {student.name}</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '10pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '10pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
+            </Stack>
+        </Box>
+    );
+}
 
+function PrintReportSide({ student, report, classRecord, yearName, side, isLast }) {
     return (
         <Paper
             square
             elevation={0}
-            className={`settling-in-page${isLast ? ' settling-in-last-page' : ''}`}
-            data-testid={`settling-in-page-${student.id}-${pageIndex + 1}`}
+            className={`settling-in-sheet${isLast ? ' settling-in-last-sheet' : ''}`}
+            data-testid={`settling-in-side-${student.id}-${side}`}
             sx={{
-                boxSizing: 'border-box', width: '100%', maxWidth: 1120, minHeight: 680,
-                mx: 'auto', mb: 2, p: { xs: 1.5, md: 2.5 }, border: '1px solid #1e3a8a',
-                bgcolor: '#fff', color: '#0f172a', pageBreakInside: 'avoid',
+                boxSizing: 'border-box',
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                width: '100%',
+                maxWidth: 1120,
+                aspectRatio: '297 / 210',
+                minHeight: 680,
+                mx: 'auto',
+                mb: 2,
+                bgcolor: '#fff',
+                color: '#0f172a',
+                overflow: 'hidden',
+                pageBreakInside: 'avoid',
             }}
         >
-            <ReportIdentity
-                student={student}
-                report={report}
-                classRecord={classRecord}
-                yearName={yearName}
-                continuation={pageIndex === 1}
-            />
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.2, alignItems: 'start' }}>
-                {[columns.left, columns.right].map((subjectKeys, columnIndex) => (
-                    <Box key={columnIndex}>
-                        {subjectKeys.map((key) => {
-                            const subject = subjectMap.get(key);
-                            return subject ? (
-                                <ReportSubjectTable
-                                    key={key}
-                                    subject={subject}
-                                    ratings={sectionRatings(key)}
-                                    ratingOrder={report.template.ratingOrder}
-                                    compact
-                                />
-                            ) : null;
-                        })}
-                    </Box>
-                ))}
-            </Box>
-            {pageIndex === 1 && (
-                <Box sx={{ mt: 0.5, pt: 0.4, borderTop: '1px solid #94a3b8', fontFamily: '"Times New Roman", Georgia, serif' }}>
-                    <Typography sx={{ fontSize: 8.5, fontFamily: 'inherit' }}>
-                        <b>Curriculum attainment:</b> WT — Working Towards · WW — Working Within · WA — Working Above
-                    </Typography>
-                </Box>
+            {side === 'outside' ? (
+                <>
+                    <PageFourPanel student={student} report={report} />
+                    <PageOnePanel student={student} report={report} classRecord={classRecord} yearName={yearName} />
+                </>
+            ) : (
+                <>
+                    <PrintSubjectPanel
+                        student={student}
+                        report={report}
+                        subjectKeys={PRINT_SUBJECT_PANELS[0].subjectKeys}
+                        pageNumber={PRINT_SUBJECT_PANELS[0].pageNumber}
+                    />
+                    <PrintSubjectPanel
+                        student={student}
+                        report={report}
+                        subjectKeys={PRINT_SUBJECT_PANELS[1].subjectKeys}
+                        pageNumber={PRINT_SUBJECT_PANELS[1].pageNumber}
+                    />
+                </>
             )}
         </Paper>
     );
@@ -175,10 +307,14 @@ export default function SettlingInReports() {
     const [studentId, setStudentId] = useState('');
     const [subjectKey, setSubjectKey] = useState('english');
     const [draftRatings, setDraftRatings] = useState({});
+    const [draftMainTeacherRatings, setDraftMainTeacherRatings] = useState({});
     const [mode, setMode] = useState('assess');
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
     const [saveSuccess, setSaveSuccess] = useState('');
+    const [savingMainTeacher, setSavingMainTeacher] = useState(false);
+    const [mainTeacherSaveError, setMainTeacherSaveError] = useState('');
+    const [mainTeacherSaveSuccess, setMainTeacherSaveSuccess] = useState('');
 
     const classes = useApi(() => classApi.list(), []);
     const terms = useApi(() => termApi.list(), []);
@@ -222,6 +358,10 @@ export default function SettlingInReports() {
     const selectedSection = selectedStudent?.sections?.[selectedSubject?.key] || null;
     const savedRatings = selectedSection?.ratings;
     const savedSectionUpdatedAt = selectedSection?.updatedAt;
+    const selectedMainTeacherSection = selectedStudent?.mainTeacherSection || null;
+    const mainTeacherTemplate = getMainTeacherTemplate(report?.template);
+    const savedMainTeacherRatings = selectedMainTeacherSection?.ratings;
+    const savedMainTeacherUpdatedAt = selectedMainTeacherSection?.updatedAt;
     const yearName = (years.data || []).find((item) => String(item.id) === String(resolvedAcademicYearId))?.name
         || (years.data || []).find((item) => String(item.id) === String(report?.term?.academicYearId))?.name
         || '';
@@ -256,6 +396,12 @@ export default function SettlingInReports() {
         setSaveSuccess('');
     }, [classId, resolvedTermId, studentId, selectedSubject, report?.template?.version, savedRatings, savedSectionUpdatedAt]);
 
+    useEffect(() => {
+        setDraftMainTeacherRatings(cleanMainTeacherRatings(mainTeacherTemplate, savedMainTeacherRatings));
+        setMainTeacherSaveError('');
+        setMainTeacherSaveSuccess('');
+    }, [classId, resolvedTermId, studentId, mainTeacherTemplate, savedMainTeacherRatings, savedMainTeacherUpdatedAt]);
+
     const formTutorClass = selectedClass || (report ? { name: report.class.name } : null);
     const printStudents = students;
 
@@ -281,6 +427,33 @@ export default function SettlingInReports() {
         }
     };
 
+    const saveCurrentMainTeacherSection = async () => {
+        if (!selectedStudent || !classId || !resolvedTermId) return;
+        setSavingMainTeacher(true);
+        setMainTeacherSaveError('');
+        setMainTeacherSaveSuccess('');
+        try {
+            await settlingInApi.saveMainTeacherSection({
+                classId,
+                studentId: selectedStudent.id,
+                termId: resolvedTermId,
+                ratings: cleanMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings),
+            });
+            await reportState.silentReload();
+            setMainTeacherSaveSuccess(`Main teacher section saved for ${selectedStudent.name}.`);
+        } catch (error) {
+            setMainTeacherSaveError(error?.response?.data?.message || error.message || 'Could not save the main teacher section.');
+        } finally {
+            setSavingMainTeacher(false);
+        }
+    };
+
+    const resetCurrentMainTeacherDraft = () => {
+        setDraftMainTeacherRatings(cleanMainTeacherRatings(mainTeacherTemplate, selectedMainTeacherSection?.ratings));
+        setMainTeacherSaveError('');
+        setMainTeacherSaveSuccess('Draft reset to the last saved main teacher ratings.');
+    };
+
     const resetCurrentDraft = () => {
         if (!selectedSubject) return;
         setDraftRatings(cleanRatings(selectedSubject.criteria, selectedSection?.ratings));
@@ -298,27 +471,37 @@ export default function SettlingInReports() {
         <>
             <style>{`
                 #settling-in-print-area { display: none; }
+                .settling-in-sheet .settling-in-panel {
+                    box-sizing: border-box; height: 100%; min-width: 0; overflow: hidden;
+                    border: 1px solid #1e293b; padding: 12px; background: #fff;
+                }
+                .settling-in-page-four, .settling-in-page-one { display: flex; flex-direction: column; }
+                .settling-in-subject-panel { display: block; }
                 @page { size: A4 landscape; margin: 8mm; }
                 @media print {
+                    html, body { margin: 0 !important; }
                     body * { visibility: hidden; }
                     #settling-in-print-area, #settling-in-print-area * { visibility: visible; }
                     #settling-in-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
-                    #settling-in-print-area .settling-in-page {
-                        width: 100% !important; max-width: none !important; height: 190mm !important;
-                        min-height: 0 !important; margin: 0 !important; padding: 0 !important;
-                        border: 0 !important; overflow: hidden !important; page-break-inside: avoid;
+                    #settling-in-print-area .settling-in-sheet {
+                        display: grid !important; grid-template-columns: 1fr 1fr !important;
+                        width: 100% !important; max-width: none !important; height: 194mm !important;
+                        min-height: 0 !important; aspect-ratio: auto !important; margin: 0 !important;
+                        padding: 0 !important; border: 0 !important; overflow: hidden !important;
+                        page-break-inside: avoid; break-inside: avoid;
                     }
-                    #settling-in-print-area .settling-in-page:not(.settling-in-last-page) {
+                    #settling-in-print-area .settling-in-sheet:not(.settling-in-last-sheet) {
                         page-break-after: always; break-after: page;
                     }
-                    #settling-in-print-area .settling-in-last-page { page-break-after: auto; break-after: auto; }
-                    #settling-in-print-area .settling-in-page > div { max-width: none !important; }
+                    #settling-in-print-area .settling-in-last-sheet { page-break-after: auto; break-after: auto; }
+                    #settling-in-print-area .settling-in-panel { height: 194mm !important; padding: 3mm !important; }
+                    #settling-in-print-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}</style>
 
             <PageHeader
                 title="Settling In Report"
-                subtitle="Admin-only assessment workspace · one saved section per student and subject · two landscape pages per student."
+                subtitle="Admin-managed at launch · subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet."
                 action={mode === 'preview' && report && (
                     <Button
                         variant="contained"
@@ -395,7 +578,7 @@ export default function SettlingInReports() {
                     </ToggleButtonGroup>
                 </Stack>
                 <Alert severity="info" sx={{ mt: 1.5 }}>
-                    Year 3 and Year 4 use different teacher-provided criteria. The selected class determines which template is loaded; ratings start blank and are not copied from the sample PDFs.
+                    Year 3 and Year 4 use different teacher-provided criteria. Ratings start blank and are not copied from sample ticks. The main-teacher section is admin-managed for the initial phase; main teachers will take responsibility when the system opens to all staff.
                 </Alert>
             </Card>
 
@@ -525,12 +708,69 @@ export default function SettlingInReports() {
                                 ) : <Alert severity="info">Select a student and subject to assess.</Alert>}
                             </Card>
 
+                            <Card sx={{ p: { xs: 1.5, md: 2 } }} data-testid="settling-in-main-teacher-editor">
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} justifyContent="space-between" sx={{ mb: 1.5 }}>
+                                    <Box>
+                                        <Typography variant="h6">Conduct, Organisation &amp; Attendance · {selectedStudent?.name || 'Select a student'}</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Main-teacher ratings · choose Pleasing, Satisfactory, or Cause for Concern for each item.
+                                        </Typography>
+                                    </Box>
+                                    <Chip
+                                        label={`${countMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings)} of ${mainTeacherTemplate.categories.length} rated`}
+                                        color={countMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings) === mainTeacherTemplate.categories.length ? 'success' : 'default'}
+                                        variant="outlined"
+                                    />
+                                </Stack>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
+                                    {mainTeacherTemplate.categories.map((category) => (
+                                        <TextField
+                                            key={category.key}
+                                            select
+                                            label={category.label}
+                                            size="small"
+                                            value={draftMainTeacherRatings[category.key] || ''}
+                                            onChange={(event) => {
+                                                setDraftMainTeacherRatings((previous) => ({
+                                                    ...previous,
+                                                    [category.key]: event.target.value || null,
+                                                }));
+                                                setMainTeacherSaveSuccess('');
+                                            }}
+                                            data-testid={`settling-in-main-rating-${category.key}`}
+                                        >
+                                            <MenuItem value=""><em>Not rated</em></MenuItem>
+                                            {mainTeacherTemplate.ratingOrder.map((rating) => (
+                                                <MenuItem key={rating} value={rating}>{mainTeacherTemplate.ratings[rating]}</MenuItem>
+                                            ))}
+                                        </TextField>
+                                    ))}
+                                </Box>
+                                {mainTeacherSaveError && <Alert severity="error" sx={{ mt: 1.5 }}>{mainTeacherSaveError}</Alert>}
+                                {mainTeacherSaveSuccess && <Alert severity="success" sx={{ mt: 1.5 }}>{mainTeacherSaveSuccess}</Alert>}
+                                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                                    <Button onClick={resetCurrentMainTeacherDraft} disabled={savingMainTeacher}>
+                                        Reset to saved
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<SaveIcon />}
+                                        onClick={saveCurrentMainTeacherSection}
+                                        disabled={savingMainTeacher || !selectedStudent}
+                                        data-testid="settling-in-save-main-teacher"
+                                    >
+                                        {savingMainTeacher ? 'Saving…' : 'Save main teacher section'}
+                                    </Button>
+                                </Stack>
+                            </Card>
+
                             <Card sx={{ p: 1.5, overflowX: 'auto' }}>
                                 <Typography variant="h6" sx={{ mb: 1 }}>Class progress · {report.class.name}</Typography>
                                 <Table size="small" data-testid="settling-in-progress-table">
                                     <TableHead>
                                         <TableRow>
                                             <TableCell sx={{ fontWeight: 800 }}>Student</TableCell>
+                                            <TableCell align="center" sx={{ fontWeight: 800, minWidth: 125 }}>Main teacher</TableCell>
                                             {report.template.subjects.map((subject) => (
                                                 <TableCell key={subject.key} align="center" sx={{ fontWeight: 800, minWidth: 125 }}>
                                                     {subject.label}
@@ -549,6 +789,22 @@ export default function SettlingInReports() {
                                                     >
                                                         {student.rollNum ? `${student.rollNum}. ` : ''}{student.name}
                                                     </Button>
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    {(() => {
+                                                        const ratedCount = countMainTeacherRatings(mainTeacherTemplate, student.mainTeacherSection?.ratings);
+                                                        return (
+                                                            <Button
+                                                                size="small"
+                                                                color={ratedCount === mainTeacherTemplate.categories.length ? 'success' : 'primary'}
+                                                                variant={student.id === studentId ? 'contained' : 'outlined'}
+                                                                onClick={() => setStudentId(student.id)}
+                                                                data-testid={`settling-in-open-main-${student.id}`}
+                                                            >
+                                                                {ratedCount}/{mainTeacherTemplate.categories.length}
+                                                            </Button>
+                                                        );
+                                                    })()}
                                                 </TableCell>
                                                 {report.template.subjects.map((subject) => (
                                                     <TableCell key={subject.key} align="center">
@@ -586,20 +842,20 @@ export default function SettlingInReports() {
                                         ))}
                                     </TextField>
                                     <Typography variant="body2" color="text.secondary">
-                                        Preview uses the selected class's Year {report.template.yearLevel} criteria. Print class reports prints two landscape pages for every active student.
+                                        Each student uses one A4 landscape sheet, printed double-sided and folded into four A5 panels: Page 4/Page 1 outside, Pages 2/3 inside. For printing, choose duplex and flip on the short edge.
                                     </Typography>
                                     <Box sx={{ flexGrow: 1 }} />
                                 </Stack>
                             </Card>
-                            {selectedStudent && PRINT_SUBJECT_COLUMNS.map((_, pageIndex) => (
-                                <PrintReportPage
-                                    key={`${selectedStudent.id}-${pageIndex}`}
+                            {selectedStudent && PRINT_SIDES.map((side, sideIndex) => (
+                                <PrintReportSide
+                                    key={`${selectedStudent.id}-${side}`}
                                     student={selectedStudent}
                                     report={report}
                                     classRecord={formTutorClass || report.class}
                                     yearName={yearName}
-                                    pageIndex={pageIndex}
-                                    isLast={pageIndex === PRINT_SUBJECT_COLUMNS.length - 1}
+                                    side={side}
+                                    isLast={sideIndex === PRINT_SIDES.length - 1}
                                 />
                             ))}
                         </Stack>
@@ -609,17 +865,17 @@ export default function SettlingInReports() {
 
             {report && printStudents.length > 0 && (
                 <Box id="settling-in-print-area" className="settling-in-print-only" aria-hidden="true">
-                    {printStudents.flatMap((student, studentIndex) => PRINT_SUBJECT_COLUMNS.map((_, pageIndex) => {
+                    {printStudents.flatMap((student, studentIndex) => PRINT_SIDES.map((side, sideIndex) => {
                         const isLast = studentIndex === printStudents.length - 1
-                            && pageIndex === PRINT_SUBJECT_COLUMNS.length - 1;
+                            && sideIndex === PRINT_SIDES.length - 1;
                         return (
-                            <PrintReportPage
-                                key={`${student.id}-${pageIndex}-print`}
+                            <PrintReportSide
+                                key={`${student.id}-${side}-print`}
                                 student={student}
                                 report={report}
                                 classRecord={formTutorClass || report.class}
                                 yearName={yearName}
-                                pageIndex={pageIndex}
+                                side={side}
                                 isLast={isLast}
                             />
                         );

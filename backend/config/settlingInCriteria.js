@@ -90,6 +90,20 @@ const CRITERIA = {
     },
 };
 
+const MAIN_TEACHER_CATEGORIES = [
+    { key: 'conduct', label: 'Conduct' },
+    { key: 'organisation', label: 'Organisation' },
+    { key: 'attendance', label: 'Attendance' },
+];
+
+const MAIN_TEACHER_RATING_ORDER = ['pleasing', 'satisfactory', 'cause_for_concern'];
+const MAIN_TEACHER_RATINGS = {
+    pleasing: 'Pleasing',
+    satisfactory: 'Satisfactory',
+    cause_for_concern: 'Cause for Concern',
+};
+const MAIN_TEACHER_TEMPLATE_VERSION = 'settling-in-main-teacher-2026-27-v1';
+
 const TEMPLATE_VERSION = {
     3: 'settling-in-year-3-2026-27-v1',
     4: 'settling-in-year-4-2026-27-v1',
@@ -107,6 +121,12 @@ const getSettlingInTemplate = (yearLevel) => {
         version: TEMPLATE_VERSION[grade],
         ratingOrder: ratingOrder(grade),
         ratings: RATING_LABELS,
+        mainTeacherSection: {
+            version: MAIN_TEACHER_TEMPLATE_VERSION,
+            categories: MAIN_TEACHER_CATEGORIES,
+            ratingOrder: MAIN_TEACHER_RATING_ORDER,
+            ratings: MAIN_TEACHER_RATINGS,
+        },
         subjects: SUBJECT_ORDER.map(({ key, label, assessorRole }) => ({
             key,
             label,
@@ -130,4 +150,8 @@ module.exports = {
     getSettlingInTemplate,
     getSubjectForYear,
     getSupportedSubjectKeys,
+    MAIN_TEACHER_CATEGORIES,
+    MAIN_TEACHER_RATING_ORDER,
+    MAIN_TEACHER_RATINGS,
+    MAIN_TEACHER_TEMPLATE_VERSION,
 };

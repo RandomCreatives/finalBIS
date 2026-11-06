@@ -48,6 +48,7 @@ const tables = () => ({
         { id: STU_OTHER_SCHOOL, school_id: OTHER_SCHOOL, name: 'Foreign Student', admission_no: 'X999', roll_num: 1, class_id: CLASS_Y3, is_active: true },
     ],
     settling_in_report_sections: [],
+    settling_in_report_main_sections: [],
     marksheets: [{ id: 'marksheet-existing', school_id: SCHOOL, marks: 83 }],
 });
 
@@ -62,6 +63,11 @@ const getReport = (classId, token = tokenFor(ADMIN)) => request(app)
 
 const saveSection = (payload, token = tokenFor(ADMIN)) => request(app)
     .put('/api/settling-in/sections')
+    .auth(token)
+    .send(payload);
+
+const saveMainTeacherSection = (payload, token = tokenFor(ADMIN)) => request(app)
+    .put('/api/settling-in/main-teacher')
     .auth(token)
     .send(payload);
 
@@ -82,6 +88,13 @@ describe('Settling In Report class templates', () => {
         assert.equal(res.body.students.length, 1);
         assert.equal(res.body.students[0].name, 'Abel Tesfaye');
         assert.deepEqual(res.body.students[0].sections, {});
+        assert.equal(res.body.students[0].mainTeacherSection, null);
+        assert.deepEqual(res.body.template.mainTeacherSection.categories.map(({ key }) => key), [
+            'conduct', 'organisation', 'attendance',
+        ]);
+        assert.deepEqual(res.body.template.mainTeacherSection.ratingOrder, [
+            'pleasing', 'satisfactory', 'cause_for_concern',
+        ]);
     });
 
     test('Year 4 gets its distinct criteria and its sample rating-column order', async () => {
@@ -115,6 +128,16 @@ describe('Settling In Report class templates', () => {
 
         assert.equal(res.status, 503);
         assert.match(res.body.message, /034_settling_in_reports\.sql/);
+    });
+
+    test('a missing main-teacher migration names the required additive migration', async () => {
+        reset(tables(), {
+            errors: { settling_in_report_main_sections: missingTableError('settling_in_report_main_sections') },
+        });
+        const res = await getReport(CLASS_Y3);
+
+        assert.equal(res.status, 503);
+        assert.match(res.body.message, /035_settling_in_main_teacher_sections\.sql/);
     });
 
     test('unknown and foreign classes/terms are not returned', async () => {
@@ -181,6 +204,70 @@ describe('Settling In Report save and data isolation', () => {
         assert.equal(rowsOf('settling_in_report_sections')[0].ratings['y3-english-01'], 'WA');
     });
 
+    const mainTeacherPayload = (overrides = {}) => ({
+        classId: CLASS_Y3,
+        studentId: STU_Y3,
+        termId: TERM_1,
+        ratings: {
+            conduct: 'pleasing',
+            organisation: 'satisfactory',
+            attendance: null,
+        },
+        ...overrides,
+    });
+
+    test('admin saves main-teacher ratings separately and the student report returns them', async () => {
+        const saved = await saveMainTeacherSection(mainTeacherPayload());
+
+        assert.equal(saved.status, 200);
+        assert.equal(saved.body.section.ratedCount, 2);
+        assert.equal(saved.body.section.totalCount, 3);
+        assert.equal(saved.body.section.complete, false);
+        assert.deepEqual(saved.body.section.ratings, {
+            conduct: 'pleasing',
+            organisation: 'satisfactory',
+            attendance: null,
+        });
+        assert.equal(rowsOf('settling_in_report_main_sections').length, 1);
+        assert.equal(rowsOf('settling_in_report_main_sections')[0].saved_by, ADMIN.id);
+        assert.equal(rowsOf('settling_in_report_sections').length, 0);
+
+        const report = await getReport(CLASS_Y3);
+        assert.deepEqual(report.body.students[0].mainTeacherSection.ratings, saved.body.section.ratings);
+    });
+
+    test('main-teacher ratings update in place and invalid categories or scale values are rejected', async () => {
+        await saveMainTeacherSection(mainTeacherPayload());
+        const updated = await saveMainTeacherSection(mainTeacherPayload({
+            ratings: { conduct: 'cause_for_concern', organisation: null, attendance: 'pleasing' },
+        }));
+        assert.equal(updated.status, 200);
+        assert.equal(rowsOf('settling_in_report_main_sections').length, 1);
+        assert.equal(rowsOf('settling_in_report_main_sections')[0].ratings.conduct, 'cause_for_concern');
+
+        const unknownCategory = await saveMainTeacherSection(mainTeacherPayload({
+            ratings: { punctuality: 'pleasing' },
+        }));
+        assert.equal(unknownCategory.status, 400);
+
+        const invalidRating = await saveMainTeacherSection(mainTeacherPayload({
+            ratings: { conduct: 'WT' },
+        }));
+        assert.equal(invalidRating.status, 400);
+        assert.equal(rowsOf('settling_in_report_main_sections').length, 1);
+    });
+
+    test('main-teacher section enforces student/class ownership and active status', async () => {
+        const wrongClass = await saveMainTeacherSection(mainTeacherPayload({ studentId: STU_Y4 }));
+        assert.equal(wrongClass.status, 400);
+        const foreignStudent = await saveMainTeacherSection(mainTeacherPayload({ studentId: STU_OTHER_SCHOOL }));
+        assert.equal(foreignStudent.status, 404);
+        rowsOf('students').find((row) => row.id === STU_Y3).is_active = false;
+        const inactive = await saveMainTeacherSection(mainTeacherPayload());
+        assert.equal(inactive.status, 400);
+        assert.equal(rowsOf('settling_in_report_main_sections').length, 0);
+    });
+
     test('a Year 3 criterion cannot be submitted against a Year 4 class', async () => {
         const payload = sectionPayload({ classId: CLASS_Y4, studentId: STU_Y4 });
         const res = await saveSection(payload);
@@ -221,10 +308,18 @@ describe('Settling In Report save and data isolation', () => {
     test('teacher and non-teaching roles are blocked by the admin-only first phase', async () => {
         const subjectTeacherGet = await getReport(CLASS_Y3, tokenFor(SUBJECT));
         const mainTeacherSave = await saveSection(sectionPayload(), tokenFor(MAIN));
+        const mainTeacherBehaviorSave = await saveMainTeacherSection({
+            classId: CLASS_Y3,
+            studentId: STU_Y3,
+            termId: TERM_1,
+            ratings: { conduct: 'pleasing', organisation: null, attendance: null },
+        }, tokenFor(MAIN));
 
         assert.equal(subjectTeacherGet.status, 403);
         assert.equal(mainTeacherSave.status, 403);
+        assert.equal(mainTeacherBehaviorSave.status, 403);
         assert.equal(rowsOf('settling_in_report_sections').length, 0);
+        assert.equal(rowsOf('settling_in_report_main_sections').length, 0);
     });
 
     test('missing authentication and malformed request values are rejected', async () => {
