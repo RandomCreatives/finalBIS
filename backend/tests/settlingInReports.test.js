@@ -84,6 +84,10 @@ const getSubjectReport = (classId, subjectKey, studentId = STU_Y3, token = token
     .get(`/api/settling-in/subject-reports/${classId}?termId=${TERM_1}&subjectKey=${subjectKey}&studentId=${studentId}`)
     .auth(token);
 
+const getSubjectClassReport = (classId, token = tokenFor(SUBJECT)) => request(app)
+    .get(`/api/settling-in/subject-classes/${classId}?termId=${TERM_1}`)
+    .auth(token);
+
 const saveSection = (payload, token = tokenFor(ADMIN)) => request(app)
     .put('/api/settling-in/sections')
     .auth(token)
@@ -272,6 +276,70 @@ describe('Subject-teacher individual Settling In reports', () => {
     });
 });
 
+describe('Subject-teacher Settling In class progress', () => {
+    test('progress includes only assigned-subject completion counts, never ratings or form-tutor data', async () => {
+        const template = getSettlingInTemplate(3);
+        const english = template.subjects.find((subject) => subject.key === 'english');
+        const amharic = template.subjects.find((subject) => subject.key === 'amharic');
+        rowsOf('settling_in_report_sections').push(
+            {
+                id: 'saved-english', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+                term_id: TERM_1, grade_level: 3, subject_key: 'english',
+                ratings: { [english.criteria[0].id]: 'WW', conduct: 'pleasing' },
+                criteria_snapshot: english.criteria, updated_at: '2026-11-01T00:00:00.000Z',
+            },
+            {
+                id: 'saved-amharic', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+                term_id: TERM_1, grade_level: 3, subject_key: 'amharic',
+                ratings: { [amharic.criteria[0].id]: 'WA' }, criteria_snapshot: amharic.criteria,
+            },
+            {
+                id: 'unassigned-mathematics', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+                term_id: TERM_1, grade_level: 3, subject_key: 'mathematics', ratings: { 'y3-mathematics-01': 'WA' },
+            },
+        );
+        rowsOf('settling_in_report_main_sections').push({
+            id: 'saved-main-teacher', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+            term_id: TERM_1, ratings: { conduct: 'pleasing' },
+        });
+
+        const res = await getSubjectClassReport(CLASS_Y3);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.class.yearLevel, 3);
+        assert.equal(res.body.term.academicYearId, ACADEMIC_YEAR);
+        assert.deepEqual(res.body.template.subjects.map((subject) => subject.key), ['english', 'amharic']);
+        assert.equal(res.body.students.length, 1);
+        assert.deepEqual(Object.keys(res.body.students[0].sections).sort(), ['amharic', 'english']);
+        assert.deepEqual(res.body.students[0].sections.english, {
+            subjectKey: 'english', ratedCount: 1, totalCount: 5, complete: false, updatedAt: '2026-11-01T00:00:00.000Z',
+        });
+        assert.equal(res.body.students[0].sections.amharic.ratedCount, 1);
+        assert.equal(res.body.students[0].sections.english.ratings, undefined);
+        assert.equal(res.body.students[0].mainTeacherSection, undefined);
+        assert.equal(JSON.stringify(res.body).includes('mathematics'), false);
+        assert.equal(JSON.stringify(res.body).includes('Conduct'), false);
+    });
+
+    test('class progress requires an exact subject, class, and academic-year assignment', async () => {
+        const unassignedClass = await getSubjectClassReport(CLASS_Y4);
+        assert.equal(unassignedClass.status, 403);
+        const assignedYearFour = await getSubjectClassReport(CLASS_Y4, tokenFor(SUBJECT_Y4));
+        assert.equal(assignedYearFour.status, 200);
+        assert.deepEqual(assignedYearFour.body.template.subjects.map((subject) => subject.key), ['english']);
+
+        rowsOf('class_subjects').forEach((assignment) => {
+            if (assignment.class_id === CLASS_Y3 && assignment.teacher_id === SUBJECT.id) {
+                assignment.academic_year_id = 'another-academic-year';
+            }
+        });
+        const wrongYear = await getSubjectClassReport(CLASS_Y3);
+        assert.equal(wrongYear.status, 403);
+
+        const admin = await getSubjectClassReport(CLASS_Y3, tokenFor(ADMIN));
+        assert.equal(admin.status, 403);
+    });
+});
+
 describe('Settling In Report save and data isolation', () => {
     const sectionPayload = (overrides = {}) => {
         const subject = getSettlingInTemplate(3).subjects.find((item) => item.key === 'english');
@@ -287,6 +355,62 @@ describe('Settling In Report save and data isolation', () => {
             ...overrides,
         };
     };
+
+    test('subject teachers can save only their assigned English or Amharic section without changing another section', async () => {
+        const y3Amharic = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'amharic');
+        const existingAmharic = {
+            id: 'existing-amharic', school_id: SCHOOL, class_id: CLASS_Y3, student_id: STU_Y3,
+            term_id: TERM_1, grade_level: 3, subject_key: 'amharic',
+            ratings: { [y3Amharic.criteria[0].id]: 'WA' }, criteria_snapshot: y3Amharic.criteria,
+            template_version: getSettlingInTemplate(3).version, saved_by: SUBJECT.id,
+        };
+        rowsOf('settling_in_report_sections').push(existingAmharic);
+
+        const savedEnglish = await saveSection(sectionPayload(), tokenFor(SUBJECT));
+        assert.equal(savedEnglish.status, 200);
+        assert.equal(savedEnglish.body.section.subjectKey, 'english');
+        assert.equal(rowsOf('settling_in_report_sections').length, 2);
+        assert.deepEqual(existingAmharic.ratings, { [y3Amharic.criteria[0].id]: 'WA' });
+        assert.equal(rowsOf('settling_in_report_sections').find((row) => row.subject_key === 'english').saved_by, SUBJECT.id);
+
+        const y4English = getSettlingInTemplate(4).subjects.find((subject) => subject.key === 'english');
+        const y4Payload = {
+            classId: CLASS_Y4, studentId: STU_Y4, termId: TERM_1, subjectKey: 'english',
+            ratings: { [y4English.criteria[0].id]: 'WW' },
+        };
+        const otherTeacherClass = await saveSection(y4Payload, tokenFor(SUBJECT));
+        assert.equal(otherTeacherClass.status, 403);
+
+        const assignedYearFour = await saveSection(y4Payload, tokenFor(SUBJECT_Y4));
+        assert.equal(assignedYearFour.status, 200);
+        const y4Amharic = getSettlingInTemplate(4).subjects.find((subject) => subject.key === 'amharic');
+        const unassignedSubject = await saveSection({
+            ...y4Payload,
+            subjectKey: 'amharic',
+            ratings: { [y4Amharic.criteria[0].id]: 'WT' },
+        }, tokenFor(SUBJECT_Y4));
+        assert.equal(unassignedSubject.status, 403);
+
+        const wrongAcademicYearAssignments = rowsOf('class_subjects').filter((assignment) =>
+            assignment.class_id === CLASS_Y4 && assignment.teacher_id === SUBJECT_Y4.id,
+        );
+        wrongAcademicYearAssignments.forEach((assignment) => { assignment.academic_year_id = 'another-academic-year'; });
+        const wrongAcademicYear = await saveSection(y4Payload, tokenFor(SUBJECT_Y4));
+        assert.equal(wrongAcademicYear.status, 403);
+
+        const y3Maths = getSettlingInTemplate(3).subjects.find((subject) => subject.key === 'mathematics');
+        const otherSubject = await saveSection({
+            classId: CLASS_Y3, studentId: STU_Y3, termId: TERM_1, subjectKey: 'mathematics',
+            ratings: { [y3Maths.criteria[0].id]: 'WA' },
+        }, tokenFor(SUBJECT));
+        assert.equal(otherSubject.status, 403);
+        const mainTeacherSection = await saveMainTeacherSection({
+            classId: CLASS_Y3, studentId: STU_Y3, termId: TERM_1,
+            ratings: { conduct: 'pleasing', organisation: 'satisfactory', attendance: 'pleasing' },
+        }, tokenFor(SUBJECT));
+        assert.equal(mainTeacherSection.status, 403);
+        assert.equal(rowsOf('settling_in_report_sections').length, 3);
+    });
 
     test('admin saves one subject section against the student, class, term and exact Year 3 template', async () => {
         const res = await saveSection(sectionPayload());

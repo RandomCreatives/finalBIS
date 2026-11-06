@@ -249,6 +249,7 @@ export const marksheetApi = {
 
 export const settlingInApi = {
     classReport: (classId, termId) => client.get(`/settling-in/classes/${classId}`, { params: { termId } }).then((r) => r.data),
+    subjectClassReport: (classId, termId) => client.get(`/settling-in/subject-classes/${classId}`, { params: { termId } }).then((r) => r.data),
     subjectReport: (classId, termId, subjectKey, studentId) => client.get(`/settling-in/subject-reports/${classId}`, {
         params: { termId, subjectKey, studentId },
     }).then((r) => r.data),

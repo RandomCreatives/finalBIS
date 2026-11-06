@@ -12,7 +12,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
 import GroupsIcon from '@mui/icons-material/Groups';
 import GradeIcon from '@mui/icons-material/Grade';
-import PrintIcon from '@mui/icons-material/Print';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import AddIcon from '@mui/icons-material/Add';
@@ -39,7 +39,7 @@ import { useColorScheme } from '../theme';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { schoolHour, schoolWeekday } from '../utils/schoolTime';
-import SubjectReportPrinting from './SubjectReportPrinting';
+import SettlingInReports from './SettlingInReports';
 
 const DAYS = [
     { value: 1, label: 'Monday' },
@@ -72,7 +72,7 @@ const SECTIONS = [
     { id: 'calendar', label: 'Calendar', icon: CalendarMonthIcon },
     { id: 'classes', label: 'My classes', icon: GroupsIcon },
     { id: 'marks', label: 'Marks', icon: GradeIcon },
-    { id: 'reports', label: 'Reports', icon: PrintIcon },
+    { id: 'settling-in', label: 'Settling In', icon: FactCheckOutlinedIcon },
     { id: 'profile', label: 'Profile', icon: PersonIcon },
 ];
 
@@ -789,14 +789,7 @@ export default function SubjectHome() {
                         )}
 
                         {section === 'marks' && <MarksSection pairs={markedPairs} />}
-                        {section === 'reports' && (
-                            <SubjectReportPrinting
-                                assignments={myAssignments.data || []}
-                                loading={myAssignments.loading}
-                                error={myAssignments.error}
-                                teacherName={user.name}
-                            />
-                        )}
+                        {section === 'settling-in' && <SettlingInReports />}
                         {section === 'profile' && (
                             <Grid container spacing={2.5}>
                                 <Grid item xs={12} md={7}>
