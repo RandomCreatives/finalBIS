@@ -18,6 +18,8 @@ jest.mock('../pages/ReportCards', () => ({
 }));
 
 const { useAuth } = jest.requireMock('../auth/AuthContext');
+const reportCardsMock = jest.requireMock('../pages/ReportCards').default;
+const CLASS_ID = '713bfeaa-d141-44f0-864a-cee594efb105';
 
 const renderDash = (slug) => {
     useAuth.mockReturnValue({
@@ -26,7 +28,7 @@ const renderDash = (slug) => {
     });
     localStorage.setItem(CLASS_LOGIN_KEY, JSON.stringify({
         slug, className: 'Year 3 - Blue', teacher: 'Ms. Yeabsira A.',
-        classId: '713bfeaa-d141-44f0-864a-cee594efb105', at: Date.now(),
+        classId: CLASS_ID, at: Date.now(),
     }));
     return render(
         <ThemeProvider>
@@ -110,12 +112,15 @@ describe('ClassHome dashboard', () => {
         expect(afterReportCards.compareDocumentPosition(adminGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    test('Report Cards opens inside the main-teacher dashboard instead of navigating to the admin workspace', () => {
+    test('Report Cards opens in the dashboard with the class-card login class preselected', () => {
+        reportCardsMock.mockClear();
         renderDash('year-3-blue');
         fireEvent.click(screen.getByRole('button', { name: 'Report Cards' }));
         expect(screen.getByTestId('class-home-report-cards-section')).toBeInTheDocument();
         expect(screen.getByTestId('side-nav')).toBeInTheDocument();
         expect(screen.queryByTestId('report-cards-target')).not.toBeInTheDocument();
+        const props = reportCardsMock.mock.calls[reportCardsMock.mock.calls.length - 1][0];
+        expect(props.initialClassId).toBe(CLASS_ID);
     });
 
     test('redirects to /classes when no session', () => {

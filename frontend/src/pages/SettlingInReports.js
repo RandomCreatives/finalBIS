@@ -300,12 +300,12 @@ function PrintReportSide({ student, report, classRecord, yearName, side, isLast 
     );
 }
 
-export default function SettlingInReports() {
+export default function SettlingInReports({ initialClassId = '' } = {}) {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
     const isMainTeacher = user?.role === 'main_teacher';
     const [academicYearId, setAcademicYearId] = useState('');
-    const [classId, setClassId] = useState('');
+    const [classId, setClassId] = useState(() => String(initialClassId || ''));
     const [termId, setTermId] = useState('');
     const [studentId, setStudentId] = useState('');
     const [subjectKey, setSubjectKey] = useState('english');
@@ -387,10 +387,14 @@ export default function SettlingInReports() {
     }, [resolvedTermId, termId]);
 
     useEffect(() => {
+        if (classes.loading) return;
         if (!supportedClasses.some((item) => String(item.id) === String(classId))) {
-            setClassId(supportedClasses[0]?.id || '');
+            const preferredClass = supportedClasses.find(
+                (item) => String(item.id) === String(initialClassId),
+            );
+            setClassId(String(preferredClass?.id || supportedClasses[0]?.id || ''));
         }
-    }, [supportedClasses, classId]);
+    }, [classes.loading, supportedClasses, classId, initialClassId]);
 
     useEffect(() => {
         if (editableSubjects.length && !editableSubjects.some((item) => item.key === subjectKey)) {
