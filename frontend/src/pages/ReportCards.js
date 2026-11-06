@@ -324,8 +324,8 @@ function BISReportPreview({ card, className, termName, term, yearName, homeroomT
     );
 }
 
-function TermReportCards() {
-    const [classId, setClassId] = useState('');
+function TermReportCards({ initialClassId = '' }) {
+    const [classId, setClassId] = useState(() => String(initialClassId || ''));
     const [termId, setTermId] = useState('');
     const [view, setView] = useState('grid');
     const [previewStudentId, setPreviewStudentId] = useState('');
@@ -336,6 +336,13 @@ function TermReportCards() {
     const years = useApi(() => academicYearApi.list(), []);
     const current = useApi(() => termApi.current(), []);
     const resolvedTermId = termId || current.data?.term?.id || '';
+
+    useEffect(() => {
+        if (classes.loading) return;
+        if (classId && !(classes.data || []).some((klass) => String(klass.id) === String(classId))) {
+            setClassId('');
+        }
+    }, [classes.data, classes.loading, classId]);
 
     const students = useApi(
         () => (classId ? studentApi.list({ classId }) : Promise.resolve([])),
@@ -536,7 +543,7 @@ function TermReportCards() {
     );
 }
 
-export default function ReportCards() {
+export default function ReportCards({ initialClassId = '' } = {}) {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
     const isMainTeacher = user?.role === 'main_teacher';
@@ -568,8 +575,8 @@ export default function ReportCards() {
                 </ToggleButtonGroup>
             </Card>
             {canAccessSettlingIn && reportType === 'settling-in'
-                ? <SettlingInReports />
-                : <TermReportCards />}
+                ? <SettlingInReports initialClassId={initialClassId} />
+                : <TermReportCards initialClassId={initialClassId} />}
         </>
     );
 }

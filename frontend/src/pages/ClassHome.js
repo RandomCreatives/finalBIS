@@ -114,7 +114,7 @@ const ATTENDANCE_STATUSES = [
 
 /**
  * Other staged rollout sections remain visible but unavailable until launch.
- * Report Cards is open to main teachers and links to the shared report workspace.
+ * Report Cards is open to main teachers and stays scoped to their class-card login.
  */
 const COMING_SOON = { store: true, request: true, conduct: true };
 
@@ -1857,7 +1857,7 @@ export default function ClassHome() {
                         {section === 'calendar' && <CalendarBoard />}
                         {section === 'reportCards' && (
                             <Box data-testid="class-home-report-cards-section">
-                                <ReportCards />
+                                <ReportCards initialClassId={session.classId} />
                             </Box>
                         )}
                         {section === 'students' && (

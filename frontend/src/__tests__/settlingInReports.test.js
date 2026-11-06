@@ -89,10 +89,10 @@ const makeReport = (classId = CLASS_Y3, template = YEAR_3_TEMPLATE, termId = TER
     }],
 });
 
-const renderPage = () => render(
+const renderPage = (props = {}) => render(
     <ThemeProvider>
         <BrowserRouter>
-            <SettlingInReports />
+            <SettlingInReports {...props} />
         </BrowserRouter>
     </ThemeProvider>,
 );
@@ -160,6 +160,22 @@ describe('Settling In Report workspace', () => {
         expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-english`)).toBeDisabled();
         expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-amharic`)).toBeDisabled();
         expect(screen.getByTestId('settling-in-main-teacher-editor')).toBeInTheDocument();
+    });
+
+    test('opens the logged-in class in the main teacher class dropdown', async () => {
+        useAuth.mockReturnValue({ user: { id: 'main-teacher-4', role: 'main_teacher' } });
+        renderPage({ initialClassId: CLASS_Y4 });
+
+        expect(await screen.findByTestId('settling-in-grade-badge')).toHaveTextContent('Year 4 criteria');
+        expect(settlingInApi.classReport).toHaveBeenCalledWith(CLASS_Y4, TERM_1);
+
+        const selector = screen.getByTestId('settling-in-class-select');
+        const combobox = within(selector).getByRole('combobox');
+        expect(combobox).toBeEnabled();
+        expect(selector).toHaveTextContent('Year 4 - Green');
+        fireEvent.mouseDown(combobox);
+        expect(await screen.findByRole('option', { name: /Year 4 - Green/ })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /Year 3 - Blue/ })).not.toBeInTheDocument();
     });
 
     test('loads the Year 3 template from the selected class and excludes unsupported years', async () => {

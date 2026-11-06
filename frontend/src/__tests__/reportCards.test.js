@@ -51,12 +51,15 @@ const MARKSHEETS = [
     },
 ];
 
-const renderPage = () => {
-    useAuth.mockReturnValue({ user: { id: 'u-admin', name: 'Mr. Mike', role: 'admin' } });
+const renderPage = ({
+    user = { id: 'u-admin', name: 'Mr. Mike', role: 'admin' },
+    initialClassId = '',
+} = {}) => {
+    useAuth.mockReturnValue({ user });
     return render(
         <ThemeProvider>
             <BrowserRouter>
-                <ReportCards />
+                <ReportCards initialClassId={initialClassId} />
             </BrowserRouter>
         </ThemeProvider>,
     );
@@ -64,7 +67,12 @@ const renderPage = () => {
 
 beforeEach(() => {
     jest.clearAllMocks();
-    classApi.list.mockResolvedValue([{ id: CLASS_A, name: 'Year 3 - Blue' }]);
+    classApi.list.mockResolvedValue([{
+        id: CLASS_A,
+        name: 'Year 3 - Blue',
+        yearLevel: 3,
+        mainTeacher: { id: 'u-main', name: 'Main Teacher' },
+    }]);
     subjectApi.list.mockResolvedValue(SUBJECTS);
     studentApi.list.mockResolvedValue(STUDENTS);
     marksheetApi.list.mockResolvedValue(MARKSHEETS);
@@ -152,6 +160,21 @@ describe('Report cards page', () => {
         expect(within(grid).getByText('77.5%')).toBeInTheDocument();
         // marksheets scoped to class + current term
         expect(marksheetApi.list).toHaveBeenCalledWith({ classId: CLASS_A, termId: TERM_1 });
+    });
+
+    test('main teacher term cards open on the class passed from their class-card login', async () => {
+        renderPage({
+            user: { id: 'u-main', name: 'Main Teacher', role: 'main_teacher' },
+            initialClassId: CLASS_A,
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Report Card' }));
+
+        const selector = await screen.findByTestId('report-class-select');
+        const combobox = within(selector).getByRole('combobox');
+        await waitFor(() => expect(selector).toHaveTextContent('Year 3 - Blue'));
+        expect(combobox).toBeEnabled();
+        fireEvent.mouseDown(combobox);
+        expect(await screen.findByRole('option', { name: 'Year 3 - Blue' })).toBeInTheDocument();
     });
 
     test('print view renders one sheet per student and the button calls print', async () => {
