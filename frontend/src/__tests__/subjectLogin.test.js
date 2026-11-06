@@ -4,6 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '../theme';
 import SubjectLogin, { yearBands, sectionLabel } from '../pages/SubjectLogin';
 import { CLASSES, CLASS_LOGIN_KEY } from '../data/classes';
+import { useAuth } from '../auth/AuthContext';
+
+jest.mock('../auth/AuthContext', () => ({ useAuth: jest.fn() }));
+
+const loginWithTokenMock = jest.fn();
 
 const renderWall = (route = '/class-home/:slug') =>
     render(
@@ -17,6 +22,8 @@ const renderWall = (route = '/class-home/:slug') =>
 beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
+    loginWithTokenMock.mockReset();
+    useAuth.mockReturnValue({ loginWithToken: loginWithTokenMock });
 });
 
 describe('yearBands', () => {
@@ -100,6 +107,7 @@ describe('SubjectLogin wall — class cards', () => {
             const saved = JSON.parse(localStorage.getItem(CLASS_LOGIN_KEY));
             expect(saved).toMatchObject({ slug: 'year-3-blue', className: 'Year 3 - Blue', classId: 'c1' });
         });
+        expect(loginWithTokenMock).toHaveBeenCalledWith('jwt-token', payload.user);
     });
 
     test('shows the API error on a wrong password', async () => {

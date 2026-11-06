@@ -5,6 +5,13 @@ import { ThemeProvider } from '../theme';
 import PublicClasses from '../pages/PublicClasses';
 import { ClassLoginDialog } from '../components/ClassLoginCard';
 import { CLASSES } from '../data/classes';
+import { useAuth } from '../auth/AuthContext';
+
+jest.mock('../auth/AuthContext', () => ({ useAuth: jest.fn() }));
+
+beforeEach(() => {
+    useAuth.mockReturnValue({ loginWithToken: jest.fn() });
+});
 
 const renderPage = () =>
     render(

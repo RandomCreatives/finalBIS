@@ -45,7 +45,7 @@ import {
     classBySlug, readClassLogin, clearClassLogin, CLASS_SUBJECTS,
 } from '../data/classes';
 import { studentApi, studentRequestApi, classApi, attendanceApi, marksheetApi, assignmentApi, termApi, assessmentApi, timetableApi, paymentApi } from '../api/endpoints';
-import { clearToken } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
 import NotificationBell from '../components/NotificationBell';
@@ -112,13 +112,10 @@ const ATTENDANCE_STATUSES = [
 ];
 
 /**
- * Staged rollout sections (report cards, store, permission requests, conduct
- * reports) are introduced to teachers one at a time, on purpose: they stay
- * visible on the sidebar but greyed out with a "soon" chip until launch.
- * Flip a flag here the day that section goes live (decision: Mike,
- * 2026-09-22).
+ * Other staged rollout sections remain visible but unavailable until launch.
+ * Report Cards is open to main teachers and links to the shared report workspace.
  */
-const COMING_SOON = { reportCards: true, store: true, request: true, conduct: true };
+const COMING_SOON = { store: true, request: true, conduct: true };
 
 const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: DashboardIcon },
@@ -132,7 +129,6 @@ const SECTIONS = [
         id: 'reportCards',
         label: 'Report Cards',
         icon: SummarizeOutlinedIcon,
-        soon: COMING_SOON.reportCards,
         dividerBefore: true,
         dividerAfter: true,
     },
@@ -1623,6 +1619,7 @@ function ProfileSection({ klass, classId }) {
 
 export default function ClassHome() {
     const { slug } = useParams();
+    const { logout } = useAuth();
     const theme = useTheme();
     const dark = theme.palette.mode === 'dark';
     const { toggleColorScheme } = useColorScheme();
@@ -1668,7 +1665,7 @@ export default function ClassHome() {
 
     const signOut = () => {
         clearClassLogin();
-        clearToken();
+        logout();
         navigate('/classes');
     };
 
@@ -1708,12 +1705,16 @@ export default function ClassHome() {
                     timetable: 'View your class week and lessons.',
                     plans: 'Keep your weekly schemes and lesson plans current.',
                     calendar: 'Check school events and term dates.',
-                    reportCards: 'Build and print termly student report cards.',
+                    reportCards: 'Open term report cards and the Settling In Report.',
                     profile: 'Review your profile and account settings.',
                 }[s.id] || s.label} placement="right" arrow>
                     <Box component="span" sx={{ display: 'flex', width: { md: '100%' } }}>
                         <Button disabled={s.soon}
-                            onClick={() => !s.soon && setSection(s.id)}
+                            onClick={() => {
+                                if (s.soon) return;
+                                if (s.id === 'reportCards') navigate('/app/report-cards');
+                                else setSection(s.id);
+                            }}
                             data-testid={s.id === 'profile' ? 'side-nav-profile' : undefined}
                             startIcon={<Icon sx={{ fontSize: 18 }} />}
                             sx={{ width: { md: '100%' }, justifyContent: 'flex-start', textTransform: 'none',

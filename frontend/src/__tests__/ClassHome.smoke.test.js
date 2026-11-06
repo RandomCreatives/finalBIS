@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { CssBaseline } from '@mui/material';
 import ClassHome from '../pages/ClassHome';
@@ -15,7 +15,10 @@ jest.mock('../auth/AuthContext', () => ({
 const { useAuth } = jest.requireMock('../auth/AuthContext');
 
 const renderDash = (slug) => {
-    useAuth.mockReturnValue({ user: { id: 'u-1', name: 'Ms. Yeabsira A.', role: 'main_teacher' } });
+    useAuth.mockReturnValue({
+        user: { id: 'u-1', name: 'Ms. Yeabsira A.', role: 'main_teacher' },
+        logout: jest.fn(),
+    });
     localStorage.setItem(CLASS_LOGIN_KEY, JSON.stringify({
         slug, className: 'Year 3 - Blue', teacher: 'Ms. Yeabsira A.',
         classId: '713bfeaa-d141-44f0-864a-cee594efb105', at: Date.now(),
@@ -26,6 +29,7 @@ const renderDash = (slug) => {
             <MemoryRouter initialEntries={[`/class-home/${slug}`]}>
                 <Routes>
                     <Route path="/class-home/:slug" element={<ClassHome />} />
+                    <Route path="/app/report-cards" element={<div data-testid="report-cards-target">Report Cards workspace</div>} />
                 </Routes>
             </MemoryRouter>
         </ThemeProvider>
@@ -50,7 +54,7 @@ describe('ClassHome dashboard', () => {
         expect(buttons[buttons.length - 1]).toBe(profile);
     });
 
-    test('sidebar groups: Class Room Management order, visual dividers, Report Cards & Admin Communications greyed "soon"', () => {
+    test('sidebar groups: Report Cards is active while the other staged sections remain greyed "soon"', () => {
         renderDash('year-3-blue');
         const nav = screen.getByTestId('side-nav');
         expect(screen.getByTestId('side-nav-group-0'))
@@ -68,19 +72,20 @@ describe('ClassHome dashboard', () => {
             'Timetable',
             'Planning',
             'Calendar',
-            'Report Cardssoon',
+            'Report Cards',
             'Storesoon',
             'Requestsoon',
             'Conduct reportsoon',
             'Profile',
         ]);
 
-        // Report Cards and Admin Communications stay visible but greyed with a "soon" chip
-        const reportCards = within(nav).getByRole('button', { name: /^Report Cards soon$/ });
+        // Report Cards is available; the Admin Communications sections remain greyed with a "soon" chip.
+        const reportCards = within(nav).getByRole('button', { name: 'Report Cards' });
         const store = within(nav).getByRole('button', { name: /^Store soon$/ });
         const request = within(nav).getByRole('button', { name: /^Request soon$/ });
         const conduct = within(nav).getByRole('button', { name: /^Conduct report soon$/ });
-        for (const btn of [reportCards, store, request, conduct]) expect(btn).toBeDisabled();
+        expect(reportCards).toBeEnabled();
+        for (const btn of [store, request, conduct]) expect(btn).toBeDisabled();
 
         // Visual separator lines: after Timetable, and framing Report Cards
         const afterTimetable = within(nav).getByTestId('side-nav-divider-after-timetable');
@@ -100,7 +105,14 @@ describe('ClassHome dashboard', () => {
         expect(afterReportCards.compareDocumentPosition(adminGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    test('Report Cards opens the shared report workspace from the main-teacher sidebar', () => {
+        renderDash('year-3-blue');
+        fireEvent.click(screen.getByRole('button', { name: 'Report Cards' }));
+        expect(screen.getByTestId('report-cards-target')).toHaveTextContent('Report Cards workspace');
+    });
+
     test('redirects to /classes when no session', () => {
+        useAuth.mockReturnValue({ logout: jest.fn() });
         localStorage.removeItem(CLASS_LOGIN_KEY);
         const { container } = render(
             <ThemeProvider>
