@@ -98,6 +98,48 @@ const assertMainTeacherClassAccess = async (req, classRecord, termRecord) => {
     }
 };
 
+const getSubjectTeacherAssignments = async (req, classRecord, termRecord, template) => {
+    if (req.user.role !== 'subject_teacher') {
+        throw new ForbiddenError('Only subject teachers may access their assigned Settling In sections');
+    }
+
+    const templateSubjects = (template.subjects || []).filter((subject) =>
+        SUBJECT_REPORT_CODES[subject.key] && subject.assessorRole === 'subject_teacher',
+    );
+    if (templateSubjects.length === 0) return [];
+
+    const { data: subjectRecords, error: subjectError } = await supabase
+        .from('subjects')
+        .select('id, name, code')
+        .eq('school_id', req.user.school_id)
+        .in('code', templateSubjects.map((subject) => SUBJECT_REPORT_CODES[subject.key]));
+    if (subjectError) throw subjectError;
+
+    const subjectByKey = new Map((subjectRecords || []).map((record) => {
+        const key = Object.keys(SUBJECT_REPORT_CODES).find((item) =>
+            SUBJECT_REPORT_CODES[item] === String(record.code || '').toUpperCase(),
+        );
+        return [key, record];
+    }).filter(([key]) => key));
+    if (subjectByKey.size === 0) return [];
+
+    const { data: assignments, error: assignmentError } = await supabase
+        .from('class_subjects')
+        .select('id, subject_id')
+        .eq('school_id', req.user.school_id)
+        .eq('academic_year_id', termRecord.academic_year_id)
+        .eq('class_id', classRecord.id)
+        .eq('teacher_id', req.user.id)
+        .in('subject_id', [...subjectByKey.values()].map((subject) => subject.id));
+    if (assignmentError) throw assignmentError;
+
+    const assignedSubjectIds = new Set((assignments || []).map((assignment) => String(assignment.subject_id)));
+    return templateSubjects.filter((subject) => {
+        const record = subjectByKey.get(subject.key);
+        return record && assignedSubjectIds.has(String(record.id));
+    });
+};
+
 const shapeSection = (row, template) => {
     const subject = template.subjects.find((item) => item.key === row.subject_key);
     const criteria = Array.isArray(row.criteria_snapshot) && row.criteria_snapshot.length
@@ -243,6 +285,96 @@ const getClassReport = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/settling-in/subject-classes/:classId?termId=...
+ * Subject-teacher workspace data: active class roster plus completion counts
+ * for only that teacher's assigned English/Amharic sections. Ratings are not
+ * returned for unselected students; their individual detail uses the route below.
+ */
+const getSubjectClassReport = asyncHandler(async (req, res) => {
+    const { classRecord, termRecord, template } = await requireClassAndTerm(
+        req,
+        req.params.classId,
+        req.query.termId,
+    );
+    const subjects = await getSubjectTeacherAssignments(req, classRecord, termRecord, template);
+    if (subjects.length === 0) {
+        throw new ForbiddenError('You are not assigned to teach English or Amharic in this class for this term');
+    }
+
+    const subjectOnlyTemplate = {
+        yearLevel: template.yearLevel,
+        label: template.label,
+        version: template.version,
+        ratingOrder: template.ratingOrder,
+        ratings: template.ratings,
+        subjects,
+    };
+    const subjectKeys = subjects.map((subject) => subject.key);
+    const [
+        { data: students, error: studentError },
+        { data: savedSections, error: sectionError },
+    ] = await Promise.all([
+        supabase
+            .from('students')
+            .select('id, name, admission_no, roll_num, class_id, is_active')
+            .eq('school_id', req.user.school_id)
+            .eq('class_id', classRecord.id)
+            .eq('is_active', true)
+            .order('roll_num', { ascending: true })
+            .order('name', { ascending: true }),
+        supabase
+            .from(SECTION_TABLE)
+            .select('id, student_id, subject_key, ratings, updated_at')
+            .eq('school_id', req.user.school_id)
+            .eq('class_id', classRecord.id)
+            .eq('term_id', termRecord.id)
+            .in('subject_key', subjectKeys),
+    ]);
+    if (studentError) throw studentError;
+    if (sectionError) throwSettlingInStorageError(sectionError);
+
+    const subjectByKey = new Map(subjects.map((subject) => [subject.key, subject]));
+    const sectionsByStudent = new Map();
+    (savedSections || []).forEach((row) => {
+        const subject = subjectByKey.get(row.subject_key);
+        if (!subject) return;
+        const ratings = row.ratings && typeof row.ratings === 'object' && !Array.isArray(row.ratings)
+            ? row.ratings
+            : {};
+        const ratedCount = subject.criteria.filter(({ id }) => RATING_VALUES.has(ratings[id])).length;
+        if (!sectionsByStudent.has(row.student_id)) sectionsByStudent.set(row.student_id, {});
+        sectionsByStudent.get(row.student_id)[row.subject_key] = {
+            subjectKey: row.subject_key,
+            ratedCount,
+            totalCount: subject.criteria.length,
+            complete: subject.criteria.length > 0 && ratedCount === subject.criteria.length,
+            updatedAt: row.updated_at,
+        };
+    });
+
+    res.json({
+        class: {
+            id: classRecord.id,
+            name: classRecord.name,
+            yearLevel: template.yearLevel,
+        },
+        term: {
+            id: termRecord.id,
+            name: termRecord.name,
+            academicYearId: termRecord.academic_year_id,
+        },
+        template: subjectOnlyTemplate,
+        students: sortStudentsCanonically(students || []).map((student) => ({
+            id: student.id,
+            name: normalizeStudentName(student.name),
+            admissionNo: normalizeStudentName(student.admission_no) || student.admission_no,
+            rollNum: student.roll_num,
+            sections: sectionsByStudent.get(student.id) || {},
+        })),
+    });
+});
+
+/**
  * GET /api/settling-in/subject-reports/:classId?termId=...&subjectKey=...&studentId=...
  * Subject teachers get exactly one assigned English or Amharic section for
  * one active student. This intentionally uses a separate route from the
@@ -259,33 +391,13 @@ const getSubjectTeacherReport = asyncHandler(async (req, res) => {
         req.query.termId,
     );
     const subjectKey = String(req.query.subjectKey || '').toLowerCase();
-    const subjectCode = SUBJECT_REPORT_CODES[subjectKey];
     const subject = getSubjectForYear(template.yearLevel, subjectKey);
 
-    if (!subjectCode || !subject || subject.assessorRole !== 'subject_teacher') {
+    if (!SUBJECT_REPORT_CODES[subjectKey] || !subject || subject.assessorRole !== 'subject_teacher') {
         throw new BadRequestError('Only English and Amharic subject reports are available');
     }
-
-    const { data: subjectRecord, error: subjectError } = await supabase
-        .from('subjects')
-        .select('id, name, code')
-        .eq('school_id', req.user.school_id)
-        .eq('code', subjectCode)
-        .maybeSingle();
-    if (subjectError) throw subjectError;
-    if (!subjectRecord) throw new NotFoundError(`${subject.label} subject not found`);
-
-    const { data: assignment, error: assignmentError } = await supabase
-        .from('class_subjects')
-        .select('id')
-        .eq('school_id', req.user.school_id)
-        .eq('academic_year_id', termRecord.academic_year_id)
-        .eq('class_id', classRecord.id)
-        .eq('subject_id', subjectRecord.id)
-        .eq('teacher_id', req.user.id)
-        .maybeSingle();
-    if (assignmentError) throw assignmentError;
-    if (!assignment) {
+    const assignedSubjects = await getSubjectTeacherAssignments(req, classRecord, termRecord, template);
+    if (!assignedSubjects.some((item) => item.key === subjectKey)) {
         throw new ForbiddenError(`You are not assigned to teach ${subject.label} in this class for this term`);
     }
 
@@ -308,7 +420,7 @@ const getSubjectTeacherReport = asyncHandler(async (req, res) => {
         throw new BadRequestError('Student is not enrolled in the selected class');
     }
     if (!student.is_active) {
-        throw new BadRequestError('Inactive students cannot be printed in the current class report');
+        throw new BadRequestError('Inactive students cannot be assessed in the current class report');
     }
 
     const { data: savedSection, error: sectionError } = await supabase
@@ -396,14 +508,24 @@ const saveSection = asyncHandler(async (req, res) => {
         classId,
         termId,
     );
-    await assertMainTeacherClassAccess(req, classRecord, termRecord);
 
     const subject = getSubjectForYear(template.yearLevel, subjectKey);
     if (!subject) {
         throw new BadRequestError('That subject is not part of the selected Year settling-in report');
     }
-    if (req.user.role === 'main_teacher' && subject.assessorRole !== 'main_teacher') {
-        throw new ForbiddenError('Main teachers cannot edit English or Amharic subject-teacher sections');
+    if (req.user.role === 'subject_teacher') {
+        if (!SUBJECT_REPORT_CODES[subject.key] || subject.assessorRole !== 'subject_teacher') {
+            throw new ForbiddenError('Subject teachers may edit only English or Amharic sections');
+        }
+        const assignedSubjects = await getSubjectTeacherAssignments(req, classRecord, termRecord, template);
+        if (!assignedSubjects.some((item) => item.key === subject.key)) {
+            throw new ForbiddenError(`You are not assigned to teach ${subject.label} in this class for this term`);
+        }
+    } else {
+        await assertMainTeacherClassAccess(req, classRecord, termRecord);
+        if (req.user.role === 'main_teacher' && subject.assessorRole !== 'main_teacher') {
+            throw new ForbiddenError('Main teachers cannot edit English or Amharic subject-teacher sections');
+        }
     }
 
     const student = await requireOwnedRecord(
@@ -498,6 +620,7 @@ const saveMainTeacherSection = asyncHandler(async (req, res) => {
 
 module.exports = {
     getClassReport,
+    getSubjectClassReport,
     getSubjectTeacherReport,
     saveSection,
     saveMainTeacherSection,

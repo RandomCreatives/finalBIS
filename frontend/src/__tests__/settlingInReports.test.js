@@ -3,15 +3,19 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '../theme';
 import SettlingInReports from '../pages/SettlingInReports';
-import { academicYearApi, classApi, settlingInApi, termApi } from '../api/endpoints';
+import { academicYearApi, assignmentApi, classApi, settlingInApi, termApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
 
 jest.mock('../auth/AuthContext', () => ({ useAuth: jest.fn() }));
 
 jest.mock('../api/endpoints', () => ({
     academicYearApi: { list: jest.fn() },
+    assignmentApi: { subjects: jest.fn() },
     classApi: { list: jest.fn() },
-    settlingInApi: { classReport: jest.fn(), saveSection: jest.fn(), saveMainTeacherSection: jest.fn() },
+    settlingInApi: {
+        classReport: jest.fn(), subjectClassReport: jest.fn(), subjectReport: jest.fn(),
+        saveSection: jest.fn(), saveMainTeacherSection: jest.fn(),
+    },
     termApi: { list: jest.fn(), current: jest.fn() },
 }));
 
@@ -90,6 +94,48 @@ const makeReport = (classId = CLASS_Y3, template = YEAR_3_TEMPLATE, termId = TER
     }],
 });
 
+const makeSubjectProgressReport = (classId, subjectKeys = ['english'], termId = TERM_1) => {
+    const template = classId === CLASS_Y4 ? YEAR_4_TEMPLATE : YEAR_3_TEMPLATE;
+    const fullReport = makeReport(classId, template, termId);
+    return {
+        ...fullReport,
+        template: { ...template, subjects: template.subjects.filter((subject) => subjectKeys.includes(subject.key)) },
+        students: fullReport.students.map(({ mainTeacherSection, ...student }) => ({ ...student, sections: {} })),
+    };
+};
+
+const makeSubjectDetailReport = (classId, subjectKey, studentId = STUDENT_1, termId = TERM_1) => {
+    const progress = makeSubjectProgressReport(classId, [subjectKey], termId);
+    const subject = progress.template.subjects[0];
+    return {
+        class: progress.class,
+        term: progress.term,
+        template: progress.template,
+        subject,
+        student: {
+            id: studentId,
+            name: 'Abel Tesfaye',
+            admissionNo: 'BIS-301',
+            rollNum: 1,
+            sections: {
+                [subjectKey]: {
+                    subjectKey,
+                    ratings: {},
+                    ratedCount: 0,
+                    totalCount: subject.criteria.length,
+                    complete: false,
+                    updatedAt: null,
+                },
+            },
+        },
+    };
+};
+
+const subjectAssignment = (classId, className, yearLevel, subjectKey) => ({
+    class: { id: classId, name: className, year_level: yearLevel },
+    subject: subjectKey === 'english' ? { code: 'ENG', name: 'English' } : { code: 'AMH', name: 'Amharic' },
+});
+
 const renderPage = (props = {}) => render(
     <ThemeProvider>
         <BrowserRouter>
@@ -101,6 +147,10 @@ const renderPage = (props = {}) => render(
 beforeEach(() => {
     jest.clearAllMocks();
     useAuth.mockReturnValue({ user: { id: 'admin-user', role: 'admin' } });
+    assignmentApi.subjects.mockResolvedValue({ assignments: [] });
+    settlingInApi.subjectClassReport.mockResolvedValue(makeSubjectProgressReport(CLASS_Y3, ['english']));
+    settlingInApi.subjectReport.mockImplementation(async (classId, termId, subjectKey, studentId) =>
+        makeSubjectDetailReport(classId, subjectKey, studentId, termId));
     classApi.list.mockResolvedValue([
         { id: CLASS_Y3, name: 'Year 3 - Blue', yearLevel: 3, mainTeacher: { id: 'main-teacher-3', name: 'Kalkidan Z.' } },
         { id: CLASS_Y4, name: 'Year 4 - Green', yearLevel: 4, mainTeacher: { id: 'main-teacher-4', name: 'Samrawit E.' } },
@@ -161,6 +211,67 @@ describe('Settling In Report workspace', () => {
         expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-english`)).toBeDisabled();
         expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-amharic`)).toBeDisabled();
         expect(screen.getByTestId('settling-in-main-teacher-editor')).toBeInTheDocument();
+    });
+
+    test('subject teachers see assigned classes and only their English or Amharic workspace', async () => {
+        useAuth.mockReturnValue({ user: { id: 'subject-user', name: 'Dawit', role: 'subject_teacher' } });
+        assignmentApi.subjects.mockResolvedValue({ assignments: [
+            subjectAssignment(CLASS_Y3, 'Year 3 - Blue', 3, 'english'),
+            subjectAssignment(CLASS_Y4, 'Year 4 - Green', 4, 'amharic'),
+        ] });
+        settlingInApi.subjectClassReport.mockImplementation(async (classId, termId) =>
+            makeSubjectProgressReport(classId, classId === CLASS_Y4 ? ['amharic'] : ['english'], termId));
+
+        renderPage();
+        expect(await screen.findByTestId('settling-in-grade-badge')).toHaveTextContent('Year 3 criteria');
+        expect(await screen.findByTestId('settling-in-progress-table')).toBeInTheDocument();
+        expect(assignmentApi.subjects).toHaveBeenLastCalledWith({ teacherId: 'subject-user', academicYearId: YEAR_CURRENT });
+        expect(classApi.list).not.toHaveBeenCalled();
+        expect(settlingInApi.classReport).not.toHaveBeenCalled();
+        expect(settlingInApi.subjectClassReport).toHaveBeenCalledWith(CLASS_Y3, TERM_1);
+        expect(screen.queryByTestId('settling-in-main-teacher-editor')).not.toBeInTheDocument();
+        expect(screen.getByTestId('settling-in-progress-table')).not.toHaveTextContent('Main teacher');
+        expect(screen.getByTestId(`settling-in-open-${STUDENT_1}-english`)).toBeEnabled();
+        expect(screen.queryByTestId(`settling-in-open-${STUDENT_1}-mathematics`)).not.toBeInTheDocument();
+
+        fireEvent.mouseDown(within(screen.getByTestId('settling-in-class-select')).getByRole('combobox'));
+        expect(await screen.findByRole('option', { name: /Year 4 - Green/ })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /Year 5/ })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('option', { name: /Year 4 - Green/ }));
+
+        expect(await screen.findByTestId('settling-in-grade-badge')).toHaveTextContent('Year 4 criteria');
+        const picker = within(screen.getByTestId('settling-in-subject-select'));
+        expect(picker.getByRole('button', { name: 'Amharic' })).toBeInTheDocument();
+        expect(picker.queryByRole('button', { name: 'English' })).not.toBeInTheDocument();
+        expect(within(await screen.findByTestId('settling-in-criteria-table')).getAllByRole('columnheader')
+            .map((cell) => cell.textContent)).toEqual(['Teacher-provided criterion', 'WA', 'WW', 'WT']);
+        expect(settlingInApi.subjectClassReport).toHaveBeenCalledWith(CLASS_Y4, TERM_1);
+    });
+
+    test('subject teachers can tick and save their assigned section without a main-teacher editor', async () => {
+        useAuth.mockReturnValue({ user: { id: 'subject-user', name: 'Dawit', role: 'subject_teacher' } });
+        assignmentApi.subjects.mockResolvedValue({ assignments: [
+            subjectAssignment(CLASS_Y3, 'Year 3 - Blue', 3, 'english'),
+        ] });
+        settlingInApi.subjectClassReport.mockResolvedValue(makeSubjectProgressReport(CLASS_Y3, ['english']));
+        renderPage();
+
+        expect(await screen.findByTestId('settling-in-assessment-editor')).toBeInTheDocument();
+        expect(screen.queryByTestId('settling-in-main-teacher-editor')).not.toBeInTheDocument();
+        const workingTowards = await screen.findByTestId('settling-in-rating-y3-english-01-WT');
+        await waitFor(() => expect(workingTowards).toBeEnabled());
+        fireEvent.click(workingTowards);
+        fireEvent.click(screen.getByTestId('settling-in-save-section'));
+
+        await waitFor(() => expect(settlingInApi.saveSection).toHaveBeenCalledWith({
+            classId: CLASS_Y3,
+            studentId: STUDENT_1,
+            termId: TERM_1,
+            subjectKey: 'english',
+            ratings: { 'y3-english-01': 'WT', 'y3-english-02': null },
+        }));
+        expect(settlingInApi.subjectReport).toHaveBeenCalledWith(CLASS_Y3, TERM_1, 'english', STUDENT_1);
+        expect(await screen.findByText(/English saved for Abel Tesfaye/)).toBeInTheDocument();
     });
 
     test('lists only the class the main teacher logged into and keeps its selector active', async () => {
@@ -253,6 +364,8 @@ describe('Settling In Report workspace', () => {
 
         expect(await screen.findByTestId('settling-in-grade-badge')).toHaveTextContent('Year 4 criteria');
         expect((await screen.findAllByText(/Year 4: To make predictions/)).length).toBeGreaterThanOrEqual(1);
+        expect(within(screen.getByTestId('settling-in-criteria-table')).getAllByRole('columnheader')
+            .map((cell) => cell.textContent)).toEqual(['Teacher-provided criterion', 'WT', 'WW', 'WA']);
         expect(settlingInApi.classReport).toHaveBeenCalledWith(CLASS_Y4, TERM_1);
     });
 
@@ -305,6 +418,35 @@ describe('Settling In Report workspace', () => {
             ratings: { conduct: 'pleasing', organisation: 'satisfactory', attendance: null },
         }));
         expect(await within(editor).findByText(/Main teacher section saved for Abel Tesfaye/)).toBeInTheDocument();
+    });
+
+    test('subject-teacher preview and print contain only the selected assigned section', async () => {
+        useAuth.mockReturnValue({ user: { id: 'subject-user', name: 'Dawit', role: 'subject_teacher' } });
+        assignmentApi.subjects.mockResolvedValue({ assignments: [
+            subjectAssignment(CLASS_Y3, 'Year 3 - Blue', 3, 'english'),
+        ] });
+        settlingInApi.subjectClassReport.mockResolvedValue(makeSubjectProgressReport(CLASS_Y3, ['english']));
+        const printSpy = jest.spyOn(window, 'print').mockImplementation(() => {});
+        renderPage();
+        await screen.findByTestId('settling-in-assessment-editor');
+
+        fireEvent.click(screen.getByText('Preview / print'));
+        const preview = screen.getByTestId('settling-in-selected-preview');
+        const subjectPage = await within(preview).findByRole('table', { name: 'English Settling In ratings' });
+        expect(within(preview).getByText('Settling In — English')).toBeInTheDocument();
+        expect(within(preview).queryByText('Maths')).not.toBeInTheDocument();
+        expect(within(preview).queryByTestId(`settling-in-side-${STUDENT_1}-outside`)).not.toBeInTheDocument();
+        expect(subjectPage).toBeInTheDocument();
+        expect(screen.queryByTestId('settling-in-print-button')).not.toBeInTheDocument();
+
+        const printSectionButton = screen.getByTestId('settling-in-print-subject-section-button');
+        await waitFor(() => expect(printSectionButton).toBeEnabled());
+        fireEvent.click(printSectionButton);
+        await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
+        const printArea = screen.getByTestId('settling-in-subject-print-area');
+        expect(within(printArea).getByRole('table', { name: 'English Settling In ratings', hidden: true })).toBeInTheDocument();
+        expect(screen.queryByTestId('settling-in-print-area')).not.toBeInTheDocument();
+        printSpy.mockRestore();
     });
 
     test('previews the four A5 booklet panels on two A4 duplex sides and prints the class', async () => {

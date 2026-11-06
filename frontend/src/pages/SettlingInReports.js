@@ -9,7 +9,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SaveIcon from '@mui/icons-material/Save';
 import {
-    academicYearApi, classApi, settlingInApi, termApi,
+    academicYearApi, assignmentApi, classApi, settlingInApi, termApi,
 } from '../api/endpoints';
 import useApi from '../hooks/useApi';
 import PageHeader from '../components/PageHeader';
@@ -17,6 +17,7 @@ import DataState from '../components/DataState';
 import { useAuth } from '../auth/AuthContext';
 
 const INPUT_RATING_ORDER = ['WT', 'WW', 'WA'];
+const EMPTY_SUBJECT_KEYS = Object.freeze([]);
 const PRINT_SUBJECT_PANELS = [
     { pageNumber: 2, subjectKeys: ['english', 'mathematics', 'science'] },
     { pageNumber: 3, subjectKeys: ['global_citizenship', 'amharic'] },
@@ -48,7 +49,23 @@ const RATING_LABELS = {
     WA: 'Working Above',
 };
 
-const isSupportedClass = (klass) => [3, 4].includes(Number(klass?.yearLevel));
+const classYearLevel = (klass) => {
+    const configuredYear = Number(klass?.yearLevel ?? klass?.year_level);
+    if ([3, 4].includes(configuredYear)) return configuredYear;
+    const nameMatch = String(klass?.name || '').match(/\byear\s*([34])\b/i);
+    return nameMatch ? Number(nameMatch[1]) : null;
+};
+const isSupportedClass = (klass) => [3, 4].includes(classYearLevel(klass));
+const subjectKeyForAssignment = (assignment) => {
+    const code = String(assignment?.subject?.code || '').trim().toUpperCase();
+    const name = String(assignment?.subject?.name || '').trim().toLowerCase();
+    if (code === 'ENG' || name === 'english') return 'english';
+    if (code === 'AMH' || name === 'amharic') return 'amharic';
+    return null;
+};
+const countSavedRatings = (subject, section) => Number.isFinite(Number(section?.ratedCount))
+    ? Number(section.ratedCount)
+    : countRatings(subject?.criteria || [], section?.ratings);
 const DEFAULT_MAIN_TEACHER_TEMPLATE = {
     version: 'settling-in-main-teacher-2026-27-v1',
     categories: DEFAULT_MAIN_TEACHER_CATEGORIES,
@@ -300,10 +317,74 @@ function PrintReportSide({ student, report, classRecord, yearName, side, isLast 
     );
 }
 
+function SubjectSectionPage({ report, student, subject, teacherName }) {
+    const ratings = student.sections?.[subject.key]?.ratings || {};
+    return (
+        <Paper className="settling-in-subject-page" variant="outlined" sx={{
+            width: '100%', maxWidth: 780, mx: 'auto', p: { xs: 2, sm: 3 },
+            borderRadius: 1.5, color: '#111', bgcolor: '#fff',
+        }}>
+            <Typography sx={{ fontWeight: 900, fontSize: '14pt', textAlign: 'center' }}>
+                British International School P.L.C.
+            </Typography>
+            <Typography sx={{ fontWeight: 800, fontSize: '13pt', textAlign: 'center', mt: 0.25 }}>
+                Settling In — {subject.label}
+            </Typography>
+            <Typography sx={{ fontSize: '12pt', textAlign: 'center', color: '#444', mb: 2 }}>
+                {report.template.label} · {report.term.name}
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 2 }}>
+                <Typography sx={{ fontSize: '12pt' }}><strong>Student:</strong> {student.name}</Typography>
+                <Typography sx={{ fontSize: '12pt' }}><strong>Class:</strong> {report.class.name}</Typography>
+                <Typography sx={{ fontSize: '12pt' }}><strong>Roll number:</strong> {student.rollNum ?? '—'}</Typography>
+                <Typography sx={{ fontSize: '12pt' }}><strong>Admission no.:</strong> {student.admissionNo || '—'}</Typography>
+            </Box>
+            <Table size="small" aria-label={`${subject.label} Settling In ratings`} sx={{
+                tableLayout: 'fixed', borderCollapse: 'collapse',
+                '& th, & td': {
+                    border: '1px solid #333', color: '#111',
+                    fontFamily: '"Times New Roman", Georgia, serif', fontSize: '12pt',
+                    lineHeight: 1.2, px: 1, py: 0.75,
+                },
+                '& th:first-of-type, & td:first-of-type': { width: '70%' },
+                '& th:not(:first-of-type), & td:not(:first-of-type)': { width: '10%', textAlign: 'center' },
+            }}>
+                <TableHead>
+                    <TableRow sx={{ bgcolor: '#e8e8e8' }}>
+                        <TableCell sx={{ fontWeight: 900 }}>Learning objective</TableCell>
+                        {report.template.ratingOrder.map((rating) => (
+                            <TableCell key={rating} sx={{ fontWeight: 900 }}>{rating}</TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {subject.criteria.map((criterion) => (
+                        <TableRow key={criterion.id}>
+                            <TableCell>{criterion.text}</TableCell>
+                            {report.template.ratingOrder.map((rating) => (
+                                <TableCell key={rating}>
+                                    {ratings[criterion.id] === rating ? '✓' : ''}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+            <Stack direction="row" justifyContent="space-between" gap={2} sx={{ mt: 1.5 }}>
+                <Typography sx={{ fontSize: '12pt' }}>
+                    Saved ratings: {student.sections?.[subject.key]?.ratedCount || 0} of {subject.criteria.length}
+                </Typography>
+                {teacherName && <Typography sx={{ fontSize: '12pt' }}>Subject teacher: {teacherName}</Typography>}
+            </Stack>
+        </Paper>
+    );
+}
+
 export default function SettlingInReports({ initialClass = null } = {}) {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
     const isMainTeacher = user?.role === 'main_teacher';
+    const isSubjectTeacher = user?.role === 'subject_teacher';
     const loginClass = useMemo(() => (initialClass?.id ? {
         ...initialClass,
         id: String(initialClass.id),
@@ -328,10 +409,12 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const classes = useApi(
         () => (hasLoginClassContext
             ? Promise.resolve([loginClass])
-            : classApi.list(isMainTeacher
-                ? { mine: true, ...(academicYearId ? { academicYearId } : {}) }
-                : undefined)),
-        [hasLoginClassContext, isMainTeacher, academicYearId, loginClass],
+            : isSubjectTeacher
+                ? Promise.resolve([])
+                : classApi.list(isMainTeacher
+                    ? { mine: true, ...(academicYearId ? { academicYearId } : {}) }
+                    : undefined)),
+        [hasLoginClassContext, isMainTeacher, isSubjectTeacher, academicYearId, loginClass],
     );
     const terms = useApi(() => termApi.list(), []);
     const years = useApi(() => academicYearApi.list(), []);
@@ -352,38 +435,111 @@ export default function SettlingInReports({ initialClass = null } = {}) {
             || termsForYear[0]?.id
             || '';
 
-    const supportedClasses = useMemo(
-        () => {
-            if (hasLoginClassContext) {
-                return isSupportedClass(loginClass) ? [loginClass] : [];
-            }
-            return (classes.data || []).filter((item) => isSupportedClass(item)
-                && (isAdmin || (isMainTeacher && item.mainTeacher?.id === user?.id)));
-        },
-        [classes.data, hasLoginClassContext, loginClass, isAdmin, isMainTeacher, user?.id],
+    const subjectAssignmentsState = useApi(
+        () => (isSubjectTeacher && user?.id && resolvedAcademicYearId
+            ? assignmentApi.subjects({ teacherId: user.id, academicYearId: resolvedAcademicYearId })
+                .then((result) => result.assignments || [])
+            : Promise.resolve([])),
+        [isSubjectTeacher, user?.id, resolvedAcademicYearId],
     );
+    const subjectClassOptions = useMemo(() => {
+        if (!isSubjectTeacher) return [];
+        const byClass = new Map();
+        (subjectAssignmentsState.data || []).forEach((assignment) => {
+            const klass = assignment.class;
+            const subjectKey = subjectKeyForAssignment(assignment);
+            if (!klass?.id || !subjectKey || !isSupportedClass(klass)) return;
+            const key = String(klass.id);
+            if (!byClass.has(key)) {
+                byClass.set(key, {
+                    id: key,
+                    name: klass.name,
+                    yearLevel: classYearLevel(klass),
+                    subjectKeys: [],
+                });
+            }
+            const entry = byClass.get(key);
+            if (!entry.subjectKeys.includes(subjectKey)) entry.subjectKeys.push(subjectKey);
+        });
+        return [...byClass.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }, [isSubjectTeacher, subjectAssignmentsState.data]);
+    const classOptionsLoading = isSubjectTeacher
+        ? years.loading || current.loading || subjectAssignmentsState.loading
+        : classes.loading;
+    const classOptionsError = isSubjectTeacher
+        ? subjectAssignmentsState.error || years.error || current.error
+        : classes.error;
+
+    const supportedClasses = useMemo(() => {
+        if (isSubjectTeacher) return subjectClassOptions;
+        if (hasLoginClassContext) return isSupportedClass(loginClass) ? [loginClass] : [];
+        return (classes.data || []).filter((item) => isSupportedClass(item)
+            && (isAdmin || (isMainTeacher && item.mainTeacher?.id === user?.id)));
+    }, [classes.data, subjectClassOptions, isSubjectTeacher, hasLoginClassContext, loginClass, isAdmin, isMainTeacher, user?.id]);
     const selectedClass = supportedClasses.find((item) => String(item.id) === String(classId)) || null;
+    const assignedSubjectKeys = selectedClass?.subjectKeys || EMPTY_SUBJECT_KEYS;
+    const activeSubjectKey = isSubjectTeacher
+        ? (assignedSubjectKeys.includes(subjectKey) ? subjectKey : assignedSubjectKeys[0] || '')
+        : subjectKey;
     const reportState = useApi(
         () => (classId && resolvedTermId
-            ? settlingInApi.classReport(classId, resolvedTermId)
+            ? isSubjectTeacher
+                ? settlingInApi.subjectClassReport(classId, resolvedTermId)
+                : settlingInApi.classReport(classId, resolvedTermId)
             : Promise.resolve(null)),
-        [classId, resolvedTermId],
+        [isSubjectTeacher, classId, resolvedTermId],
     );
     const fetchedReport = reportState.data;
     const report = fetchedReport?.class?.id === classId
         && fetchedReport?.term?.id === resolvedTermId
         ? fetchedReport
         : null;
-    const students = useMemo(() => report?.students || [], [report?.students]);
-    const selectedStudent = students.find((item) => String(item.id) === String(studentId)) || null;
+    const inputRatingOrder = isSubjectTeacher
+        ? report?.template?.ratingOrder || INPUT_RATING_ORDER
+        : INPUT_RATING_ORDER;
+    const reportStudents = useMemo(() => report?.students || [], [report?.students]);
+    const selectedStudentSummary = reportStudents.find((item) => String(item.id) === String(studentId)) || null;
     const editableSubjects = useMemo(
         () => (report?.template?.subjects || []).filter((subject) => isAdmin
-            || (isMainTeacher && subject.assessorRole === 'main_teacher')),
-        [report?.template?.subjects, isAdmin, isMainTeacher],
+            || (isMainTeacher && subject.assessorRole === 'main_teacher')
+            || (isSubjectTeacher && subject.assessorRole === 'subject_teacher' && assignedSubjectKeys.includes(subject.key))),
+        [report?.template?.subjects, isAdmin, isMainTeacher, isSubjectTeacher, assignedSubjectKeys],
     );
-    const selectedSubject = editableSubjects.find((item) => item.key === subjectKey)
+    const selectedSubject = editableSubjects.find((item) => item.key === activeSubjectKey)
         || editableSubjects[0]
         || null;
+    const subjectStudentReportState = useApi(
+        () => (isSubjectTeacher && classId && resolvedTermId && selectedStudentSummary && selectedSubject
+            ? settlingInApi.subjectReport(classId, resolvedTermId, selectedSubject.key, selectedStudentSummary.id)
+            : Promise.resolve(null)),
+        [isSubjectTeacher, classId, resolvedTermId, selectedSubject?.key, selectedStudentSummary?.id],
+    );
+    const fetchedSubjectStudentReport = subjectStudentReportState.data;
+    const subjectStudentReport = fetchedSubjectStudentReport
+        && fetchedSubjectStudentReport.class?.id === classId
+        && fetchedSubjectStudentReport.term?.id === resolvedTermId
+        && fetchedSubjectStudentReport.subject?.key === selectedSubject?.key
+        && fetchedSubjectStudentReport.student?.id === selectedStudentSummary?.id
+        ? fetchedSubjectStudentReport
+        : null;
+    const subjectDetailLoading = Boolean(isSubjectTeacher
+        && selectedStudentSummary
+        && selectedSubject
+        && !subjectStudentReport
+        && !subjectStudentReportState.error);
+    const subjectSectionLocked = Boolean(isSubjectTeacher
+        && (!subjectStudentReport || subjectStudentReportState.error));
+    const students = useMemo(() => {
+        if (!isSubjectTeacher || !subjectStudentReport) return reportStudents;
+        return reportStudents.map((student) => String(student.id) === String(subjectStudentReport.student.id)
+            ? {
+                ...student,
+                ...subjectStudentReport.student,
+                sections: { ...student.sections, ...subjectStudentReport.student.sections },
+            }
+            : student);
+    }, [isSubjectTeacher, reportStudents, subjectStudentReport]);
+    const selectedStudent = students.find((item) => String(item.id) === String(studentId)) || null;
     const selectedSection = selectedStudent?.sections?.[selectedSubject?.key] || null;
     const savedRatings = selectedSection?.ratings;
     const savedSectionUpdatedAt = selectedSection?.updatedAt;
@@ -394,20 +550,19 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const yearName = (years.data || []).find((item) => String(item.id) === String(resolvedAcademicYearId))?.name
         || (years.data || []).find((item) => String(item.id) === String(report?.term?.academicYearId))?.name
         || '';
-
     useEffect(() => {
         if (String(termId) !== String(resolvedTermId)) setTermId(resolvedTermId);
     }, [resolvedTermId, termId]);
 
     useEffect(() => {
-        if (classes.loading) return;
+        if (classOptionsLoading) return;
         if (!supportedClasses.some((item) => String(item.id) === String(classId))) {
             const preferredClass = supportedClasses.find(
                 (item) => String(item.id) === String(loginClass?.id),
             );
             setClassId(String(preferredClass?.id || supportedClasses[0]?.id || ''));
         }
-    }, [classes.loading, supportedClasses, classId, loginClass?.id]);
+    }, [classOptionsLoading, supportedClasses, classId, loginClass?.id]);
 
     useEffect(() => {
         if (editableSubjects.length && !editableSubjects.some((item) => item.key === subjectKey)) {
@@ -431,15 +586,21 @@ export default function SettlingInReports({ initialClass = null } = {}) {
             return;
         }
         setDraftRatings(cleanRatings(selectedSubject.criteria, savedRatings));
-        setSaveError('');
-        setSaveSuccess('');
     }, [classId, resolvedTermId, studentId, selectedSubject, report?.template?.version, savedRatings, savedSectionUpdatedAt]);
 
     useEffect(() => {
+        setSaveError('');
+        setSaveSuccess('');
+    }, [classId, resolvedTermId, studentId, selectedSubject?.key]);
+
+    useEffect(() => {
         setDraftMainTeacherRatings(cleanMainTeacherRatings(mainTeacherTemplate, savedMainTeacherRatings));
+    }, [classId, resolvedTermId, studentId, mainTeacherTemplate, savedMainTeacherRatings, savedMainTeacherUpdatedAt]);
+
+    useEffect(() => {
         setMainTeacherSaveError('');
         setMainTeacherSaveSuccess('');
-    }, [classId, resolvedTermId, studentId, mainTeacherTemplate, savedMainTeacherRatings, savedMainTeacherUpdatedAt]);
+    }, [classId, resolvedTermId, studentId]);
 
     useEffect(() => {
         if (!printRequest) return undefined;
@@ -453,9 +614,12 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const printStudents = printRequest?.studentId
         ? students.filter((student) => String(student.id) === String(printRequest.studentId))
         : students;
+    const subjectPrintStudent = isSubjectTeacher && printRequest?.studentId
+        ? students.find((student) => String(student.id) === String(printRequest.studentId)) || null
+        : null;
 
     const saveCurrentSection = async () => {
-        if (!selectedStudent || !selectedSubject || !classId || !resolvedTermId) return;
+        if (!selectedStudent || !selectedSubject || !classId || !resolvedTermId || subjectSectionLocked) return;
         setSaving(true);
         setSaveError('');
         setSaveSuccess('');
@@ -467,6 +631,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                 subjectKey: selectedSubject.key,
                 ratings: cleanRatings(selectedSubject.criteria, draftRatings),
             });
+            if (isSubjectTeacher) await subjectStudentReportState.silentReload();
             await reportState.silentReload();
             setSaveSuccess(`${selectedSubject.label} saved for ${selectedStudent.name}.`);
         } catch (error) {
@@ -518,7 +683,24 @@ export default function SettlingInReports({ initialClass = null } = {}) {
 
     return (
         <>
-            <style>{`
+            <style>{isSubjectTeacher ? `
+                #settling-in-subject-print-area { display: none; }
+                @page { size: A4 portrait; margin: 12mm; }
+                @media print {
+                    html, body { margin: 0 !important; }
+                    body * { visibility: hidden !important; }
+                    #settling-in-subject-print-area, #settling-in-subject-print-area * { visibility: visible !important; }
+                    #settling-in-subject-print-area {
+                        display: block !important; position: absolute !important;
+                        left: 0 !important; top: 0 !important; width: 100% !important;
+                    }
+                    #settling-in-subject-print-area .settling-in-subject-page {
+                        width: 100% !important; max-width: none !important; margin: 0 !important;
+                        padding: 0 !important; border: 0 !important; box-shadow: none !important;
+                    }
+                    #settling-in-subject-print-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+            ` : `
                 #settling-in-print-area { display: none; }
                 .settling-in-sheet .settling-in-panel {
                     box-sizing: border-box; height: 100%; min-width: 0; overflow: hidden;
@@ -550,10 +732,22 @@ export default function SettlingInReports({ initialClass = null } = {}) {
 
             <PageHeader
                 title="Settling In Report"
-                subtitle={isMainTeacher
-                    ? 'Main-teacher pilot · assigned classes only · edit Maths, Science, Global Citizenship and the main-teacher section; English and Amharic are read-only.'
-                    : 'Subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet.'}
-                action={mode === 'preview' && report && (
+                subtitle={isSubjectTeacher
+                    ? 'Subject-teacher assessment · assigned English and/or Amharic sections only · tick and save one student at a time.'
+                    : isMainTeacher
+                        ? 'Main-teacher pilot · assigned classes only · edit Maths, Science, Global Citizenship and the main-teacher section; English and Amharic are read-only.'
+                        : 'Subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet.'}
+                action={mode === 'preview' && report && (isSubjectTeacher ? (
+                    <Button
+                        variant="contained"
+                        startIcon={<PrintIcon />}
+                        disabled={!selectedStudent || !selectedSection || subjectSectionLocked}
+                        onClick={() => setPrintRequest({ studentId: selectedStudent?.id ?? null })}
+                        data-testid="settling-in-print-subject-section-button"
+                    >
+                        Print selected section
+                    </Button>
+                ) : (
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                         <Button
                             variant="contained"
@@ -573,7 +767,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                             Print selected student
                         </Button>
                     </Stack>
-                )}
+                ))}
             />
 
             <Card sx={{ p: 2, mb: 2.5 }}>
@@ -615,11 +809,13 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         data-testid="settling-in-class-select"
                     >
                         {!hasLoginClassContext && (
-                            <MenuItem value=""><em>Choose a Year 3 or Year 4 class…</em></MenuItem>
+                            <MenuItem value="">
+                                <em>{isSubjectTeacher ? 'Choose an assigned class…' : 'Choose a Year 3 or Year 4 class…'}</em>
+                            </MenuItem>
                         )}
                         {supportedClasses.map((klass) => (
                             <MenuItem key={klass.id} value={klass.id}>
-                                {hasLoginClassContext ? klass.name : `${klass.name} · Year ${klass.yearLevel}`}
+                                {hasLoginClassContext ? klass.name : `${klass.name} · Year ${classYearLevel(klass)}`}
                             </MenuItem>
                         ))}
                     </TextField>
@@ -642,18 +838,32 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     </ToggleButtonGroup>
                 </Stack>
                 <Alert severity="info" sx={{ mt: 1.5 }}>
-                    Year 3 and Year 4 use different teacher-provided criteria. Ratings start blank and are not copied from sample ticks. {isMainTeacher
-                        ? 'This pilot is limited to your assigned classes. You can edit Maths, Science, Global Citizenship, and Conduct, Organisation, and Attendance. English and Amharic remain subject-teacher sections and are read-only; admins can make corrections.'
-                        : 'Admins can edit every section. Main teachers are limited to their assigned classes and cannot edit the English or Amharic subject-teacher sections.'}
+                    Year 3 and Year 4 use different teacher-provided criteria. Ratings start blank and are not copied from sample ticks. {isSubjectTeacher
+                        ? 'Only your assigned English or Amharic sections in Year 3 and Year 4 classes are shown. Select a student, tick the criteria, and save; other subjects and the main-teacher section are not available.'
+                        : isMainTeacher
+                            ? 'This pilot is limited to your assigned classes. You can edit Maths, Science, Global Citizenship, and Conduct, Organisation, and Attendance. English and Amharic remain subject-teacher sections and are read-only; admins can make corrections.'
+                            : 'Admins can edit every section. Main teachers are limited to their assigned classes and cannot edit the English or Amharic subject-teacher sections.'}
                 </Alert>
             </Card>
 
             {!classId ? (
-                <Alert severity="info">Choose a Year 3 or Year 4 class to begin.</Alert>
+                classOptionsLoading ? (
+                    <DataState loading error={classOptionsError}>
+                        <Alert severity="info">Loading assigned classes…</Alert>
+                    </DataState>
+                ) : classOptionsError ? (
+                    <Alert severity="error">{classOptionsError}</Alert>
+                ) : (
+                    <Alert severity="info">
+                        {isSubjectTeacher
+                            ? 'No assigned English or Amharic Settling In classes are available for this academic year.'
+                            : 'Choose a Year 3 or Year 4 class to begin.'}
+                    </Alert>
+                )
             ) : (
                 <DataState
-                    loading={classes.loading || terms.loading || years.loading || current.loading || reportState.loading}
-                    error={classes.error || terms.error || years.error || current.error || reportState.error}
+                    loading={classOptionsLoading || terms.loading || years.loading || current.loading || reportState.loading}
+                    error={classOptionsError || terms.error || years.error || current.error || reportState.error}
                 >
                     {!resolvedTermId ? (
                         <Alert severity="info">Choose an academic year with at least one term to load this class's Settling In Report cards.</Alert>
@@ -678,7 +888,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                         ))}
                                     </TextField>
                                     <ToggleButtonGroup
-                                        exclusive size="small" value={subjectKey}
+                                        exclusive size="small" value={activeSubjectKey}
                                         onChange={(_, value) => value && setSubjectKey(value)}
                                         data-testid="settling-in-subject-select"
                                         sx={{ flexWrap: 'wrap' }}
@@ -693,6 +903,12 @@ export default function SettlingInReports({ initialClass = null } = {}) {
 
                                 {selectedStudent && selectedSubject ? (
                                     <>
+                                        {isSubjectTeacher && subjectDetailLoading && (
+                                            <Alert severity="info" sx={{ mb: 1.5 }}>Loading saved ratings for this student…</Alert>
+                                        )}
+                                        {isSubjectTeacher && subjectStudentReportState.error && (
+                                            <Alert severity="error" sx={{ mb: 1.5 }}>{subjectStudentReportState.error}</Alert>
+                                        )}
                                         <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
                                             <Box>
                                                 <Typography variant="h6">{selectedStudent.name} · {selectedSubject.label}</Typography>
@@ -712,7 +928,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                                 <TableHead>
                                                     <TableRow>
                                                         <TableCell sx={{ fontWeight: 800, minWidth: 300 }}>Teacher-provided criterion</TableCell>
-                                                        {INPUT_RATING_ORDER.map((rating) => (
+                                                        {inputRatingOrder.map((rating) => (
                                                             <TableCell key={rating} align="center" sx={{ fontWeight: 800, minWidth: 145 }}>
                                                                 <Tooltip title={RATING_LABELS[rating]}><span>{rating}</span></Tooltip>
                                                             </TableCell>
@@ -727,29 +943,30 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                                                     {index + 1}. {criterion.text}
                                                                 </Typography>
                                                             </TableCell>
-                    {INPUT_RATING_ORDER.map((rating) => (
-                        <TableCell key={rating} align="center">
-                            <Button
-                                size="small"
-                                variant={draftRatings[criterion.id] === rating ? 'contained' : 'outlined'}
-                                color={draftRatings[criterion.id] === rating ? 'primary' : 'inherit'}
-                                aria-label={`${RATING_LABELS[rating]} for ${criterion.text}`}
-                                aria-pressed={draftRatings[criterion.id] === rating}
-                                data-testid={`settling-in-rating-${criterion.id}-${rating}`}
-                                onClick={() => {
-                                    setDraftRatings((previous) => ({
-                                        ...previous,
-                                        [criterion.id]: previous[criterion.id] === rating ? null : rating,
-                                    }));
-                                    setSaveSuccess('');
-                                }}
-                                sx={{ minWidth: 48, fontWeight: 800 }}
-                            >
-                                {draftRatings[criterion.id] === rating && <CheckIcon fontSize="small" sx={{ mr: 0.25 }} />}
-                                {rating}
-                            </Button>
-                        </TableCell>
-                    ))}
+                                                            {inputRatingOrder.map((rating) => (
+                                                                <TableCell key={rating} align="center">
+                                                                    <Button
+                                                                        size="small"
+                                                                        disabled={saving || subjectSectionLocked}
+                                                                        variant={draftRatings[criterion.id] === rating ? 'contained' : 'outlined'}
+                                                                        color={draftRatings[criterion.id] === rating ? 'primary' : 'inherit'}
+                                                                        aria-label={`${RATING_LABELS[rating]} for ${criterion.text}`}
+                                                                        aria-pressed={draftRatings[criterion.id] === rating}
+                                                                        data-testid={`settling-in-rating-${criterion.id}-${rating}`}
+                                                                        onClick={() => {
+                                                                            setDraftRatings((previous) => ({
+                                                                                ...previous,
+                                                                                [criterion.id]: previous[criterion.id] === rating ? null : rating,
+                                                                            }));
+                                                                            setSaveSuccess('');
+                                                                        }}
+                                                                        sx={{ minWidth: 48, fontWeight: 800 }}
+                                                                    >
+                                                                        {draftRatings[criterion.id] === rating && <CheckIcon fontSize="small" sx={{ mr: 0.25 }} />}
+                                                                        {rating}
+                                                                    </Button>
+                                                                </TableCell>
+                                                            ))}
                                                         </TableRow>
                                                     ))}
                                                 </TableBody>
@@ -759,12 +976,12 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                         {saveError && <Alert severity="error" sx={{ mt: 1.5 }}>{saveError}</Alert>}
                                         {saveSuccess && <Alert severity="success" sx={{ mt: 1.5 }}>{saveSuccess}</Alert>}
                                         <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
-                                            <Button startIcon={<RestartAltIcon />} onClick={resetCurrentDraft} disabled={saving}>
+                                            <Button startIcon={<RestartAltIcon />} onClick={resetCurrentDraft} disabled={saving || subjectSectionLocked}>
                                                 Reset to saved
                                             </Button>
                                             <Button
                                                 variant="contained" startIcon={<SaveIcon />}
-                                                onClick={saveCurrentSection} disabled={saving}
+                                                onClick={saveCurrentSection} disabled={saving || subjectSectionLocked}
                                                 data-testid="settling-in-save-section"
                                             >
                                                 {saving ? 'Saving…' : `Save ${selectedSubject.label}`}
@@ -774,61 +991,71 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                 ) : <Alert severity="info">Select a student and subject to assess.</Alert>}
                             </Card>
 
-                            <Card sx={{ p: { xs: 1.5, md: 2 } }} data-testid="settling-in-main-teacher-editor">
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} justifyContent="space-between" sx={{ mb: 1.5 }}>
-                                    <Box>
-                                        <Typography variant="h6">Conduct, Organisation &amp; Attendance · {selectedStudent?.name || 'Select a student'}</Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Main-teacher ratings · choose Pleasing, Satisfactory, or Cause for Concern for each item.
-                                        </Typography>
-                                    </Box>
-                                    <Chip
-                                        label={`${countMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings)} of ${mainTeacherTemplate.categories.length} rated`}
-                                        color={countMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings) === mainTeacherTemplate.categories.length ? 'success' : 'default'}
-                                        variant="outlined"
-                                    />
-                                </Stack>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
-                                    {mainTeacherTemplate.categories.map((category) => (
-                                        <TextField
-                                            key={category.key}
-                                            select
-                                            label={category.label}
-                                            size="small"
-                                            value={draftMainTeacherRatings[category.key] || ''}
-                                            onChange={(event) => {
-                                                setDraftMainTeacherRatings((previous) => ({
-                                                    ...previous,
-                                                    [category.key]: event.target.value || null,
-                                                }));
-                                                setMainTeacherSaveSuccess('');
-                                            }}
-                                            data-testid={`settling-in-main-rating-${category.key}`}
-                                        >
-                                            <MenuItem value=""><em>Not rated</em></MenuItem>
-                                            {mainTeacherTemplate.ratingOrder.map((rating) => (
-                                                <MenuItem key={rating} value={rating}>{mainTeacherTemplate.ratings[rating]}</MenuItem>
-                                            ))}
-                                        </TextField>
-                                    ))}
-                                </Box>
-                                {mainTeacherSaveError && <Alert severity="error" sx={{ mt: 1.5 }}>{mainTeacherSaveError}</Alert>}
-                                {mainTeacherSaveSuccess && <Alert severity="success" sx={{ mt: 1.5 }}>{mainTeacherSaveSuccess}</Alert>}
-                                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
-                                    <Button onClick={resetCurrentMainTeacherDraft} disabled={savingMainTeacher}>
-                                        Reset to saved
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        startIcon={<SaveIcon />}
-                                        onClick={saveCurrentMainTeacherSection}
-                                        disabled={savingMainTeacher || !selectedStudent}
-                                        data-testid="settling-in-save-main-teacher"
+                            {!isSubjectTeacher && (
+                                <Card sx={{ p: { xs: 1.5, md: 2 } }} data-testid="settling-in-main-teacher-editor">
+                                    <Stack
+                                        direction={{ xs: 'column', sm: 'row' }}
+                                        spacing={1}
+                                        alignItems={{ sm: 'center' }}
+                                        justifyContent="space-between"
+                                        sx={{ mb: 1.5 }}
                                     >
-                                        {savingMainTeacher ? 'Saving…' : 'Save main teacher section'}
-                                    </Button>
-                                </Stack>
-                            </Card>
+                                        <Box>
+                                            <Typography variant="h6">
+                                                Conduct, Organisation &amp; Attendance · {selectedStudent?.name || 'Select a student'}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Main-teacher ratings · choose Pleasing, Satisfactory, or Cause for Concern for each item.
+                                            </Typography>
+                                        </Box>
+                                        <Chip
+                                            label={`${countMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings)} of ${mainTeacherTemplate.categories.length} rated`}
+                                            color={countMainTeacherRatings(mainTeacherTemplate, draftMainTeacherRatings) === mainTeacherTemplate.categories.length ? 'success' : 'default'}
+                                            variant="outlined"
+                                        />
+                                    </Stack>
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
+                                        {mainTeacherTemplate.categories.map((category) => (
+                                            <TextField
+                                                key={category.key}
+                                                select
+                                                label={category.label}
+                                                size="small"
+                                                value={draftMainTeacherRatings[category.key] || ''}
+                                                onChange={(event) => {
+                                                    setDraftMainTeacherRatings((previous) => ({
+                                                        ...previous,
+                                                        [category.key]: event.target.value || null,
+                                                    }));
+                                                    setMainTeacherSaveSuccess('');
+                                                }}
+                                                data-testid={`settling-in-main-rating-${category.key}`}
+                                            >
+                                                <MenuItem value=""><em>Not rated</em></MenuItem>
+                                                {mainTeacherTemplate.ratingOrder.map((rating) => (
+                                                    <MenuItem key={rating} value={rating}>{mainTeacherTemplate.ratings[rating]}</MenuItem>
+                                                ))}
+                                            </TextField>
+                                        ))}
+                                    </Box>
+                                    {mainTeacherSaveError && <Alert severity="error" sx={{ mt: 1.5 }}>{mainTeacherSaveError}</Alert>}
+                                    {mainTeacherSaveSuccess && <Alert severity="success" sx={{ mt: 1.5 }}>{mainTeacherSaveSuccess}</Alert>}
+                                    <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                                        <Button onClick={resetCurrentMainTeacherDraft} disabled={savingMainTeacher}>
+                                            Reset to saved
+                                        </Button>
+                                        <Button
+                                            variant="contained"
+                                            startIcon={<SaveIcon />}
+                                            onClick={saveCurrentMainTeacherSection}
+                                            disabled={savingMainTeacher || !selectedStudent}
+                                            data-testid="settling-in-save-main-teacher"
+                                        >
+                                            {savingMainTeacher ? 'Saving…' : 'Save main teacher section'}
+                                        </Button>
+                                    </Stack>
+                                </Card>
+                            )}
 
                             <Card sx={{ p: 1.5, overflowX: 'auto' }}>
                                 <Typography variant="h6" sx={{ mb: 1 }}>Class progress · {report.class.name}</Typography>
@@ -836,7 +1063,9 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                     <TableHead>
                                         <TableRow>
                                             <TableCell sx={{ fontWeight: 800 }}>Student</TableCell>
-                                            <TableCell align="center" sx={{ fontWeight: 800, minWidth: 125 }}>Main teacher</TableCell>
+                                            {!isSubjectTeacher && (
+                                                <TableCell align="center" sx={{ fontWeight: 800, minWidth: 125 }}>Main teacher</TableCell>
+                                            )}
                                             {report.template.subjects.map((subject) => (
                                                 <TableCell key={subject.key} align="center" sx={{ fontWeight: 800, minWidth: 125 }}>
                                                     {subject.label}
@@ -856,28 +1085,32 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                                         {student.rollNum ? `${student.rollNum}. ` : ''}{student.name}
                                                     </Button>
                                                 </TableCell>
-                                                <TableCell align="center">
-                                                    {(() => {
-                                                        const ratedCount = countMainTeacherRatings(mainTeacherTemplate, student.mainTeacherSection?.ratings);
-                                                        return (
-                                                            <Button
-                                                                size="small"
-                                                                color={ratedCount === mainTeacherTemplate.categories.length ? 'success' : 'primary'}
-                                                                variant={student.id === studentId ? 'contained' : 'outlined'}
-                                                                onClick={() => setStudentId(student.id)}
-                                                                data-testid={`settling-in-open-main-${student.id}`}
-                                                            >
-                                                                {ratedCount}/{mainTeacherTemplate.categories.length}
-                                                            </Button>
-                                                        );
-                                                    })()}
-                                                </TableCell>
+                                                {!isSubjectTeacher && (
+                                                    <TableCell align="center">
+                                                        {(() => {
+                                                            const ratedCount = countMainTeacherRatings(mainTeacherTemplate, student.mainTeacherSection?.ratings);
+                                                            return (
+                                                                <Button
+                                                                    size="small"
+                                                                    color={ratedCount === mainTeacherTemplate.categories.length ? 'success' : 'primary'}
+                                                                    variant={student.id === studentId ? 'contained' : 'outlined'}
+                                                                    onClick={() => setStudentId(student.id)}
+                                                                    data-testid={`settling-in-open-main-${student.id}`}
+                                                                >
+                                                                    {ratedCount}/{mainTeacherTemplate.categories.length}
+                                                                </Button>
+                                                            );
+                                                        })()}
+                                                    </TableCell>
+                                                )}
                                                 {report.template.subjects.map((subject) => {
                                                     const canEditSubject = isAdmin
-                                                        || (isMainTeacher && subject.assessorRole === 'main_teacher');
+                                                        || (isMainTeacher && subject.assessorRole === 'main_teacher')
+                                                        || (isSubjectTeacher && assignedSubjectKeys.includes(subject.key));
                                                     const tooltip = canEditSubject
                                                         ? `Open ${subject.label} criteria for ${student.name}`
                                                         : `${subject.label} is a subject-teacher section and is read-only for main teachers`;
+                                                    const ratedCount = countSavedRatings(subject, student.sections?.[subject.key]);
                                                     return (
                                                         <TableCell key={subject.key} align="center">
                                                             <Tooltip title={tooltip}>
@@ -885,12 +1118,12 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                                                     <Button
                                                                         size="small"
                                                                         disabled={!canEditSubject}
-                                                                        color={countRatings(subject.criteria, student.sections?.[subject.key]?.ratings) === subject.criteria.length ? 'success' : 'primary'}
+                                                                        color={ratedCount === subject.criteria.length ? 'success' : 'primary'}
                                                                         variant={student.id === studentId && subject.key === selectedSubject?.key ? 'contained' : 'outlined'}
                                                                         onClick={() => startAssessment(student.id, subject.key)}
                                                                         data-testid={`settling-in-open-${student.id}-${subject.key}`}
                                                                     >
-                                                                        {countRatings(subject.criteria, student.sections?.[subject.key]?.ratings)}/{subject.criteria.length}
+                                                                        {ratedCount}/{subject.criteria.length}
                                                                     </Button>
                                                                 </span>
                                                             </Tooltip>
@@ -905,41 +1138,88 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         </Stack>
                     ) : (
                         <Stack spacing={2} data-testid="settling-in-selected-preview">
-                            <Card sx={{ p: 2 }}>
-                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-                                    <TextField
-                                        select label="Preview student" size="small" sx={{ minWidth: 260 }}
-                                        value={studentId}
-                                        onChange={(event) => setStudentId(event.target.value)}
-                                        data-testid="settling-in-preview-student-select"
-                                    >
-                                        {students.map((student) => (
-                                            <MenuItem key={student.id} value={student.id}>{student.name}</MenuItem>
-                                        ))}
-                                    </TextField>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Each student uses one A4 landscape sheet, printed double-sided and folded into four A5 panels: Page 4/Page 1 outside, Pages 2/3 inside. Print text is at least 12 pt; margins and row padding are tightened to make room. For printing, choose duplex and flip on the short edge.
-                                    </Typography>
-                                    <Box sx={{ flexGrow: 1 }} />
-                                </Stack>
-                            </Card>
-                            {selectedStudent && PRINT_SIDES.map((side, sideIndex) => (
-                                <PrintReportSide
-                                    key={`${selectedStudent.id}-${side}`}
-                                    student={selectedStudent}
-                                    report={report}
-                                    classRecord={formTutorClass || report.class}
-                                    yearName={yearName}
-                                    side={side}
-                                    isLast={sideIndex === PRINT_SIDES.length - 1}
-                                />
-                            ))}
+                            {isSubjectTeacher ? (
+                                <>
+                                    <Card sx={{ p: 2 }}>
+                                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                                            <TextField
+                                                select label="Preview student" size="small" sx={{ minWidth: 260 }}
+                                                value={studentId}
+                                                onChange={(event) => setStudentId(event.target.value)}
+                                                data-testid="settling-in-preview-student-select"
+                                            >
+                                                {students.map((student) => (
+                                                    <MenuItem key={student.id} value={student.id}>{student.name}</MenuItem>
+                                                ))}
+                                            </TextField>
+                                            <Typography variant="body2" color="text.secondary">
+                                                This print preview contains only your assigned {selectedSubject?.label || 'English or Amharic'} section for the selected student.
+                                            </Typography>
+                                        </Stack>
+                                    </Card>
+                                    {selectedStudent && selectedSubject && (
+                                        <SubjectSectionPage
+                                            report={report}
+                                            student={selectedStudent}
+                                            subject={selectedSubject}
+                                            teacherName={user?.name}
+                                        />
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <Card sx={{ p: 2 }}>
+                                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                                            <TextField
+                                                select label="Preview student" size="small" sx={{ minWidth: 260 }}
+                                                value={studentId}
+                                                onChange={(event) => setStudentId(event.target.value)}
+                                                data-testid="settling-in-preview-student-select"
+                                            >
+                                                {students.map((student) => (
+                                                    <MenuItem key={student.id} value={student.id}>{student.name}</MenuItem>
+                                                ))}
+                                            </TextField>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Each student uses one A4 landscape sheet, printed double-sided and folded into four A5 panels: Page 4/Page 1 outside, Pages 2/3 inside. Print text is at least 12 pt; margins and row padding are tightened to make room. For printing, choose duplex and flip on the short edge.
+                                            </Typography>
+                                            <Box sx={{ flexGrow: 1 }} />
+                                        </Stack>
+                                    </Card>
+                                    {selectedStudent && PRINT_SIDES.map((side, sideIndex) => (
+                                        <PrintReportSide
+                                            key={`${selectedStudent.id}-${side}`}
+                                            student={selectedStudent}
+                                            report={report}
+                                            classRecord={formTutorClass || report.class}
+                                            yearName={yearName}
+                                            side={side}
+                                            isLast={sideIndex === PRINT_SIDES.length - 1}
+                                        />
+                                    ))}
+                                </>
+                            )}
                         </Stack>
                     )}
                 </DataState>
             )}
 
-            {report && printStudents.length > 0 && (
+            {isSubjectTeacher ? (
+                report && subjectPrintStudent && selectedSubject && (
+                    <Box
+                        id="settling-in-subject-print-area"
+                        data-testid="settling-in-subject-print-area"
+                        aria-hidden="true"
+                    >
+                        <SubjectSectionPage
+                            report={report}
+                            student={subjectPrintStudent}
+                            subject={selectedSubject}
+                            teacherName={user?.name}
+                        />
+                    </Box>
+                )
+            ) : report && printStudents.length > 0 && (
                 <Box
                     id="settling-in-print-area"
                     data-testid="settling-in-print-area"
