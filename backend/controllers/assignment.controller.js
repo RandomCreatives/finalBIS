@@ -221,7 +221,7 @@ const removeClassStaff = asyncHandler(async (req, res) => {
 
 const SUBJECT_SELECT = `
     id, class_id, subject_id, teacher_id, sessions_per_week,
-    class:classes(id, name),
+    class:classes(id, name, year_level),
     subject:subjects(id, name, code),
     teacher:users(id, name, email)
 `;

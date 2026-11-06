@@ -18,7 +18,8 @@ jest.mock('../api/endpoints', () => ({
     assignmentApi: { subjects: jest.fn() },
     assessmentApi: { list: jest.fn() },
     studentApi: { list: jest.fn() },
-    termApi: { current: jest.fn() },
+    settlingInApi: { subjectReport: jest.fn() },
+    termApi: { current: jest.fn(), list: jest.fn() },
     timetableApi: { myWeek: jest.fn(), forClass: jest.fn() },
     planningApi: {
         schemes: jest.fn(),
@@ -55,7 +56,7 @@ describe('SubjectHome — Planning & Calendar sections', () => {
     test('sidebar offers Planning and Calendar beside the existing sections', () => {
         renderHome();
         const nav = screen.getByTestId('side-nav');
-        ['Overview', 'My week', 'Planning', 'Calendar', 'My classes', 'Marks'].forEach((label) => {
+        ['Overview', 'My week', 'Planning', 'Calendar', 'My classes', 'Marks', 'Reports'].forEach((label) => {
             expect(within(nav).getByRole('button', { name: label })).toBeInTheDocument();
         });
         // Profile stays pinned to the bottom of the full-length sidebar
