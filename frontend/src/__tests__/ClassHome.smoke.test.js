@@ -12,6 +12,11 @@ jest.mock('../auth/AuthContext', () => ({
     useAuth: jest.fn(),
 }));
 
+jest.mock('../pages/ReportCards', () => ({
+    __esModule: true,
+    default: jest.fn(() => null),
+}));
+
 const { useAuth } = jest.requireMock('../auth/AuthContext');
 
 const renderDash = (slug) => {
@@ -105,10 +110,12 @@ describe('ClassHome dashboard', () => {
         expect(afterReportCards.compareDocumentPosition(adminGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    test('Report Cards opens the shared report workspace from the main-teacher sidebar', () => {
+    test('Report Cards opens inside the main-teacher dashboard instead of navigating to the admin workspace', () => {
         renderDash('year-3-blue');
         fireEvent.click(screen.getByRole('button', { name: 'Report Cards' }));
-        expect(screen.getByTestId('report-cards-target')).toHaveTextContent('Report Cards workspace');
+        expect(screen.getByTestId('class-home-report-cards-section')).toBeInTheDocument();
+        expect(screen.getByTestId('side-nav')).toBeInTheDocument();
+        expect(screen.queryByTestId('report-cards-target')).not.toBeInTheDocument();
     });
 
     test('redirects to /classes when no session', () => {

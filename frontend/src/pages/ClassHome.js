@@ -50,6 +50,7 @@ import useApi from '../hooks/useApi';
 import StudentIdCard from '../components/StudentIdCard';
 import NotificationBell from '../components/NotificationBell';
 import { CalendarBoard } from './PublicCalendar';
+import ReportCards from './ReportCards';
 import PlanningSection from '../components/planning/PlanningDocs';
 import StoreSection from '../components/communications/StoreSection';
 import RequestSection from '../components/communications/RequestSection';
@@ -1710,11 +1711,7 @@ export default function ClassHome() {
                 }[s.id] || s.label} placement="right" arrow>
                     <Box component="span" sx={{ display: 'flex', width: { md: '100%' } }}>
                         <Button disabled={s.soon}
-                            onClick={() => {
-                                if (s.soon) return;
-                                if (s.id === 'reportCards') navigate('/app/report-cards');
-                                else setSection(s.id);
-                            }}
+                            onClick={() => !s.soon && setSection(s.id)}
                             data-testid={s.id === 'profile' ? 'side-nav-profile' : undefined}
                             startIcon={<Icon sx={{ fontSize: 18 }} />}
                             sx={{ width: { md: '100%' }, justifyContent: 'flex-start', textTransform: 'none',
@@ -1857,7 +1854,12 @@ export default function ClassHome() {
                         {section === 'attendance' && <AttendanceSection klass={klass} classId={session.classId} roster={roster} />}
                         {section === 'marks' && <MarksSection klass={klass} classId={session.classId} roster={roster} teacherId={session.userId} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
-{section === 'calendar' && <CalendarBoard />}
+                        {section === 'calendar' && <CalendarBoard />}
+                        {section === 'reportCards' && (
+                            <Box data-testid="class-home-report-cards-section">
+                                <ReportCards />
+                            </Box>
+                        )}
                         {section === 'students' && (
                             <StudentsSection klass={klass} roster={roster}
                                 loading={liveRoster.loading} error={liveRoster.error}
