@@ -28,7 +28,7 @@ const renderDash = (slug) => {
     });
     localStorage.setItem(CLASS_LOGIN_KEY, JSON.stringify({
         slug, className: 'Year 3 - Blue', teacher: 'Ms. Yeabsira A.',
-        classId: CLASS_ID, at: Date.now(),
+        classId: CLASS_ID, userId: 'u-1', at: Date.now(),
     }));
     return render(
         <ThemeProvider>
@@ -120,7 +120,12 @@ describe('ClassHome dashboard', () => {
         expect(screen.getByTestId('side-nav')).toBeInTheDocument();
         expect(screen.queryByTestId('report-cards-target')).not.toBeInTheDocument();
         const props = reportCardsMock.mock.calls[reportCardsMock.mock.calls.length - 1][0];
-        expect(props.initialClassId).toBe(CLASS_ID);
+        expect(props.initialClass).toMatchObject({
+            id: CLASS_ID,
+            name: 'Year 3 - Blue',
+            yearLevel: 3,
+            mainTeacher: { id: 'u-1', name: 'Ms. Yeabsira A.' },
+        });
     });
 
     test('redirects to /classes when no session', () => {

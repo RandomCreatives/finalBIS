@@ -53,13 +53,12 @@ const MARKSHEETS = [
 
 const renderPage = ({
     user = { id: 'u-admin', name: 'Mr. Mike', role: 'admin' },
-    initialClassId = '',
 } = {}) => {
     useAuth.mockReturnValue({ user });
     return render(
         <ThemeProvider>
             <BrowserRouter>
-                <ReportCards initialClassId={initialClassId} />
+                <ReportCards />
             </BrowserRouter>
         </ThemeProvider>,
     );
@@ -119,7 +118,7 @@ describe('buildReportCards', () => {
 });
 
 describe('Report cards page', () => {
-    test('exposes Settling In Report to main teachers while retaining Report Cards', () => {
+    test('disables Report Card for main teachers and keeps Settling In active', () => {
         useAuth.mockReturnValue({ user: { id: 'u-main', name: 'Main Teacher', role: 'main_teacher' } });
         render(
             <ThemeProvider>
@@ -129,8 +128,11 @@ describe('Report cards page', () => {
             </ThemeProvider>,
         );
 
-        expect(screen.getByRole('button', { name: 'Report Card' })).toBeInTheDocument();
+        const termReport = screen.getByRole('button', { name: 'Report Card' });
+        expect(termReport).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Settling In Report' })).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(termReport);
+        expect(screen.queryByTestId('report-class-select')).not.toBeInTheDocument();
     });
 
     test('does not expose Settling In Report to subject teachers', () => {
@@ -160,21 +162,6 @@ describe('Report cards page', () => {
         expect(within(grid).getByText('77.5%')).toBeInTheDocument();
         // marksheets scoped to class + current term
         expect(marksheetApi.list).toHaveBeenCalledWith({ classId: CLASS_A, termId: TERM_1 });
-    });
-
-    test('main teacher term cards open on the class passed from their class-card login', async () => {
-        renderPage({
-            user: { id: 'u-main', name: 'Main Teacher', role: 'main_teacher' },
-            initialClassId: CLASS_A,
-        });
-        fireEvent.click(screen.getByRole('button', { name: 'Report Card' }));
-
-        const selector = await screen.findByTestId('report-class-select');
-        const combobox = within(selector).getByRole('combobox');
-        await waitFor(() => expect(selector).toHaveTextContent('Year 3 - Blue'));
-        expect(combobox).toBeEnabled();
-        fireEvent.mouseDown(combobox);
-        expect(await screen.findByRole('option', { name: 'Year 3 - Blue' })).toBeInTheDocument();
     });
 
     test('print view renders one sheet per student and the button calls print', async () => {
