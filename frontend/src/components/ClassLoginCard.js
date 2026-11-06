@@ -11,8 +11,8 @@ import PersonIcon from '@mui/icons-material/Person';
 import LockIcon from '@mui/icons-material/Lock';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { setToken } from '../api/client';
 import { saveClassLogin, slugFor } from '../data/classes';
+import { useAuth } from '../auth/AuthContext';
 
 const BASE_URL = process.env.REACT_APP_API_URL || '';
 
@@ -102,12 +102,13 @@ export function ClassCard({ klass, onLogin, actionLabel }) {
 }
 
 /**
- * The class-card password dialog. Posts to /api/auth/class-login, stores the
- * JWT + class session and navigates into the class dashboard on success.
+ * The class-card password dialog. Posts to /api/auth/class-login, adopts the
+ * verified user in AuthContext, stores the class session and opens its dashboard.
  */
 export function ClassLoginDialog({ loginClass, onClose }) {
     const theme = useTheme();
     const navigate = useNavigate();
+    const { loginWithToken } = useAuth();
 
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -129,9 +130,9 @@ export function ClassLoginDialog({ loginClass, onClose }) {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.message || 'Sign-in failed');
 
-            // Real JWT for the class's main teacher — the dashboard uses it
-            // for the live roster, edits and transfers.
-            setToken(data.token);
+            // Adopt the verified main-teacher identity for both the class
+            // dashboard and shared report pages opened from its sidebar.
+            loginWithToken(data.token, data.user);
             saveClassLogin(loginClass, {
                 classId: data.class?.id,
                 userId: data.user?.id,
