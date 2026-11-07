@@ -5,6 +5,7 @@ import {
     ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
+import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SaveIcon from '@mui/icons-material/Save';
@@ -269,27 +270,29 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
     );
 }
 
-function PrintReportSide({ student, report, classRecord, yearName, side, isLast }) {
+function PrintReportSide({ student, report, classRecord, yearName, side, isLast, pdfMode = false }) {
     return (
         <Paper
             square
             elevation={0}
-            className={`settling-in-sheet${isLast ? ' settling-in-last-sheet' : ''}`}
+            className={`settling-in-sheet${isLast ? ' settling-in-last-sheet' : ''}${pdfMode ? ` settling-in-pdf-${side}` : ''}`}
             data-testid={`settling-in-side-${student.id}-${side}`}
             sx={{
                 boxSizing: 'border-box',
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-                width: '100%',
-                maxWidth: 1120,
-                aspectRatio: '297 / 210',
-                minHeight: 680,
-                mx: 'auto',
-                mb: 2,
+                width: pdfMode ? '289mm' : '100%',
+                maxWidth: pdfMode ? 'none' : 1120,
+                height: pdfMode ? '202mm' : undefined,
+                aspectRatio: pdfMode ? 'auto' : '297 / 210',
+                minHeight: pdfMode ? 0 : 680,
+                mx: pdfMode ? 0 : 'auto',
+                mb: pdfMode ? 0 : 2,
                 bgcolor: '#fff',
                 color: '#0f172a',
                 overflow: 'hidden',
                 pageBreakInside: 'avoid',
+                breakInside: 'avoid',
             }}
         >
             {side === 'outside' ? (
@@ -405,6 +408,8 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const [savingMainTeacher, setSavingMainTeacher] = useState(false);
     const [mainTeacherSaveError, setMainTeacherSaveError] = useState('');
     const [mainTeacherSaveSuccess, setMainTeacherSaveSuccess] = useState('');
+    const [pdfProgress, setPdfProgress] = useState(null);
+    const [pdfError, setPdfError] = useState('');
 
     const classes = useApi(
         () => (hasLoginClassContext
@@ -547,8 +552,8 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const mainTeacherTemplate = getMainTeacherTemplate(report?.template);
     const savedMainTeacherRatings = selectedMainTeacherSection?.ratings;
     const savedMainTeacherUpdatedAt = selectedMainTeacherSection?.updatedAt;
-    const yearName = (years.data || []).find((item) => String(item.id) === String(resolvedAcademicYearId))?.name
-        || (years.data || []).find((item) => String(item.id) === String(report?.term?.academicYearId))?.name
+    const yearName = (years.data || []).find((item) => String(item.id) === String(report?.term?.academicYearId))?.name
+        || (years.data || []).find((item) => String(item.id) === String(resolvedAcademicYearId))?.name
         || '';
     useEffect(() => {
         if (String(termId) !== String(resolvedTermId)) setTermId(resolvedTermId);
@@ -617,6 +622,62 @@ export default function SettlingInReports({ initialClass = null } = {}) {
     const subjectPrintStudent = isSubjectTeacher && printRequest?.studentId
         ? students.find((student) => String(student.id) === String(printRequest.studentId)) || null
         : null;
+    const pdfBusy = Boolean(pdfProgress);
+    const pdfReportDetails = {
+        className: formTutorClass?.name || report?.class?.name,
+        termName: report?.term?.name,
+        yearName: formatPrintAcademicYear(yearName),
+    };
+
+    const downloadSelectedStudentPdf = async () => {
+        if (!isAdmin || !selectedStudent || !report || pdfBusy) return;
+        setPdfError('');
+        setPdfProgress({ kind: 'student', studentName: selectedStudent.name });
+        try {
+            const element = document.getElementById(`settling-in-pdf-student-${selectedStudent.id}`);
+            if (!element) throw new Error('The selected student report is not ready to export.');
+            const {
+                createSettlingInPdf,
+                downloadBlob,
+                settlingInStudentPdfFilename,
+            } = await import('../utils/settlingInPdf');
+            const pdf = await createSettlingInPdf(element);
+            downloadBlob(pdf, settlingInStudentPdfFilename(selectedStudent, pdfReportDetails));
+        } catch (error) {
+            setPdfError(error?.message || 'Could not create the selected student PDF.');
+        } finally {
+            setPdfProgress(null);
+        }
+    };
+
+    const downloadClassPdfZip = async () => {
+        if (!isAdmin || !report || !reportStudents.length || pdfBusy) return;
+        setPdfError('');
+        setPdfProgress({ kind: 'zip', stage: 'pdfs', completed: 0, total: reportStudents.length });
+        try {
+            const {
+                createSettlingInPdfZip,
+                downloadBlob,
+                settlingInClassZipFilename,
+                settlingInStudentPdfFilename,
+            } = await import('../utils/settlingInPdf');
+            const entries = reportStudents.map((student) => ({
+                element: document.getElementById(`settling-in-pdf-student-${student.id}`),
+                filename: settlingInStudentPdfFilename(student, pdfReportDetails),
+            }));
+            if (entries.some((entry) => !entry.element)) {
+                throw new Error('One or more student reports are not ready to export. Please try again.');
+            }
+            const zip = await createSettlingInPdfZip(entries, (completed, total, stage, percent) => {
+                setPdfProgress({ kind: 'zip', stage, completed, total, percent });
+            });
+            downloadBlob(zip, settlingInClassZipFilename(pdfReportDetails));
+        } catch (error) {
+            setPdfError(error?.message || 'Could not create the class PDF ZIP.');
+        } finally {
+            setPdfProgress(null);
+        }
+    };
 
     const saveCurrentSection = async () => {
         if (!selectedStudent || !selectedSubject || !classId || !resolvedTermId || subjectSectionLocked) return;
@@ -708,6 +769,14 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                 }
                 .settling-in-page-four, .settling-in-page-one { display: flex; flex-direction: column; }
                 .settling-in-subject-panel { display: block; }
+                #settling-in-pdf-area .settling-in-sheet .settling-in-panel {
+                    box-sizing: border-box; height: 202mm !important; min-width: 0; overflow: hidden;
+                    border: 1px solid #1e293b; padding: 2mm !important; background: #fff;
+                }
+                #settling-in-pdf-area .settling-in-page-four,
+                #settling-in-pdf-area .settling-in-page-one { display: flex; flex-direction: column; }
+                #settling-in-pdf-area .settling-in-subject-panel { display: block; }
+                #settling-in-pdf-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 @page { size: A4 landscape; margin: 4mm; }
                 @media print {
                     html, body { margin: 0 !important; }
@@ -749,6 +818,30 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     </Button>
                 ) : (
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        {isAdmin && (
+                            <>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    disabled={!selectedStudent || pdfBusy}
+                                    onClick={downloadSelectedStudentPdf}
+                                    data-testid="settling-in-download-student-pdf-button"
+                                >
+                                    {pdfProgress?.kind === 'student' ? 'Preparing PDF…' : 'Download selected PDF'}
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    title="A ZIP containing one separate Settling In PDF for each student."
+                                    aria-label={`Download a separate Settling In PDF for each of ${reportStudents.length} students as a ZIP`}
+                                    disabled={!reportStudents.length || pdfBusy}
+                                    onClick={downloadClassPdfZip}
+                                    data-testid="settling-in-download-class-zip-button"
+                                >
+                                    {pdfProgress?.kind === 'zip' ? 'Preparing ZIP…' : `Download ${reportStudents.length} PDFs (.zip)`}
+                                </Button>
+                            </>
+                        )}
                         <Button
                             variant="contained"
                             startIcon={<PrintIcon />}
@@ -770,12 +863,27 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                 ))}
             />
 
+            {isAdmin && pdfError && (
+                <Alert severity="error" onClose={() => setPdfError('')} sx={{ mb: 2 }}>
+                    {pdfError}
+                </Alert>
+            )}
+            {isAdmin && pdfProgress && (
+                <Alert severity="info" role="status" sx={{ mb: 2 }}>
+                    {pdfProgress.kind === 'student'
+                        ? `Preparing ${pdfProgress.studentName}'s Settling In PDF…`
+                        : pdfProgress.stage === 'archive'
+                            ? `Building the ZIP archive… ${Math.round(pdfProgress.percent || 0)}%`
+                            : `Creating student PDFs ${pdfProgress.completed}/${pdfProgress.total}…`}
+                </Alert>
+            )}
+
             <Card sx={{ p: 2, mb: 2.5 }}>
                 <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems={{ lg: 'center' }}>
                     <TextField
                         select label="Academic year" size="small" sx={{ minWidth: 190 }}
                         value={resolvedAcademicYearId}
-                        disabled={years.loading || !(years.data || []).length}
+                        disabled={years.loading || !(years.data || []).length || pdfBusy}
                         onChange={(event) => {
                             setAcademicYearId(event.target.value);
                             setTermId('');
@@ -790,7 +898,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     <TextField
                         select label="Term" size="small" sx={{ minWidth: 170 }}
                         value={resolvedTermId}
-                        disabled={!termsForYear.length}
+                        disabled={!termsForYear.length || pdfBusy}
                         onChange={(event) => setTermId(event.target.value)}
                         data-testid="settling-in-term-select"
                     >
@@ -802,6 +910,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     <TextField
                         select label="Class" size="small" sx={{ minWidth: 240 }}
                         value={classId}
+                        disabled={pdfBusy}
                         onChange={(event) => {
                             setClassId(event.target.value);
                             setStudentId('');
@@ -829,7 +938,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     )}
                     <Box sx={{ flexGrow: 1 }} />
                     <ToggleButtonGroup
-                        exclusive size="small" value={mode}
+                        exclusive size="small" value={mode} disabled={pdfBusy}
                         onChange={(_, value) => value && setMode(value)}
                         data-testid="settling-in-mode-toggle"
                     >
@@ -1145,6 +1254,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                             <TextField
                                                 select label="Preview student" size="small" sx={{ minWidth: 260 }}
                                                 value={studentId}
+                                                disabled={pdfBusy}
                                                 onChange={(event) => setStudentId(event.target.value)}
                                                 data-testid="settling-in-preview-student-select"
                                             >
@@ -1173,6 +1283,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                             <TextField
                                                 select label="Preview student" size="small" sx={{ minWidth: 260 }}
                                                 value={studentId}
+                                                disabled={pdfBusy}
                                                 onChange={(event) => setStudentId(event.target.value)}
                                                 data-testid="settling-in-preview-student-select"
                                             >
@@ -1241,6 +1352,51 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                             />
                         );
                     }))}
+                </Box>
+            )}
+
+            {isAdmin && mode === 'preview' && report && reportStudents.length > 0 && (
+                <Box
+                    id="settling-in-pdf-area"
+                    data-testid="settling-in-pdf-area"
+                    aria-hidden="true"
+                    sx={{
+                        position: 'fixed',
+                        top: 0,
+                        left: '-10000px',
+                        width: '289mm',
+                        bgcolor: '#fff',
+                        pointerEvents: 'none',
+                        zIndex: -1,
+                    }}
+                >
+                    {reportStudents.map((student) => (
+                        <Box
+                            key={student.id}
+                            id={`settling-in-pdf-student-${student.id}`}
+                            data-testid={`settling-in-pdf-student-${student.id}`}
+                            sx={{ width: '289mm', bgcolor: '#fff' }}
+                        >
+                            <PrintReportSide
+                                student={student}
+                                report={report}
+                                classRecord={formTutorClass || report.class}
+                                yearName={yearName}
+                                side="outside"
+                                isLast={false}
+                                pdfMode
+                            />
+                            <PrintReportSide
+                                student={student}
+                                report={report}
+                                classRecord={formTutorClass || report.class}
+                                yearName={yearName}
+                                side="inside"
+                                isLast
+                                pdfMode
+                            />
+                        </Box>
+                    ))}
                 </Box>
             )}
         </>

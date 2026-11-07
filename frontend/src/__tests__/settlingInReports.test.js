@@ -5,6 +5,21 @@ import { ThemeProvider } from '../theme';
 import SettlingInReports from '../pages/SettlingInReports';
 import { academicYearApi, assignmentApi, classApi, settlingInApi, termApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
+import {
+    createSettlingInPdf,
+    createSettlingInPdfZip,
+    downloadBlob,
+    settlingInClassZipFilename,
+    settlingInStudentPdfFilename,
+} from '../utils/settlingInPdf';
+
+jest.mock('../utils/settlingInPdf', () => ({
+    createSettlingInPdf: jest.fn(),
+    createSettlingInPdfZip: jest.fn(),
+    downloadBlob: jest.fn(),
+    settlingInClassZipFilename: jest.fn(),
+    settlingInStudentPdfFilename: jest.fn(),
+}));
 
 jest.mock('../auth/AuthContext', () => ({ useAuth: jest.fn() }));
 
@@ -146,6 +161,15 @@ const renderPage = (props = {}) => render(
 
 beforeEach(() => {
     jest.clearAllMocks();
+    const individualPdf = new Blob(['student-pdf'], { type: 'application/pdf' });
+    const classZip = new Blob(['student-pdfs-zip'], { type: 'application/zip' });
+    createSettlingInPdf.mockResolvedValue(individualPdf);
+    createSettlingInPdfZip.mockImplementation(async (entries, onProgress) => {
+        onProgress?.(entries.length, entries.length, 'archive', 100);
+        return classZip;
+    });
+    settlingInStudentPdfFilename.mockImplementation((student) => `${student.name}.pdf`);
+    settlingInClassZipFilename.mockReturnValue('Year 3 - Blue Settling-In PDFs.zip');
     useAuth.mockReturnValue({ user: { id: 'admin-user', role: 'admin' } });
     assignmentApi.subjects.mockResolvedValue({ assignments: [] });
     settlingInApi.subjectClassReport.mockResolvedValue(makeSubjectProgressReport(CLASS_Y3, ['english']));
@@ -438,6 +462,9 @@ describe('Settling In Report workspace', () => {
         expect(within(preview).queryByTestId(`settling-in-side-${STUDENT_1}-outside`)).not.toBeInTheDocument();
         expect(subjectPage).toBeInTheDocument();
         expect(screen.queryByTestId('settling-in-print-button')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settling-in-download-student-pdf-button')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settling-in-download-class-zip-button')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settling-in-pdf-area')).not.toBeInTheDocument();
 
         const printSectionButton = screen.getByTestId('settling-in-print-subject-section-button');
         await waitFor(() => expect(printSectionButton).toBeEnabled());
@@ -505,5 +532,46 @@ describe('Settling In Report workspace', () => {
         expect(within(printArea).queryByTestId(`settling-in-side-${STUDENT_1}-outside`)).not.toBeInTheDocument();
         expect(within(printArea).getAllByTestId(/^settling-in-side-/)).toHaveLength(2);
         printSpy.mockRestore();
+    });
+
+    test('admins can download a student booklet PDF and a class ZIP of separate student PDFs', async () => {
+        const report = makeReport();
+        settlingInApi.classReport.mockResolvedValue({
+            ...report,
+            students: [
+                ...report.students,
+                { ...report.students[0], id: STUDENT_2, name: 'Bethlehem Adera', rollNum: 2 },
+            ],
+        });
+        renderPage();
+        await screen.findByTestId('settling-in-grade-badge');
+
+        fireEvent.click(screen.getByText('Preview / print'));
+        expect(await screen.findByTestId('settling-in-pdf-area')).toBeInTheDocument();
+        expect(screen.getByTestId('settling-in-download-student-pdf-button')).toBeEnabled();
+        expect(screen.getByTestId('settling-in-download-class-zip-button')).toHaveTextContent('Download 2 PDFs (.zip)');
+
+        const studentPicker = within(screen.getByTestId('settling-in-preview-student-select'))
+            .getByRole('combobox');
+        fireEvent.mouseDown(studentPicker);
+        fireEvent.click(await screen.findByRole('option', { name: 'Bethlehem Adera' }));
+        fireEvent.click(screen.getByTestId('settling-in-download-student-pdf-button'));
+
+        await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1));
+        expect(createSettlingInPdf).toHaveBeenCalledWith(
+            document.getElementById(`settling-in-pdf-student-${STUDENT_2}`),
+        );
+        expect(downloadBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'Bethlehem Adera.pdf');
+
+        fireEvent.click(screen.getByTestId('settling-in-download-class-zip-button'));
+        await waitFor(() => expect(createSettlingInPdfZip).toHaveBeenCalledTimes(1));
+        const entries = createSettlingInPdfZip.mock.calls[0][0];
+        expect(entries.map(({ filename }) => filename)).toEqual(['Abel Tesfaye.pdf', 'Bethlehem Adera.pdf']);
+        expect(entries.map(({ element }) => element.id)).toEqual([
+            `settling-in-pdf-student-${STUDENT_1}`,
+            `settling-in-pdf-student-${STUDENT_2}`,
+        ]);
+        await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(2));
+        expect(downloadBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'Year 3 - Blue Settling-In PDFs.zip');
     });
 });
