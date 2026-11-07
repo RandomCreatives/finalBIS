@@ -1,4 +1,5 @@
 import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import {
     createSettlingInPdf,
@@ -9,22 +10,44 @@ import {
 } from '../settlingInPdf';
 
 jest.mock('html2pdf.js', () => jest.fn());
+jest.mock('jspdf', () => ({ jsPDF: jest.fn() }));
 jest.mock('jszip', () => jest.fn());
+
+const makeBooklet = () => {
+    const booklet = document.createElement('div');
+    ['outside', 'inside'].forEach((side) => {
+        const page = document.createElement('div');
+        page.className = `settling-in-pdf-${side}`;
+        booklet.appendChild(page);
+    });
+    return booklet;
+};
 
 describe('Settling In PDF exports', () => {
     let pdfBlob;
     let zipBlob;
     let worker;
     let zip;
+    let pdf;
+    let sourceCanvases;
+    let canvasContext;
 
     beforeEach(() => {
+        jest.restoreAllMocks();
         jest.clearAllMocks();
         pdfBlob = new Blob(['student-pdf'], { type: 'application/pdf' });
         zipBlob = new Blob(['class-zip'], { type: 'application/zip' });
+        sourceCanvases = Array.from({ length: 8 }, () => ({
+            width: 600,
+            height: 840,
+            toDataURL: jest.fn(),
+        }));
+        let sourceCanvasIndex = 0;
         worker = {
             set: jest.fn().mockReturnThis(),
             from: jest.fn().mockReturnThis(),
-            outputPdf: jest.fn().mockResolvedValue(pdfBlob),
+            toCanvas: jest.fn().mockReturnThis(),
+            get: jest.fn().mockImplementation(() => Promise.resolve(sourceCanvases[sourceCanvasIndex++])),
         };
         zip = {
             file: jest.fn(),
@@ -33,12 +56,25 @@ describe('Settling In PDF exports', () => {
                 return zipBlob;
             }),
         };
+        pdf = {
+            addPage: jest.fn(),
+            addImage: jest.fn(),
+            output: jest.fn().mockReturnValue(pdfBlob),
+        };
+        canvasContext = {
+            fillStyle: '',
+            fillRect: jest.fn(),
+            drawImage: jest.fn(),
+        };
+        jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(canvasContext);
+        jest.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,page');
         html2pdf.mockReturnValue(worker);
+        jsPDF.mockImplementation(() => pdf);
         JSZip.mockImplementation(() => zip);
     });
 
-    test('renders one student booklet as a two-sided A4 landscape PDF', async () => {
-        const element = document.createElement('div');
+    test('renders exactly two booklet sides into an A4 landscape PDF', async () => {
+        const element = makeBooklet();
 
         await expect(createSettlingInPdf(element)).resolves.toBe(pdfBlob);
 
@@ -46,16 +82,64 @@ describe('Settling In PDF exports', () => {
         expect(worker.set).toHaveBeenCalledWith(expect.objectContaining({
             margin: [4, 4, 4, 4],
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-            pagebreak: { mode: ['css', 'legacy'], before: ['.settling-in-pdf-inside'] },
+            pagebreak: { mode: [] },
         }));
         expect(worker.from).toHaveBeenCalledWith(element);
-        expect(worker.outputPdf).toHaveBeenCalledWith('blob');
+        expect(worker.toCanvas).toHaveBeenCalledTimes(1);
+        expect(worker.get).toHaveBeenCalledWith('canvas');
+        expect(jsPDF).toHaveBeenCalledWith({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+        expect(pdf.addPage).toHaveBeenCalledTimes(1);
+        expect(pdf.addPage).toHaveBeenCalledWith('a4', 'landscape');
+        expect(pdf.addImage).toHaveBeenCalledTimes(2);
+        expect(pdf.addImage).toHaveBeenNthCalledWith(
+            1,
+            'data:image/jpeg;base64,page',
+            'JPEG',
+            4,
+            4,
+            289,
+            202,
+        );
+        expect(pdf.addImage).toHaveBeenNthCalledWith(
+            2,
+            'data:image/jpeg;base64,page',
+            'JPEG',
+            4,
+            4,
+            289,
+            202,
+        );
+        expect(pdf.output).toHaveBeenCalledWith('blob');
+        expect(canvasContext.drawImage).toHaveBeenNthCalledWith(
+            1,
+            sourceCanvases[0],
+            0,
+            0,
+            600,
+            420,
+            0,
+            0,
+            600,
+            420,
+        );
+        expect(canvasContext.drawImage).toHaveBeenNthCalledWith(
+            2,
+            sourceCanvases[0],
+            0,
+            420,
+            600,
+            420,
+            0,
+            0,
+            600,
+            420,
+        );
     });
 
     test('puts a separate PDF for every student into the ZIP and reports progress', async () => {
         const entries = [
-            { element: document.createElement('div'), filename: 'Year-3_Abel.pdf' },
-            { element: document.createElement('div'), filename: 'Year-3_Bethlehem.pdf' },
+            { element: makeBooklet(), filename: 'Year-3_Abel.pdf' },
+            { element: makeBooklet(), filename: 'Year-3_Bethlehem.pdf' },
         ];
         const progress = jest.fn();
 
@@ -75,8 +159,8 @@ describe('Settling In PDF exports', () => {
 
     test('keeps same-named students as separate ZIP files', async () => {
         const entries = [
-            { element: document.createElement('div'), filename: 'Settling-In_Student.pdf' },
-            { element: document.createElement('div'), filename: 'Settling-In_Student.pdf' },
+            { element: makeBooklet(), filename: 'Settling-In_Student.pdf' },
+            { element: makeBooklet(), filename: 'Settling-In_Student.pdf' },
         ];
 
         await createSettlingInPdfZip(entries);
@@ -104,5 +188,7 @@ describe('Settling In PDF exports', () => {
 
         await expect(createSettlingInPdf(null)).rejects.toThrow('not ready to export');
         await expect(createSettlingInPdfZip([])).rejects.toThrow('no student reports');
+        await expect(createSettlingInPdf(document.createElement('div')))
+            .rejects.toThrow('Both booklet sides are required');
     });
 });

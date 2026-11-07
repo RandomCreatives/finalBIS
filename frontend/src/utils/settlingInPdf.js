@@ -1,8 +1,13 @@
 import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 
+const PDF_MARGIN_MM = 4;
+const PDF_CONTENT_WIDTH_MM = 289;
+const PDF_CONTENT_HEIGHT_MM = 202;
+const PDF_PAGE_OPTIONS = { unit: 'mm', format: 'a4', orientation: 'landscape' };
 const PDF_OPTIONS = {
-    margin: [4, 4, 4, 4],
+    margin: [PDF_MARGIN_MM, PDF_MARGIN_MM, PDF_MARGIN_MM, PDF_MARGIN_MM],
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: {
         scale: 2,
@@ -10,8 +15,10 @@ const PDF_OPTIONS = {
         backgroundColor: '#ffffff',
         logging: false,
     },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-    pagebreak: { mode: ['css', 'legacy'], before: ['.settling-in-pdf-inside'] },
+    jsPDF: PDF_PAGE_OPTIONS,
+    // Export each booklet side as its own image and add it to the PDF explicitly.
+    // Avoid html2pdf's automatic page-break padding, which can create blank pages.
+    pagebreak: { mode: [] },
 };
 
 export const safeFileSegment = (value) => String(value ?? '')
@@ -52,10 +59,61 @@ export const settlingInClassZipFilename = (reportDetails) => [
 
 export const createSettlingInPdf = async (element) => {
     if (!element) throw new Error('The Settling In report is not ready to export.');
-    return html2pdf()
+    const sides = ['outside', 'inside'].map((side) => element.querySelector(`.settling-in-pdf-${side}`));
+    if (sides.some((side) => !side)) {
+        throw new Error('Both booklet sides are required to export the Settling In PDF.');
+    }
+
+    const canvas = await html2pdf()
         .set(PDF_OPTIONS)
         .from(element)
-        .outputPdf('blob');
+        .toCanvas()
+        .get('canvas');
+    if (!canvas?.width || !canvas?.height) {
+        throw new Error('Could not render the Settling In booklet.');
+    }
+
+    const pdf = new jsPDF(PDF_PAGE_OPTIONS);
+    for (let pageIndex = 0; pageIndex < sides.length; pageIndex += 1) {
+        if (pageIndex > 0) pdf.addPage('a4', 'landscape');
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = Math.ceil(canvas.height / sides.length);
+        const context = pageCanvas.getContext('2d');
+        if (!context) throw new Error('Could not prepare the Settling In PDF page.');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        const sourceY = pageIndex * pageCanvas.height;
+        const sourceHeight = Math.min(pageCanvas.height, canvas.height - sourceY);
+        if (sourceHeight > 0) {
+            context.drawImage(
+                canvas,
+                0,
+                sourceY,
+                canvas.width,
+                sourceHeight,
+                0,
+                0,
+                pageCanvas.width,
+                sourceHeight,
+            );
+        }
+        const pageImage = pageCanvas.toDataURL(`image/${PDF_OPTIONS.image.type}`, PDF_OPTIONS.image.quality);
+        pdf.addImage(
+            pageImage,
+            'JPEG',
+            PDF_MARGIN_MM,
+            PDF_MARGIN_MM,
+            PDF_CONTENT_WIDTH_MM,
+            PDF_CONTENT_HEIGHT_MM,
+        );
+        pageCanvas.width = 0;
+        pageCanvas.height = 0;
+    }
+    canvas.width = 0;
+    canvas.height = 0;
+
+    return pdf.output('blob');
 };
 
 const uniqueArchiveFilename = (filename, usedFilenames) => {
