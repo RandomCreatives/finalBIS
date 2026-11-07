@@ -135,7 +135,7 @@ describe('Report cards page', () => {
         expect(screen.queryByTestId('report-class-select')).not.toBeInTheDocument();
     });
 
-    test('does not expose Settling In Report to subject teachers', () => {
+    test('subject teachers are directed to their Settling In workflow instead of shared term report cards', () => {
         useAuth.mockReturnValue({ user: { id: 'u-subject', name: 'Subject Teacher', role: 'subject_teacher' } });
         render(
             <ThemeProvider>
@@ -145,8 +145,10 @@ describe('Report cards page', () => {
             </ThemeProvider>,
         );
 
-        expect(screen.getByRole('button', { name: 'Report Card' })).toBeInTheDocument();
+        expect(screen.getByText(/Subject Home → Settling In/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Report Card' })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Settling In Report' })).not.toBeInTheDocument();
+        expect(screen.queryByTestId('report-class-select')).not.toBeInTheDocument();
     });
 
     test('asks for a class, then shows the summary grid', async () => {
