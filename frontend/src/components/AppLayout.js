@@ -65,7 +65,7 @@ const NAV_GROUPS = [
             },
             {
                 label: 'Report Cards', to: '/app/report-cards', icon: <SummarizeOutlinedIcon fontSize="small" />,
-                roles: ['admin', 'main_teacher', 'subject_teacher'],
+                roles: ['admin'],
             },
         ],
     },

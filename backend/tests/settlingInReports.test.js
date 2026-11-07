@@ -141,6 +141,17 @@ describe('Settling In Report class templates', () => {
         );
     });
 
+    test('explicit Year 3 class names recover when year_level is incorrectly set to 2', async () => {
+        rowsOf('classes').find((item) => item.id === CLASS_Y3).year_level = 2;
+
+        const res = await getReport(CLASS_Y3);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.class.yearLevel, 3);
+        assert.equal(res.body.template.label, 'Year 3');
+        assert.match(res.body.template.subjects[0].criteria[0].text, /predictions using clues from the text/);
+    });
+
     test('unsupported class years are rejected instead of being assigned another year template', async () => {
         const res = await getReport(CLASS_Y5);
         assert.equal(res.status, 400);
@@ -277,6 +288,17 @@ describe('Subject-teacher individual Settling In reports', () => {
 });
 
 describe('Subject-teacher Settling In class progress', () => {
+    test('Year 3 subject access works when the class has a legacy year_level value of 2', async () => {
+        rowsOf('classes').find((item) => item.id === CLASS_Y3).year_level = 2;
+
+        const res = await getSubjectClassReport(CLASS_Y3);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.class.yearLevel, 3);
+        assert.equal(res.body.template.label, 'Year 3');
+        assert.deepEqual(res.body.template.subjects.map((subject) => subject.key), ['english', 'amharic']);
+    });
+
     test('progress includes only assigned-subject completion counts, never ratings or form-tutor data', async () => {
         const template = getSettlingInTemplate(3);
         const english = template.subjects.find((subject) => subject.key === 'english');

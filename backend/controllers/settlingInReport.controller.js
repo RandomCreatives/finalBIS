@@ -31,16 +31,18 @@ const throwSettlingInStorageError = (error) => {
 };
 
 const gradeForClass = (classRecord) => {
-    if (classRecord.year_level !== null && classRecord.year_level !== undefined) {
-        const configured = Number(classRecord.year_level);
-        if ([3, 4].includes(configured)) return configured;
-        throw new BadRequestError('Settling In Reports are configured for Year 3 and Year 4 only');
-    }
+    const configuredYearLevel = classRecord.year_level;
+    const configured = Number(configuredYearLevel);
+    if ([3, 4].includes(configured)) return configured;
 
-    // Legacy classes can lack year_level. Only use an explicit class-name
-    // pattern as a fallback; never infer a grade from unrelated digits.
+    // Use a literal Year 3/4 class name to recover legacy or misconfigured
+    // year_level values, but never infer from unrelated digits in the name.
     const match = String(classRecord.name || '').match(/\byear\s*([34])\b/i);
     if (match) return Number(match[1]);
+
+    if (configuredYearLevel !== null && configuredYearLevel !== undefined) {
+        throw new BadRequestError('Settling In Reports are configured for Year 3 and Year 4 only');
+    }
     throw new BadRequestError('This class does not have Year 3 or Year 4 settling-in criteria');
 };
 

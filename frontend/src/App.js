@@ -116,7 +116,14 @@ export default function App() {
                             <Route path="settings" element={<Settings />} />
                             <Route path="files" element={<Files />} />
                             <Route path="marksheets" element={<Marksheets />} />
-                            <Route path="report-cards" element={<ReportCards />} />
+                            <Route
+                                path="report-cards"
+                                element={
+                                    <RequireAuth roles={['admin']}>
+                                        <ReportCards />
+                                    </RequireAuth>
+                                }
+                            />
                             <Route path="student-portal" element={<StudentPortal />} />
                             <Route
                                 path="push-notifications"

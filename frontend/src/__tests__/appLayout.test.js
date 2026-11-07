@@ -49,6 +49,7 @@ describe('AppLayout (staff workspace shell)', () => {
         expect(screen.getByText('page body')).toBeInTheDocument();
 
         const nav = screen.getByTestId('side-nav');
+        expect(within(nav).getByText('Report Cards')).toBeInTheDocument();
         expect(within(nav).getByTestId('side-nav-group-0')).toHaveTextContent('School Today');
         expect(within(nav).getByTestId('side-nav-group-3')).toHaveTextContent('Admin Communications');
         // settings pinned at the bottom, like Profile on the teacher dashboards
@@ -79,6 +80,14 @@ describe('AppLayout (staff workspace shell)', () => {
         expect(within(nav).getByText('Attendance')).toBeInTheDocument();
         expect(within(nav).getByText('Students')).toBeInTheDocument();
         expect(within(nav).getByText('Student Portal')).toBeInTheDocument();
+        expect(within(nav).queryByText('Report Cards')).not.toBeInTheDocument();
         expect(screen.getByText(/Main teacher workspace · 2026\/2027/)).toBeInTheDocument();
+    });
+
+    test('subject teachers do not see the shared Report Cards entry', () => {
+        renderShell('subject_teacher');
+        const nav = screen.getByTestId('side-nav');
+        expect(within(nav).queryByText('Report Cards')).not.toBeInTheDocument();
+        expect(within(nav).getByText('Marksheets')).toBeInTheDocument();
     });
 });

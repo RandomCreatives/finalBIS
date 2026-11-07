@@ -549,6 +549,14 @@ export default function ReportCards({ initialClass = null } = {}) {
         else if (!isAdmin) setReportType('report-card');
     }, [isAdmin, isMainTeacher]);
 
+    if (!isAdmin && !isMainTeacher) {
+        return (
+            <Alert severity="info">
+                Subject-teacher Settling In assessments are available from Subject Home → Settling In.
+            </Alert>
+        );
+    }
+
     return (
         <>
             <Card sx={{ p: 1, mb: 2 }}>
