@@ -808,8 +808,11 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         : 'Subject and main-teacher ratings saved per student · one duplex A4 sheet per student, folded into a four-page A5 booklet.'}
                 action={mode === 'preview' && report && (isSubjectTeacher ? (
                     <Button
+                        size="small"
                         variant="contained"
-                        startIcon={<PrintIcon />}
+                        disableElevation
+                        startIcon={<PrintIcon sx={{ fontSize: 17 }} />}
+                        sx={{ borderRadius: 1 }}
                         disabled={!selectedStudent || !selectedSection || subjectSectionLocked}
                         onClick={() => setPrintRequest({ studentId: selectedStudent?.id ?? null })}
                         data-testid="settling-in-print-subject-section-button"
@@ -817,12 +820,19 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         Print selected section
                     </Button>
                 ) : (
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={0.75}
+                        useFlexGap
+                        sx={{ flexWrap: { sm: 'wrap' }, justifyContent: { sm: 'flex-end' } }}
+                    >
                         {isAdmin && (
                             <>
                                 <Button
+                                    size="small"
                                     variant="outlined"
-                                    startIcon={<DownloadIcon />}
+                                    startIcon={<DownloadIcon sx={{ fontSize: 17 }} />}
+                                    sx={{ borderRadius: 1 }}
                                     disabled={!selectedStudent || pdfBusy}
                                     onClick={downloadSelectedStudentPdf}
                                     data-testid="settling-in-download-student-pdf-button"
@@ -830,8 +840,10 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                                     {pdfProgress?.kind === 'student' ? 'Preparing PDF…' : 'Download selected PDF'}
                                 </Button>
                                 <Button
+                                    size="small"
                                     variant="outlined"
-                                    startIcon={<DownloadIcon />}
+                                    startIcon={<DownloadIcon sx={{ fontSize: 17 }} />}
+                                    sx={{ borderRadius: 1 }}
                                     title="A ZIP containing one separate Settling In PDF for each student."
                                     aria-label={`Download a separate Settling In PDF for each of ${reportStudents.length} students as a ZIP`}
                                     disabled={!reportStudents.length || pdfBusy}
@@ -843,16 +855,21 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                             </>
                         )}
                         <Button
+                            size="small"
                             variant="contained"
-                            startIcon={<PrintIcon />}
+                            disableElevation
+                            startIcon={<PrintIcon sx={{ fontSize: 17 }} />}
+                            sx={{ borderRadius: 1 }}
                             onClick={() => setPrintRequest({ studentId: null })}
                             data-testid="settling-in-print-button"
                         >
                             Print class reports
                         </Button>
                         <Button
+                            size="small"
                             variant="outlined"
-                            startIcon={<PrintIcon />}
+                            startIcon={<PrintIcon sx={{ fontSize: 17 }} />}
+                            sx={{ borderRadius: 1 }}
                             disabled={!selectedStudent}
                             onClick={() => setPrintRequest({ studentId: selectedStudent?.id ?? null })}
                             data-testid="settling-in-print-student-button"

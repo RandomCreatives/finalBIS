@@ -548,8 +548,14 @@ describe('Settling In Report workspace', () => {
 
         fireEvent.click(screen.getByText('Preview / print'));
         expect(await screen.findByTestId('settling-in-pdf-area')).toBeInTheDocument();
-        expect(screen.getByTestId('settling-in-download-student-pdf-button')).toBeEnabled();
-        expect(screen.getByTestId('settling-in-download-class-zip-button')).toHaveTextContent('Download 2 PDFs (.zip)');
+        const downloadStudentButton = screen.getByTestId('settling-in-download-student-pdf-button');
+        expect(downloadStudentButton).toBeEnabled();
+        expect(downloadStudentButton).toHaveClass('MuiButton-sizeSmall');
+        const downloadClassButton = screen.getByTestId('settling-in-download-class-zip-button');
+        expect(downloadClassButton).toHaveTextContent('Download 2 PDFs (.zip)');
+        expect(downloadClassButton).toHaveClass('MuiButton-sizeSmall');
+        expect(screen.getByTestId('settling-in-print-button')).toHaveClass('MuiButton-sizeSmall');
+        expect(screen.getByTestId('settling-in-print-student-button')).toHaveClass('MuiButton-sizeSmall');
 
         const studentPicker = within(screen.getByTestId('settling-in-preview-student-select'))
             .getByRole('combobox');
