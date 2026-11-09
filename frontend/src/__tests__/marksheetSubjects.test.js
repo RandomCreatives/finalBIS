@@ -22,11 +22,26 @@ describe('marksheet subject options', () => {
         expect(options.map((subject) => subject.name)).not.toContain('English');
     });
 
+    test('the main teacher sees homeroom subjects after a handover even if assignment owners are stale', () => {
+        const handedOverAssignments = assignments.map((assignment) => ({
+            ...assignment,
+            teacherId: 'previous-teacher',
+        }));
+        const user = { id: 'main-1', role: 'main_teacher' };
 
-    test('class-home filters by the logged-in main teacher seat as well', () => {
-        const options = mainTeacherMarksheetSubjectsFor(assignments, 'main-1');
+        expect(mainTeacherMarksheetSubjectsFor(handedOverAssignments)
+            .map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
+        expect(marksheetSubjectsFor(handedOverAssignments, {
+            user,
+            isMainTeacherOfClass: true,
+        }).map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
 
-        expect(options.map((subject) => subject.code)).toEqual(['GLS', 'MAT', 'SCI']);
+        // The broader homeroom rule must not expose someone else's stale seat
+        // when the logged-in teacher is not the class's main teacher.
+        expect(marksheetSubjectsFor(handedOverAssignments, {
+            user,
+            isMainTeacherOfClass: false,
+        })).toEqual([]);
     });
 
     test('main teachers can see Global Citizenship when their assignment uses legacy code GCT', () => {
@@ -38,7 +53,7 @@ describe('marksheet subject options', () => {
         expect(marksheetSubjectsFor(legacyAssignment, {
             user: { id: 'main-1', role: 'main_teacher' },
         }).map((subject) => subject.code)).toEqual(['GCT']);
-        expect(mainTeacherMarksheetSubjectsFor(legacyAssignment, 'main-1')
+        expect(mainTeacherMarksheetSubjectsFor(legacyAssignment)
             .map((subject) => subject.code)).toEqual(['GCT']);
     });
 

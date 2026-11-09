@@ -7,6 +7,8 @@ const {
 } = require('../utils/errors');
 const { teacherClassIds, assertClassAccess } = require('../utils/classAccess');
 const { normalizeStudentName } = require('../utils/studentRolls');
+const { isFixtureSubject } = require('../utils/subjects');
+const { selectAll } = require('../utils/selectAll');
 
 /** Hard ceiling for one bulk save — a roster of 30 classes stays well under. */
 const BULK_LIMIT = 200;
@@ -367,6 +369,194 @@ const listMarksheets = asyncHandler(async (req, res) => {
     res.json({ marksheets: data.map(shape) });
 });
 
+/**
+ * GET /api/marksheets/export?termId=&classId=
+ * Admin-only, read-only snapshot for current-term Excel exports. The report
+ * bundles class rosters, subject assignments, assessment columns/marks, and
+ * stored final marks in a few paged reads rather than one request per cell.
+ */
+const exportMarksheetData = asyncHandler(async (req, res) => {
+    const schoolId = req.user.school_id;
+    const { data: year, error: yearErr } = await supabase
+        .from('academic_years')
+        .select('id, name')
+        .eq('school_id', schoolId)
+        .eq('is_current', true)
+        .maybeSingle();
+    if (yearErr) throw yearErr;
+    if (!year) throw new NotFoundError('No current academic year is configured.');
+
+    const termId = req.query.termId || await resolveTermId(req);
+    const { data: term, error: termErr } = await supabase
+        .from('terms')
+        .select('id, name, academic_year_id, is_current')
+        .eq('school_id', schoolId)
+        .eq('id', termId)
+        .maybeSingle();
+    if (termErr) throw termErr;
+    if (!term) throw new NotFoundError('Term not found');
+    if (!term.is_current || term.academic_year_id !== year.id) {
+        throw new BadRequestError('Only the current term in the current academic year can be exported.');
+    }
+
+    const { classId } = req.query;
+    const classes = await selectAll(
+        'classes',
+        'id, name, year_level',
+        (query) => {
+            let scoped = query.eq('school_id', schoolId);
+            if (classId) scoped = scoped.eq('id', classId);
+            return scoped;
+        },
+        { order: [['name', true], ['id', true]] },
+    );
+    if (classId && classes.length === 0) throw new NotFoundError('Class not found');
+
+    const classIds = classes.map((klass) => klass.id);
+    if (classIds.length === 0) {
+        return res.json({
+            academicYear: { id: year.id, name: year.name },
+            term: { id: term.id, name: term.name, academicYearId: term.academic_year_id },
+            classes: [], assignments: [], students: [], assessments: [], finals: [],
+        });
+    }
+
+    const [staffRows, assignmentRows, studentRows, assessmentRows, finalRows] = await Promise.all([
+        selectAll('class_staff', 'id, class_id, position, user:users(id, name)',
+            (query) => query.eq('school_id', schoolId)
+                .eq('academic_year_id', year.id)
+                .eq('position', 'main')
+                .in('class_id', classIds)),
+        selectAll('class_subjects', `
+            id, class_id, subject_id, teacher_id,
+            subject:subjects(id, name, code, taught_by),
+            teacher:users(id, name)
+        `, (query) => query.eq('school_id', schoolId)
+            .eq('academic_year_id', year.id)
+            .in('class_id', classIds)),
+        selectAll('students', 'id, class_id, name, admission_no, roll_num',
+            (query) => query.eq('school_id', schoolId).in('class_id', classIds)),
+        selectAll('assessments', `
+            id, class_id, subject_id, term_id, label, max_marks, sort_order,
+            subject:subjects(id, name, code, taught_by)
+        `, (query) => query.eq('school_id', schoolId)
+            .eq('term_id', term.id)
+            .in('class_id', classIds)),
+        selectAll('marksheets', `
+            id, class_id, subject_id, student_id, marks, max_marks, percentage, grade,
+            student:students(id, name, admission_no, roll_num),
+            subject:subjects(id, name, code, taught_by)
+        `, (query) => query.eq('school_id', schoolId)
+            .eq('term_id', term.id)
+            .in('class_id', classIds)),
+    ]);
+
+    const assessmentIds = assessmentRows.map((assessment) => assessment.id);
+    const assessmentMarkBatches = await Promise.all(
+        Array.from({ length: Math.ceil(assessmentIds.length / 100) }, (_, index) => {
+            const ids = assessmentIds.slice(index * 100, (index + 1) * 100);
+            return selectAll('assessment_marks', `
+                id, assessment_id, student_id, marks,
+                student:students(id, name, admission_no, roll_num)
+            `, (query) => query.eq('school_id', schoolId).in('assessment_id', ids));
+        }),
+    );
+    const assessmentMarkRows = assessmentMarkBatches.flat();
+
+    const mainTeacherByClass = new Map(
+        staffRows.filter((staff) => staff.position === 'main')
+            .map((staff) => [staff.class_id, staff.user || null]),
+    );
+    const marksByAssessment = new Map();
+    for (const mark of assessmentMarkRows) {
+        const marks = marksByAssessment.get(mark.assessment_id) || [];
+        marks.push({
+            studentId: mark.student_id,
+            marks: Number(mark.marks),
+            student: mark.student ? {
+                id: mark.student.id,
+                name: normalizeStudentName(mark.student.name),
+                admissionNo: normalizeStudentName(mark.student.admission_no) || mark.student.admission_no,
+                rollNum: mark.student.roll_num,
+            } : null,
+        });
+        marksByAssessment.set(mark.assessment_id, marks);
+    }
+
+    res.json({
+        academicYear: { id: year.id, name: year.name },
+        term: { id: term.id, name: term.name, academicYearId: term.academic_year_id },
+        classes: classes.map((klass) => ({
+            id: klass.id,
+            name: klass.name,
+            yearLevel: klass.year_level,
+            mainTeacher: mainTeacherByClass.get(klass.id) || null,
+        })),
+        assignments: assignmentRows.filter((assignment) => !isFixtureSubject(assignment.subject))
+            .map((assignment) => ({
+                id: assignment.id,
+                classId: assignment.class_id,
+                subjectId: assignment.subject_id,
+                teacherId: assignment.teacher_id,
+                subject: assignment.subject ? {
+                    id: assignment.subject.id,
+                    name: assignment.subject.name,
+                    code: assignment.subject.code,
+                    taughtBy: assignment.subject.taught_by,
+                } : null,
+                teacher: assignment.teacher ? {
+                    id: assignment.teacher.id,
+                    name: assignment.teacher.name,
+                } : null,
+            })),
+        students: studentRows.map((student) => ({
+            id: student.id,
+            classId: student.class_id,
+            name: normalizeStudentName(student.name),
+            admissionNo: normalizeStudentName(student.admission_no) || student.admission_no,
+            rollNum: student.roll_num,
+        })),
+        assessments: assessmentRows.map((assessment) => ({
+            id: assessment.id,
+            classId: assessment.class_id,
+            subjectId: assessment.subject_id,
+            termId: assessment.term_id,
+            label: assessment.label,
+            maxMarks: Number(assessment.max_marks),
+            sortOrder: assessment.sort_order,
+            subject: assessment.subject ? {
+                id: assessment.subject.id,
+                name: assessment.subject.name,
+                code: assessment.subject.code,
+                taughtBy: assessment.subject.taught_by,
+            } : null,
+            marks: marksByAssessment.get(assessment.id) || [],
+        })),
+        finals: finalRows.map((mark) => ({
+            id: mark.id,
+            classId: mark.class_id,
+            subjectId: mark.subject_id,
+            studentId: mark.student_id,
+            marks: Number(mark.marks),
+            maxMarks: Number(mark.max_marks),
+            percentage: mark.percentage === null ? null : Number(mark.percentage),
+            grade: mark.grade,
+            subject: mark.subject ? {
+                id: mark.subject.id,
+                name: mark.subject.name,
+                code: mark.subject.code,
+                taughtBy: mark.subject.taught_by,
+            } : null,
+            student: mark.student ? {
+                id: mark.student.id,
+                name: normalizeStudentName(mark.student.name),
+                admissionNo: normalizeStudentName(mark.student.admission_no) || mark.student.admission_no,
+                rollNum: mark.student.roll_num,
+            } : null,
+        })),
+    });
+});
+
 /** GET /api/marksheets/student/:studentId?termId= */
 const getStudentMarksheet = asyncHandler(async (req, res) => {
     // Teachers may only read the report of a student in one of their classes.
@@ -438,7 +628,7 @@ const deleteMarksheet = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-    upsertMarksheet, bulkUpsertMarksheets, listMarksheets,
+    upsertMarksheet, bulkUpsertMarksheets, listMarksheets, exportMarksheetData,
     getStudentMarksheet, deleteMarksheet, gradeFor,
     assertCanRecord, // exported for tests
 };

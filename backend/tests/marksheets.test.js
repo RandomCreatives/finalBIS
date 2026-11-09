@@ -41,6 +41,7 @@ const tables = () => ({
     classes: [
         { id: CLASS_A, school_id: SCHOOL, name: 'Year 3A', capacity: 25 },
         { id: CLASS_B, school_id: SCHOOL, name: 'Year 3B', capacity: 25 },
+        { id: 'a7b8c9d0-e1f2-4a3b-8c5d-6e7f8a9b0c1d', school_id: OTHER_SCHOOL, name: 'Foreign Class' },
     ],
     subjects: [
         { id: SUBJ_ENG, school_id: SCHOOL, name: 'English', code: 'ENG', taught_by: 'subject_teacher' },
@@ -63,11 +64,103 @@ const tables = () => ({
         { id: STU_FOREIGN, school_id: OTHER_SCHOOL, name: 'Foreign Student', admission_no: 'X999', roll_num: 1, class_id: null, is_active: true },
     ],
     marksheets: [],
+    assessments: [],
+    assessment_marks: [],
 });
 
 beforeEach(() => {
     reset(tables());
     supabaseStub._rpc = {};
+});
+
+describe('admin current-term marksheet export data', () => {
+    test('returns a read-only class snapshot with subject teachers, assessment marks and stored finals', async () => {
+        const assessmentId = 'c3d4e5f6-a7b8-4c9d-9e1f-2a3b4c5d6e7f';
+        rowsOf('assessments').push({
+            id: assessmentId,
+            school_id: SCHOOL,
+            academic_year_id: YEAR,
+            class_id: CLASS_A,
+            subject_id: SUBJ_MAT,
+            term_id: TERM_1,
+            label: 'Quiz 1',
+            max_marks: 10,
+            sort_order: 1,
+        });
+        rowsOf('assessment_marks').push({
+            id: 'd4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70',
+            school_id: SCHOOL,
+            assessment_id: assessmentId,
+            student_id: STU_1,
+            marks: 8,
+        });
+        rowsOf('marksheets').push({
+            id: 'e5f6a7b8-c9d0-4e1f-8a2b-3c4d5e6f7081',
+            school_id: SCHOOL,
+            class_id: CLASS_A,
+            subject_id: SUBJ_MAT,
+            student_id: STU_1,
+            term_id: TERM_1,
+            marks: 8,
+            max_marks: 10,
+            percentage: 80,
+            grade: 'A',
+        });
+
+        const res = await request(app)
+            .get(`/api/marksheets/export?termId=${TERM_1}&classId=${CLASS_A}`)
+            .auth(tokenFor(ADMIN));
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body.academicYear, { id: YEAR, name: '2026/2027' });
+        assert.deepEqual(res.body.term, { id: TERM_1, name: 'Term 1', academicYearId: YEAR });
+        assert.equal(res.body.classes.length, 1);
+        assert.equal(res.body.classes[0].name, 'Year 3A');
+        assert.equal(res.body.classes[0].mainTeacher.name, 'Meron');
+
+        const maths = res.body.assignments.find((assignment) => assignment.subject.code === 'MAT');
+        assert.equal(maths.teacher.name, 'Meron');
+        assert.equal(res.body.students.length, 2);
+        assert.equal(res.body.assessments.length, 1);
+        assert.equal(res.body.assessments[0].marks[0].student.name, 'Abel Tesfaye');
+        assert.equal(res.body.assessments[0].marks[0].marks, 8);
+        assert.equal(res.body.finals.length, 1);
+        assert.equal(res.body.finals[0].percentage, 80);
+        assert.equal(res.body.finals[0].grade, 'A');
+
+        const bulkRes = await request(app)
+            .get(`/api/marksheets/export?termId=${TERM_1}`)
+            .auth(tokenFor(ADMIN));
+        assert.equal(bulkRes.status, 200);
+        assert.equal(bulkRes.body.classes.length, 2);
+        assert.equal(bulkRes.body.students.length, 3);
+        assert.equal(bulkRes.body.classes.some((klass) => klass.name === 'Foreign Class'), false);
+
+        // Export is read-only: it leaves the stored assessment and final rows intact.
+        assert.equal(rowsOf('assessment_marks').length, 1);
+        assert.equal(rowsOf('marksheets').length, 1);
+    });
+
+    test('refuses non-admins and terms outside the current term', async () => {
+        const teacherRes = await request(app)
+            .get(`/api/marksheets/export?termId=${TERM_1}`)
+            .auth(tokenFor(MAIN_A));
+        assert.equal(teacherRes.status, 403);
+
+        const oldTermId = 'f7a8b9c0-d1e2-4f3a-b4c5-d6e7f8a9b0c1';
+        rowsOf('terms').push({
+            id: oldTermId,
+            school_id: SCHOOL,
+            academic_year_id: YEAR,
+            term_index: 2,
+            name: 'Term 2',
+            is_current: false,
+        });
+        const oldTermRes = await request(app)
+            .get(`/api/marksheets/export?termId=${oldTermId}`)
+            .auth(tokenFor(ADMIN));
+        assert.equal(oldTermRes.status, 400);
+    });
 });
 
 describe('single marksheet entry', () => {

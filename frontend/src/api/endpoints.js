@@ -240,6 +240,7 @@ export const assessmentApi = {
 
 export const marksheetApi = {
     list: (params) => client.get('/marksheets', { params }).then((r) => r.data.marksheets),
+    exportCurrentTerm: (params) => client.get('/marksheets/export', { params }).then((r) => r.data),
     forStudent: (studentId, params) =>
         client.get(`/marksheets/student/${studentId}`, { params }).then((r) => r.data),
     save: (payload) => client.put('/marksheets', payload).then((r) => r.data.marksheet).then(syncAfter(['assessments'])),
