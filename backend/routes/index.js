@@ -675,6 +675,18 @@ router.put(
     marksheets.upsertMarksheet
 );
 
+// Bulk marksheet exports expose every class's current-term marks, so they are
+// intentionally reserved for administrators and return a read-only snapshot.
+router.get(
+    '/marksheets/export',
+    authenticate,
+    authorize(ROLES.ADMIN),
+    query('termId').isUUID().withMessage('termId is required'),
+    query('classId').optional().isUUID().withMessage('classId must be a valid id'),
+    validate,
+    marksheets.exportMarksheetData,
+);
+
 // Reads are teaching roles only — assistants and store staff have no marks
 // access, mirroring the write rules.
 router.get('/marksheets', authenticate, authorize(...TEACHING), marksheets.listMarksheets);

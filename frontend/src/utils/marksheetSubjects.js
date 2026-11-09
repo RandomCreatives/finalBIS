@@ -4,20 +4,9 @@
 // Spelling remains a timetable/teaching seat, but is not a marksheet subject.
 export const MAIN_TEACHER_MARKSHEET_CODES = new Set(['MAT', 'SCI', 'GLS', 'GCT']);
 
-/**
- * Keep a marksheet subject picker aligned with the caller's teaching
- * responsibility. Admins see every subject; teachers see their own seats.
- */
-export const marksheetSubjectsFor = (assignments, { user, isAdmin = false } = {}) => {
-    const list = assignments || [];
-    const visible = isAdmin
-        ? list
-        : list.filter((assignment) => assignment.teacherId === user?.id)
-            .filter((assignment) => user?.role !== 'main_teacher'
-                || MAIN_TEACHER_MARKSHEET_CODES.has(assignment.subject?.code));
-
+const uniqueSortedSubjects = (assignments) => {
     const bySubject = new Map();
-    visible.forEach((assignment) => {
+    (assignments || []).forEach((assignment) => {
         if (assignment.subject?.id && !bySubject.has(assignment.subject.id)) {
             bySubject.set(assignment.subject.id, assignment.subject);
         }
@@ -25,16 +14,37 @@ export const marksheetSubjectsFor = (assignments, { user, isAdmin = false } = {}
     return [...bySubject.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
+/**
+ * Admins see every subject. A main teacher sees MAT/SCI/GLS/GCT in their own
+ * homeroom even if a handover left class_subjects.teacher_id on the previous
+ * teacher; that seat identifies the current main teacher and the API permits
+ * their marksheet access. On any other class, teachers only see their own
+ * assigned subjects.
+ */
+export const marksheetSubjectsFor = (
+    assignments,
+    { user, isAdmin = false, isMainTeacherOfClass = false } = {},
+) => {
+    const list = assignments || [];
+    const visible = isAdmin
+        ? list
+        : user?.role === 'main_teacher' && isMainTeacherOfClass
+            ? list.filter((assignment) => MAIN_TEACHER_MARKSHEET_CODES.has(assignment.subject?.code))
+            : list.filter((assignment) => assignment.teacherId === user?.id)
+                .filter((assignment) => user?.role !== 'main_teacher'
+                    || MAIN_TEACHER_MARKSHEET_CODES.has(assignment.subject?.code));
 
-/** Subjects for the class-home main-teacher screen. */
-export const mainTeacherMarksheetSubjectsFor = (assignments, teacherId) => {
+    return uniqueSortedSubjects(visible);
+};
+
+/**
+ * Subjects for the class-home main-teacher screen. The class-card login is
+ * already scoped to the main teacher's own class, so the subject assignment
+ * owner is not used to gate these options (it can lag behind a teacher handover).
+ */
+export const mainTeacherMarksheetSubjectsFor = (assignments) => {
     const list = (assignments || []).filter((assignment) =>
-        (!teacherId || assignment.teacherId === teacherId)
-        && assignment.subject?.id
+        assignment.subject?.id
         && MAIN_TEACHER_MARKSHEET_CODES.has(assignment.subject.code));
-    const bySubject = new Map();
-    list.forEach((assignment) => {
-        if (!bySubject.has(assignment.subject.id)) bySubject.set(assignment.subject.id, assignment.subject);
-    });
-    return [...bySubject.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return uniqueSortedSubjects(list);
 };

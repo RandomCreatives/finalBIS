@@ -624,7 +624,7 @@ function AttendanceSection({ klass, classId, roster }) {
 
 /* ── marksheets section ───────────────────────────────────── */
 
-function MarksSection({ klass, classId, roster, teacherId }) {
+function MarksSection({ klass, classId, roster }) {
     const [subjectId, setSubjectId] = useState('');
     const [edits, setEdits] = useState({});
     const [saving, setSaving] = useState(false);
@@ -655,13 +655,12 @@ function MarksSection({ klass, classId, roster, teacherId }) {
         [],
         { syncTopic: 'students' },
     );
-    // The class-home session is a main-teacher session. Keep this dropdown
-    // to that teacher's Term 1 subjects, not every subject offered by the
-    // class. Old sessions without userId still get the safe MAT/SCI/GLS/GCT
-    // code filter (GCT is the legacy Global Citizenship code).
+    // The class-home session is already scoped to this class's main teacher.
+    // Keep this dropdown to the main-teacher subjects, even if a handover left
+    // their class_subjects rows assigned to the previous teacher.
     const subjects = useMemo(
-        () => mainTeacherMarksheetSubjectsFor(classSubjects.data, teacherId),
-        [classSubjects.data, teacherId]
+        () => mainTeacherMarksheetSubjectsFor(classSubjects.data),
+        [classSubjects.data]
     );
 
     useEffect(() => {
@@ -1858,7 +1857,7 @@ export default function ClassHome() {
 
                         {section === 'overview' && <OverviewSection klass={klass} classId={session.classId} roster={roster} goTo={setSection} />}
                         {section === 'attendance' && <AttendanceSection klass={klass} classId={session.classId} roster={roster} />}
-                        {section === 'marks' && <MarksSection klass={klass} classId={session.classId} roster={roster} teacherId={session.userId} />}
+                        {section === 'marks' && <MarksSection klass={klass} classId={session.classId} roster={roster} />}
                         {section === 'plans' && <PlanningSection klass={klass} onToast={() => {}} />}
                         {section === 'calendar' && <CalendarBoard />}
                         {section === 'reportCards' && (

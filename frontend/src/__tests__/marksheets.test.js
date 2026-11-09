@@ -14,28 +14,53 @@ jest.mock('../api/endpoints', () => ({
     academicYearApi: { list: jest.fn() },
     assignmentApi: { subjects: jest.fn() },
     classApi: { list: jest.fn() },
-    marksheetApi: { list: jest.fn(), bulkSave: jest.fn(), remove: jest.fn() },
+    marksheetApi: {
+        list: jest.fn(), bulkSave: jest.fn(), remove: jest.fn(), exportCurrentTerm: jest.fn(),
+    },
     studentApi: { list: jest.fn() },
     studentRequestApi: { list: jest.fn() },
     termApi: { list: jest.fn() },
 }));
 
+jest.mock('../utils/marksheetExport', () => ({
+    marksheetExportFilename: jest.fn(() => 'Teacher-Marksheets.xlsx'),
+    downloadMarksheetWorkbook: jest.fn(),
+    createMarksheetZip: jest.fn().mockResolvedValue('excel-zip'),
+    downloadMarksheetBlob: jest.fn(),
+}));
+
+const exportTools = jest.requireMock('../utils/marksheetExport');
 const USER_ID = 'teacher-bethelhem';
 const CLASS_ID = 'year-4-magenta';
 const SUBJECT_ID = 'subject-mat';
 const TERM_1 = 'term-1';
 const TERM_2 = 'term-2';
 
-const assignment = {
+const classAssignment = {
     id: 'seat-mat',
     classId: CLASS_ID,
     subjectId: SUBJECT_ID,
-    teacherId: USER_ID,
+    // Handover left this assignment pointing at the previous main teacher.
+    teacherId: 'previous-main-teacher',
     sessionsPerWeek: 6,
     class: { id: CLASS_ID, name: 'Year 4 - Magenta' },
     subject: { id: SUBJECT_ID, code: 'MAT', name: 'Mathematics' },
-    teacher: { id: USER_ID, name: 'Bethelhem Girma' },
+    teacher: { id: 'previous-main-teacher', name: 'Previous main teacher' },
 };
+
+const classAssignments = [
+    classAssignment,
+    {
+        id: 'seat-sci', classId: CLASS_ID, subjectId: 'subject-sci', teacherId: 'previous-main-teacher',
+        class: { id: CLASS_ID, name: 'Year 4 - Magenta' },
+        subject: { id: 'subject-sci', code: 'SCI', name: 'Science' },
+    },
+    {
+        id: 'seat-gls', classId: CLASS_ID, subjectId: 'subject-gls', teacherId: 'previous-main-teacher',
+        class: { id: CLASS_ID, name: 'Year 4 - Magenta' },
+        subject: { id: 'subject-gls', code: 'GLS', name: 'Global Citizenship' },
+    },
+];
 
 const renderPage = () => render(
     <ThemeProvider>
@@ -47,11 +72,13 @@ const renderPage = () => render(
 
 beforeEach(() => {
     jest.clearAllMocks();
+    exportTools.marksheetExportFilename.mockReturnValue('Teacher-Marksheets.xlsx');
+    exportTools.createMarksheetZip.mockResolvedValue('excel-zip');
     useAuth.mockReturnValue({
         user: { id: USER_ID, name: 'Bethelhem Girma', role: 'main_teacher' },
         isAdmin: false,
     });
-    assignmentApi.subjects.mockResolvedValue({ assignments: [assignment] });
+    assignmentApi.subjects.mockResolvedValue({ assignments: classAssignments });
     classApi.list.mockResolvedValue([{
         id: CLASS_ID,
         name: 'Year 4 - Magenta',
@@ -69,6 +96,11 @@ beforeEach(() => {
         id: 'student-1', name: 'Test Pupil', admissionNo: 'MAG-001', rollNum: 1,
     }]);
     studentRequestApi.list.mockResolvedValue([]);
+    marksheetApi.exportCurrentTerm.mockResolvedValue({
+        classes: [{ id: CLASS_ID, name: 'Year 4 - Magenta' }],
+        academicYear: { id: 'year-2', name: '2026/2027' },
+        term: { id: TERM_2, name: 'Term 2' },
+    });
     marksheetApi.list.mockResolvedValue([{
         id: 'saved-term-1',
         termId: TERM_1,
@@ -88,7 +120,9 @@ describe('Marksheets term visibility', () => {
 
         const subjectSelect = await screen.findByTestId('marksheet-subject-select');
         fireEvent.mouseDown(within(subjectSelect).getByRole('combobox'));
-        fireEvent.click(await screen.findByRole('option', { name: 'Mathematics' }));
+        expect((await screen.findAllByRole('option')).map((option) => option.textContent))
+            .toEqual(['Global Citizenship', 'Mathematics', 'Science']);
+        fireEvent.click(screen.getByRole('option', { name: 'Mathematics' }));
 
         expect(await screen.findByTestId('marksheet-other-term-notice'))
             .toHaveTextContent('No marks are saved for Mathematics in Term 2 (2026/2027)');
@@ -102,5 +136,38 @@ describe('Marksheets term visibility', () => {
 
         await waitFor(() => expect(screen.queryByTestId('marksheet-other-term-notice')).not.toBeInTheDocument());
         await waitFor(() => expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(84));
+    });
+});
+
+describe('admin marksheet exports', () => {
+    test('shows selected-class and both bulk Excel formats for the current term', async () => {
+        useAuth.mockReturnValue({
+            user: { id: 'admin-user', name: 'Admin', role: 'admin' },
+            isAdmin: true,
+        });
+        renderPage();
+
+        fireEvent.click(await screen.findByTestId('marksheets-download-button'));
+        expect(await screen.findByTestId('marksheets-export-current-term'))
+            .toHaveTextContent('Current term · Term 2 · 2026/2027');
+        await waitFor(() => expect(screen.getByTestId('marksheets-export-selected-class')).toBeEnabled());
+        expect(screen.getByTestId('marksheets-export-all-workbook')).toBeEnabled();
+        expect(screen.getByTestId('marksheets-export-all-zip')).toBeEnabled();
+
+        fireEvent.click(screen.getByTestId('marksheets-export-selected-class'));
+
+        await waitFor(() => expect(marksheetApi.exportCurrentTerm).toHaveBeenCalledWith({
+            termId: TERM_2,
+            classId: CLASS_ID,
+        }));
+        expect(exportTools.downloadMarksheetWorkbook).toHaveBeenCalledWith(
+            expect.objectContaining({ classes: [{ id: CLASS_ID, name: 'Year 4 - Magenta' }] }),
+            'Teacher-Marksheets.xlsx',
+        );
+    });
+
+    test('does not expose exports to teachers', () => {
+        renderPage();
+        expect(screen.queryByTestId('marksheets-download-button')).not.toBeInTheDocument();
     });
 });

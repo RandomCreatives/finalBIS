@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert, Box, Button, Card, Chip, IconButton, InputAdornment, MenuItem, Paper, Snackbar,
+    Alert, Box, Button, Card, Chip, Divider, IconButton, InputAdornment, Menu, MenuItem, Paper, Snackbar,
     Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
     Tooltip, Typography,
 } from '@mui/material';
@@ -9,6 +9,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
+import DownloadIcon from '@mui/icons-material/Download';
 import { Link as RouterLink } from 'react-router-dom';
 import {
     academicYearApi, assignmentApi, classApi, marksheetApi, studentApi, studentRequestApi, termApi,
@@ -58,6 +59,8 @@ export default function Marksheets() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
+    const [downloadAnchorEl, setDownloadAnchorEl] = useState(null);
+    const [exporting, setExporting] = useState(false);
 
     // -------------------------------------------------------------------------
     // Teaching scope. A subject teacher may hold several classes, so the class
@@ -66,7 +69,7 @@ export default function Marksheets() {
     const scope = useApi(async () => {
         if (isAdmin) {
             const classes = await classApi.list();
-            return { classes };
+            return { classes, mainTeacherClassIds: [] };
         }
 
         const [{ assignments }, classes] = await Promise.all([
@@ -74,6 +77,9 @@ export default function Marksheets() {
             user.role === 'main_teacher' ? classApi.list() : Promise.resolve([]),
         ]);
 
+        const mainTeacherClassIds = user.role === 'main_teacher'
+            ? (classes || []).filter((c) => c.mainTeacher?.id === user.id).map((c) => c.id)
+            : [];
         const byId = new Map();
         assignments.forEach((a) => {
             if (a.class?.id && !byId.has(a.class.id)) byId.set(a.class.id, a.class);
@@ -84,8 +90,8 @@ export default function Marksheets() {
             if (c.mainTeacher?.id === user.id && !byId.has(c.id)) byId.set(c.id, { id: c.id, name: c.name });
         });
 
-        return { classes: [...byId.values()] };
-    }, [user?.id], { syncTopic: 'assignments' });
+        return { classes: [...byId.values()], mainTeacherClassIds };
+    }, [user?.id, user?.role, isAdmin], { syncTopic: 'assignments' });
 
     const classOptions = useMemo(
         () => [...(scope.data?.classes || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
@@ -112,9 +118,9 @@ export default function Marksheets() {
         }
     }, [terms.data, termId]);
 
-    // Subjects offered in the chosen class. The picker is deliberately
-    // assignment-driven for every teacher; main teachers see only their Term 1
-    // marksheet subjects (Math, Science and Global Citizenship).
+    // Subjects offered in the chosen class. Main teachers see MAT/SCI/GLS in
+    // their own homeroom even when the subject assignment owner still reflects
+    // a previous teacher; elsewhere the picker remains assignment-scoped.
     const classSubjects = useApi(
         () => (classId
             ? assignmentApi.subjects({ classId }).then((r) => r.assignments)
@@ -123,9 +129,10 @@ export default function Marksheets() {
         { syncTopic: 'assignments' },
     );
 
+    const isMainTeacherOfClass = scope.data?.mainTeacherClassIds?.includes(classId) || false;
     const subjectOptions = useMemo(
-        () => marksheetSubjectsFor(classSubjects.data, { user, isAdmin }),
-        [classSubjects.data, isAdmin, user]
+        () => marksheetSubjectsFor(classSubjects.data, { user, isAdmin, isMainTeacherOfClass }),
+        [classSubjects.data, isAdmin, isMainTeacherOfClass, user]
     );
 
     // Keep the subject choice valid when the class changes.
@@ -356,6 +363,53 @@ export default function Marksheets() {
     const selectedTermLabel = selectedTerm
         ? `${selectedTerm.name}${selectedYearName ? ` (${selectedYearName})` : ''}`
         : 'the selected term';
+    const currentYear = (years.data || []).find((year) => year.isCurrent);
+    const currentTerm = (terms.data || []).find((term) => term.isCurrent
+        && (!currentYear || String(term.academicYearId) === String(currentYear.id)));
+
+    const handleExport = async (mode) => {
+        setDownloadAnchorEl(null);
+        if (!isAdmin) return;
+        if (dirtyIds.length > 0) {
+            setToast('Save or discard unsaved marks before exporting.');
+            return;
+        }
+        if (!currentTerm) {
+            setToast('No current term is configured for this academic year.');
+            return;
+        }
+
+        setExporting(true);
+        try {
+            const params = { termId: currentTerm.id };
+            if (mode === 'selected') params.classId = classId;
+            const data = await marksheetApi.exportCurrentTerm(params);
+            const exportTools = await import('../utils/marksheetExport');
+
+            if (mode === 'allZip') {
+                const zip = await exportTools.createMarksheetZip(data);
+                exportTools.downloadMarksheetBlob(
+                    zip,
+                    exportTools.marksheetExportFilename(data, null, 'zip'),
+                );
+                setToast('Downloaded Excel files for all classes');
+            } else {
+                const klass = mode === 'selected' ? data.classes?.[0] : null;
+                if (mode === 'selected' && !klass) throw new Error('No class data was returned for this export.');
+                exportTools.downloadMarksheetWorkbook(
+                    data,
+                    exportTools.marksheetExportFilename(data, klass),
+                );
+                setToast(mode === 'selected'
+                    ? `Downloaded ${klass.name} marksheet`
+                    : 'Downloaded the all-classes Excel workbook');
+            }
+        } catch (err) {
+            setToast(err.message || 'Could not prepare the Excel export.');
+        } finally {
+            setExporting(false);
+        }
+    };
 
     // -------------------------------------------------------------------------
 
@@ -364,11 +418,67 @@ export default function Marksheets() {
             <PageHeader
                 title="Marksheets"
                 action={(
-                    <Button component={RouterLink} to="/app/report-cards" size="small"
-                        variant="outlined" startIcon={<SummarizeOutlinedIcon />}
-                        sx={{ textTransform: 'none', fontWeight: 700 }}>
-                        Report cards
-                    </Button>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        {isAdmin && (
+                            <>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    onClick={(event) => setDownloadAnchorEl(event.currentTarget)}
+                                    disabled={exporting || dirtyIds.length > 0}
+                                    aria-haspopup="menu"
+                                    aria-controls={downloadAnchorEl ? 'marksheets-download-menu' : undefined}
+                                    aria-expanded={downloadAnchorEl ? 'true' : undefined}
+                                    data-testid="marksheets-download-button"
+                                    sx={{ textTransform: 'none', fontWeight: 700 }}
+                                >
+                                    {exporting ? 'Preparing…' : 'Download'}
+                                </Button>
+                                <Menu
+                                    id="marksheets-download-menu"
+                                    anchorEl={downloadAnchorEl}
+                                    open={Boolean(downloadAnchorEl)}
+                                    onClose={() => setDownloadAnchorEl(null)}
+                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                                >
+                                    <MenuItem disabled data-testid="marksheets-export-current-term">
+                                        {currentTerm
+                                            ? `Current term · ${currentTerm.name}${currentYear ? ` · ${currentYear.name}` : ''}`
+                                            : 'No current term configured'}
+                                    </MenuItem>
+                                    <Divider />
+                                    <MenuItem
+                                        disabled={!classId || !currentTerm || dirtyIds.length > 0 || exporting}
+                                        onClick={() => { void handleExport('selected'); }}
+                                        data-testid="marksheets-export-selected-class"
+                                    >
+                                        Selected class · Excel (.xlsx)
+                                    </MenuItem>
+                                    <MenuItem
+                                        disabled={!currentTerm || dirtyIds.length > 0 || exporting}
+                                        onClick={() => { void handleExport('allWorkbook'); }}
+                                        data-testid="marksheets-export-all-workbook"
+                                    >
+                                        All classes · one Excel workbook
+                                    </MenuItem>
+                                    <MenuItem
+                                        disabled={!currentTerm || dirtyIds.length > 0 || exporting}
+                                        onClick={() => { void handleExport('allZip'); }}
+                                        data-testid="marksheets-export-all-zip"
+                                    >
+                                        All classes · ZIP of Excel files
+                                    </MenuItem>
+                                </Menu>
+                            </>
+                        )}
+                        <Button component={RouterLink} to="/app/report-cards" size="small"
+                            variant="outlined" startIcon={<SummarizeOutlinedIcon />}
+                            sx={{ textTransform: 'none', fontWeight: 700 }}>
+                            Report cards
+                        </Button>
+                    </Stack>
                 )}
                 subtitle={isSubjectTeacher
                     ? 'Manage results class by class, for every class you teach.'
