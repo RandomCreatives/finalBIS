@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { lessonLabel } from '../utils/periods';
 import { PaymentChip } from '../utils/payments';
@@ -675,20 +675,20 @@ function MarksSection({ klass, classId, roster }) {
         [classId, subjectId, termId],
         { syncTopic: 'assessments' },
     );
-    const assessments = assessmentsApi.data || [];
+    const assessments = useMemo(() => assessmentsApi.data || [], [assessmentsApi.data]);
 
     // Reset local edits only when switching class/subject/term (never on background sync).
     useEffect(() => { setEdits({}); }, [classId, subjectId, termId]);
 
-    const loadedValue = (aid, sid) => {
+    const loadedValue = useCallback((aid, sid) => {
         const a = assessments.find((x) => x.id === aid);
         const v = a?.marks?.[sid];
         return v === undefined || v === null ? '' : String(v);
-    };
-    const currentValue = (aid, sid) => {
+    }, [assessments]);
+    const currentValue = useCallback((aid, sid) => {
         const key = `${aid}|${sid}`;
         return key in edits ? edits[key] : loadedValue(aid, sid);
-    };
+    }, [edits, loadedValue]);
 
     // Cells the teacher changed (only entered, non-empty values are saved).
     const dirtyEntries = useMemo(() => {
@@ -700,24 +700,23 @@ function MarksSection({ klass, classId, roster }) {
             }
         }));
         return out;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [edits, assessments, roster]);
+    }, [assessments, currentValue, loadedValue, roster]);
 
     // Invalid = entered value exceeds the assessment max.
     const invalidCells = useMemo(() => {
         const set = new Set();
         assessments.forEach((a) => roster.forEach((s) => {
             const cur = currentValue(a.id, s.id);
-            if (cur !== '' && (Number.isNaN(Number(cur)) || Number(cur) > a.maxMarks)) {
+            const score = Number(cur);
+            if (cur !== '' && (!Number.isFinite(score) || score < 0 || score > a.maxMarks)) {
                 set.add(`${a.id}|${s.id}`);
             }
         }));
         return set;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [edits, assessments, roster]);
+    }, [assessments, currentValue, roster]);
 
     // Running final per student = sum of entered marks / sum of their maxes.
-    const finalFor = (sid) => {
+    const finalFor = useCallback((sid) => {
         let marks = 0;
         let max = 0;
         assessments.forEach((a) => {
@@ -729,7 +728,33 @@ function MarksSection({ klass, classId, roster }) {
         });
         if (max === 0) return null;
         return { marks, max, pct: (marks / max) * 100 };
-    };
+    }, [assessments, currentValue]);
+
+    const assessmentAverages = useMemo(() => new Map(assessments.map((assessment) => {
+        const scores = roster.flatMap((student) => {
+            const value = currentValue(assessment.id, student.id);
+            if (value === '') return [];
+            const score = Number(value);
+            return Number.isFinite(score) && score >= 0 && score <= assessment.maxMarks ? [score] : [];
+        });
+        return [assessment.id, scores.length ? {
+            average: scores.reduce((total, score) => total + score, 0) / scores.length,
+            count: scores.length,
+        } : null];
+    })), [assessments, currentValue, roster]);
+
+    const classFinalAverage = useMemo(() => {
+        const percentages = roster.flatMap((student) => {
+            const hasInvalidMark = assessments.some((assessment) =>
+                invalidCells.has(`${assessment.id}|${student.id}`));
+            const final = finalFor(student.id);
+            return final && !hasInvalidMark ? [final.pct] : [];
+        });
+        return percentages.length ? {
+            average: percentages.reduce((total, percentage) => total + percentage, 0) / percentages.length,
+            count: percentages.length,
+        } : null;
+    }, [assessments, finalFor, invalidCells, roster]);
 
     const createAssessment = async () => {
         const max = Number(newMax);
@@ -899,6 +924,47 @@ function MarksSection({ klass, classId, roster }) {
                                     </TableRow>
                                 );
                             })}
+                            <TableRow sx={{ bgcolor: 'action.hover' }} data-testid="marks-class-average-row">
+                                <TableCell colSpan={2} sx={{ fontWeight: 800 }}>Class average</TableCell>
+                                {assessments.map((assessment) => {
+                                    const summary = assessmentAverages.get(assessment.id);
+                                    return (
+                                        <TableCell key={assessment.id} align="center"
+                                            data-testid={`marks-class-average-${assessment.id}`}>
+                                            {summary ? (
+                                                <Box>
+                                                    <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                                                        {summary.average.toFixed(1)} / {assessment.maxMarks}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {summary.count}/{roster.length} marked
+                                                    </Typography>
+                                                </Box>
+                                            ) : '—'}
+                                        </TableCell>
+                                    );
+                                })}
+                                <TableCell align="right" data-testid="marks-class-average-final">
+                                    {classFinalAverage ? (
+                                        <Box>
+                                            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                                                {classFinalAverage.average.toFixed(1)}%
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {classFinalAverage.count}/{roster.length} graded
+                                            </Typography>
+                                        </Box>
+                                    ) : '—'}
+                                </TableCell>
+                                <TableCell align="center">
+                                    {classFinalAverage ? (
+                                        <Chip size="small" label={gradeFor(classFinalAverage.average)}
+                                            data-testid="marks-class-average-grade"
+                                            sx={{ fontWeight: 800, minWidth: 42, borderRadius: 1,
+                                                bgcolor: GRADE_COLORS[gradeFor(classFinalAverage.average)], color: '#fff' }} />
+                                    ) : '—'}
+                                </TableCell>
+                            </TableRow>
                         </TableBody>
                     </Table>
                 </TableContainer>

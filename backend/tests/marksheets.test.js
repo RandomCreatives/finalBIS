@@ -128,6 +128,25 @@ describe('admin current-term marksheet export data', () => {
         assert.equal(res.body.finals[0].percentage, 80);
         assert.equal(res.body.finals[0].grade, 'A');
 
+        const subjectRes = await request(app)
+            .get(`/api/marksheets/export?termId=${TERM_1}&classId=${CLASS_A}&subjectId=${SUBJ_MAT}`)
+            .auth(tokenFor(ADMIN));
+        assert.equal(subjectRes.status, 200);
+        assert.deepEqual(subjectRes.body.assignments.map((assignment) => assignment.subjectId), [SUBJ_MAT]);
+        assert.deepEqual(subjectRes.body.assessments.map((assessment) => assessment.subjectId), [SUBJ_MAT]);
+        assert.deepEqual(subjectRes.body.finals.map((mark) => mark.subjectId), [SUBJ_MAT]);
+        assert.equal(subjectRes.body.students.length, 2);
+
+        const subjectWithoutClassRes = await request(app)
+            .get(`/api/marksheets/export?termId=${TERM_1}&subjectId=${SUBJ_MAT}`)
+            .auth(tokenFor(ADMIN));
+        assert.equal(subjectWithoutClassRes.status, 400);
+
+        const unassignedSubjectRes = await request(app)
+            .get(`/api/marksheets/export?termId=${TERM_1}&classId=${CLASS_B}&subjectId=${SUBJ_MAT}`)
+            .auth(tokenFor(ADMIN));
+        assert.equal(unassignedSubjectRes.status, 404);
+
         const bulkRes = await request(app)
             .get(`/api/marksheets/export?termId=${TERM_1}`)
             .auth(tokenFor(ADMIN));

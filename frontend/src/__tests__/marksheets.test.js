@@ -140,26 +140,41 @@ describe('Marksheets term visibility', () => {
 });
 
 describe('admin marksheet exports', () => {
-    test('shows selected-class and both bulk Excel formats for the current term', async () => {
+    test('places the download control with the filters and exports the selected subject plus both bulk formats', async () => {
         useAuth.mockReturnValue({
             user: { id: 'admin-user', name: 'Admin', role: 'admin' },
             isAdmin: true,
         });
         renderPage();
 
-        fireEvent.click(await screen.findByTestId('marksheets-download-button'));
+        const filters = await screen.findByTestId('marksheets-filter-card');
+        const downloadButton = within(filters).getByTestId('marksheets-download-button');
+        expect(downloadButton).toBeVisible();
+
+        const subjectSelect = within(filters).getByTestId('marksheet-subject-select');
+        fireEvent.mouseDown(within(subjectSelect).getByRole('combobox'));
+        fireEvent.click(await screen.findByRole('option', { name: 'Mathematics' }));
+
+        fireEvent.click(downloadButton);
         expect(await screen.findByTestId('marksheets-export-current-term'))
             .toHaveTextContent('Current term · Term 2 · 2026/2027');
-        await waitFor(() => expect(screen.getByTestId('marksheets-export-selected-class')).toBeEnabled());
+        await waitFor(() => expect(screen.getByTestId('marksheets-export-selected-subject')).toBeEnabled());
         expect(screen.getByTestId('marksheets-export-all-workbook')).toBeEnabled();
         expect(screen.getByTestId('marksheets-export-all-zip')).toBeEnabled();
 
-        fireEvent.click(screen.getByTestId('marksheets-export-selected-class'));
+        fireEvent.click(screen.getByTestId('marksheets-export-selected-subject'));
 
         await waitFor(() => expect(marksheetApi.exportCurrentTerm).toHaveBeenCalledWith({
             termId: TERM_2,
             classId: CLASS_ID,
+            subjectId: SUBJECT_ID,
         }));
+        expect(exportTools.marksheetExportFilename).toHaveBeenCalledWith(
+            expect.objectContaining({ classes: [{ id: CLASS_ID, name: 'Year 4 - Magenta' }] }),
+            { id: CLASS_ID, name: 'Year 4 - Magenta' },
+            'xlsx',
+            expect.objectContaining({ id: SUBJECT_ID, name: 'Mathematics' }),
+        );
         expect(exportTools.downloadMarksheetWorkbook).toHaveBeenCalledWith(
             expect.objectContaining({ classes: [{ id: CLASS_ID, name: 'Year 4 - Magenta' }] }),
             'Teacher-Marksheets.xlsx',

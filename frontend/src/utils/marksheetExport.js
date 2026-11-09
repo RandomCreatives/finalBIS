@@ -24,11 +24,12 @@ const safeSegment = (value) => String(value || '')
     .replace(/^-|-$/g, '')
     || 'Report';
 
-export const marksheetExportFilename = (data, klass = null, extension = 'xlsx') => [
+export const marksheetExportFilename = (data, klass = null, extension = 'xlsx', subject = null) => [
     'Teacher-Marksheets',
     data?.term?.name,
     data?.academicYear?.name,
     klass?.name || 'All-Classes',
+    ...(subject?.name ? [subject.name] : []),
 ].map(safeSegment).join('_') + `.${extension}`;
 
 const classSubjectDescriptors = (data, classId) => {
