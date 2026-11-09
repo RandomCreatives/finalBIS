@@ -113,5 +113,7 @@ describe('teacher marksheet Excel export', () => {
         expect(workbook.SheetNames).toEqual(['Year 4 - Magenta']);
         expect(marksheetExportFilename(exportData, null, 'zip'))
             .toBe('Teacher-Marksheets_Term-1_2026-2027_All-Classes.zip');
+        expect(marksheetExportFilename(exportData, klass, 'xlsx', { name: 'Mathematics' }))
+            .toBe('Teacher-Marksheets_Term-1_2026-2027_Year-4-Magenta_Mathematics.xlsx');
     });
 });

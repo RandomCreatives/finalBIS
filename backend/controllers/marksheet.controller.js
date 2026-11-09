@@ -370,7 +370,7 @@ const listMarksheets = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/marksheets/export?termId=&classId=
+ * GET /api/marksheets/export?termId=&classId=&subjectId=
  * Admin-only, read-only snapshot for current-term Excel exports. The report
  * bundles class rosters, subject assignments, assessment columns/marks, and
  * stored final marks in a few paged reads rather than one request per cell.
@@ -399,7 +399,11 @@ const exportMarksheetData = asyncHandler(async (req, res) => {
         throw new BadRequestError('Only the current term in the current academic year can be exported.');
     }
 
-    const { classId } = req.query;
+    const { classId, subjectId } = req.query;
+    if (subjectId && !classId) {
+        throw new BadRequestError('A classId is required when exporting one subject.');
+    }
+
     const classes = await selectAll(
         'classes',
         'id, name, year_level',
@@ -451,7 +455,20 @@ const exportMarksheetData = asyncHandler(async (req, res) => {
             .in('class_id', classIds)),
     ]);
 
-    const assessmentIds = assessmentRows.map((assessment) => assessment.id);
+    const exportAssignmentRows = assignmentRows.filter((assignment) => !isFixtureSubject(assignment.subject));
+    if (subjectId && !exportAssignmentRows.some((assignment) =>
+        String(assignment.class_id) === String(classId)
+        && String(assignment.subject_id) === String(subjectId))) {
+        throw new NotFoundError('Subject is not assigned to this class.');
+    }
+    const exportAssessmentRows = subjectId
+        ? assessmentRows.filter((assessment) => String(assessment.subject_id) === String(subjectId))
+        : assessmentRows;
+    const exportFinalRows = subjectId
+        ? finalRows.filter((mark) => String(mark.subject_id) === String(subjectId))
+        : finalRows;
+
+    const assessmentIds = exportAssessmentRows.map((assessment) => assessment.id);
     const assessmentMarkBatches = await Promise.all(
         Array.from({ length: Math.ceil(assessmentIds.length / 100) }, (_, index) => {
             const ids = assessmentIds.slice(index * 100, (index + 1) * 100);
@@ -492,7 +509,8 @@ const exportMarksheetData = asyncHandler(async (req, res) => {
             yearLevel: klass.year_level,
             mainTeacher: mainTeacherByClass.get(klass.id) || null,
         })),
-        assignments: assignmentRows.filter((assignment) => !isFixtureSubject(assignment.subject))
+        assignments: exportAssignmentRows
+            .filter((assignment) => !subjectId || String(assignment.subject_id) === String(subjectId))
             .map((assignment) => ({
                 id: assignment.id,
                 classId: assignment.class_id,
@@ -516,7 +534,7 @@ const exportMarksheetData = asyncHandler(async (req, res) => {
             admissionNo: normalizeStudentName(student.admission_no) || student.admission_no,
             rollNum: student.roll_num,
         })),
-        assessments: assessmentRows.map((assessment) => ({
+        assessments: exportAssessmentRows.map((assessment) => ({
             id: assessment.id,
             classId: assessment.class_id,
             subjectId: assessment.subject_id,
@@ -532,7 +550,7 @@ const exportMarksheetData = asyncHandler(async (req, res) => {
             } : null,
             marks: marksByAssessment.get(assessment.id) || [],
         })),
-        finals: finalRows.map((mark) => ({
+        finals: exportFinalRows.map((mark) => ({
             id: mark.id,
             classId: mark.class_id,
             subjectId: mark.subject_id,

@@ -378,11 +378,18 @@ export default function Marksheets() {
             setToast('No current term is configured for this academic year.');
             return;
         }
+        if (mode === 'selected' && (!classId || !subjectId)) {
+            setToast('Choose a class and subject before downloading a specific marksheet.');
+            return;
+        }
 
         setExporting(true);
         try {
             const params = { termId: currentTerm.id };
-            if (mode === 'selected') params.classId = classId;
+            if (mode === 'selected') {
+                params.classId = classId;
+                params.subjectId = subjectId;
+            }
             const data = await marksheetApi.exportCurrentTerm(params);
             const exportTools = await import('../utils/marksheetExport');
 
@@ -398,10 +405,10 @@ export default function Marksheets() {
                 if (mode === 'selected' && !klass) throw new Error('No class data was returned for this export.');
                 exportTools.downloadMarksheetWorkbook(
                     data,
-                    exportTools.marksheetExportFilename(data, klass),
+                    exportTools.marksheetExportFilename(data, klass, 'xlsx', mode === 'selected' ? selectedSubject : null),
                 );
                 setToast(mode === 'selected'
-                    ? `Downloaded ${klass.name} marksheet`
+                    ? `Downloaded ${klass.name} · ${selectedSubject?.name || 'subject'} marksheet`
                     : 'Downloaded the all-classes Excel workbook');
             }
         } catch (err) {
@@ -418,67 +425,11 @@ export default function Marksheets() {
             <PageHeader
                 title="Marksheets"
                 action={(
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        {isAdmin && (
-                            <>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<DownloadIcon />}
-                                    onClick={(event) => setDownloadAnchorEl(event.currentTarget)}
-                                    disabled={exporting || dirtyIds.length > 0}
-                                    aria-haspopup="menu"
-                                    aria-controls={downloadAnchorEl ? 'marksheets-download-menu' : undefined}
-                                    aria-expanded={downloadAnchorEl ? 'true' : undefined}
-                                    data-testid="marksheets-download-button"
-                                    sx={{ textTransform: 'none', fontWeight: 700 }}
-                                >
-                                    {exporting ? 'Preparing…' : 'Download'}
-                                </Button>
-                                <Menu
-                                    id="marksheets-download-menu"
-                                    anchorEl={downloadAnchorEl}
-                                    open={Boolean(downloadAnchorEl)}
-                                    onClose={() => setDownloadAnchorEl(null)}
-                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                                >
-                                    <MenuItem disabled data-testid="marksheets-export-current-term">
-                                        {currentTerm
-                                            ? `Current term · ${currentTerm.name}${currentYear ? ` · ${currentYear.name}` : ''}`
-                                            : 'No current term configured'}
-                                    </MenuItem>
-                                    <Divider />
-                                    <MenuItem
-                                        disabled={!classId || !currentTerm || dirtyIds.length > 0 || exporting}
-                                        onClick={() => { void handleExport('selected'); }}
-                                        data-testid="marksheets-export-selected-class"
-                                    >
-                                        Selected class · Excel (.xlsx)
-                                    </MenuItem>
-                                    <MenuItem
-                                        disabled={!currentTerm || dirtyIds.length > 0 || exporting}
-                                        onClick={() => { void handleExport('allWorkbook'); }}
-                                        data-testid="marksheets-export-all-workbook"
-                                    >
-                                        All classes · one Excel workbook
-                                    </MenuItem>
-                                    <MenuItem
-                                        disabled={!currentTerm || dirtyIds.length > 0 || exporting}
-                                        onClick={() => { void handleExport('allZip'); }}
-                                        data-testid="marksheets-export-all-zip"
-                                    >
-                                        All classes · ZIP of Excel files
-                                    </MenuItem>
-                                </Menu>
-                            </>
-                        )}
-                        <Button component={RouterLink} to="/app/report-cards" size="small"
-                            variant="outlined" startIcon={<SummarizeOutlinedIcon />}
-                            sx={{ textTransform: 'none', fontWeight: 700 }}>
-                            Report cards
-                        </Button>
-                    </Stack>
+                    <Button component={RouterLink} to="/app/report-cards" size="small"
+                        variant="outlined" startIcon={<SummarizeOutlinedIcon />}
+                        sx={{ textTransform: 'none', fontWeight: 700 }}>
+                        Report cards
+                    </Button>
                 )}
                 subtitle={isSubjectTeacher
                     ? 'Manage results class by class, for every class you teach.'
@@ -486,8 +437,14 @@ export default function Marksheets() {
             />
 
             <DataState loading={scope.loading || terms.loading || years.loading} error={scope.error || terms.error}>
-                <Card sx={{ p: 2, mb: 2.5 }}>
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                <Card sx={{ p: 2, mb: 2.5 }} data-testid="marksheets-filter-card">
+                    <Stack
+                        direction={{ xs: 'column', md: 'row' }}
+                        spacing={2}
+                        alignItems={{ md: 'center' }}
+                        flexWrap="wrap"
+                        useFlexGap
+                    >
                         <TextField
                             select label={isSubjectTeacher ? 'My class' : 'Class'} size="small"
                             sx={{ minWidth: 210 }}
@@ -550,6 +507,67 @@ export default function Marksheets() {
                                     />
                                 )}
                             </Stack>
+                        )}
+
+                        {isAdmin && <Box sx={{ display: { xs: 'none', md: 'block' }, flexGrow: 1 }} />}
+                        {isAdmin && (
+                            <Box sx={{
+                                display: 'flex',
+                                justifyContent: { xs: 'stretch', md: 'flex-end' },
+                                width: { xs: '100%', md: 'auto' },
+                                ml: { md: 'auto' },
+                            }}>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    onClick={(event) => setDownloadAnchorEl(event.currentTarget)}
+                                    disabled={exporting || dirtyIds.length > 0}
+                                    aria-haspopup="menu"
+                                    aria-controls={downloadAnchorEl ? 'marksheets-download-menu' : undefined}
+                                    aria-expanded={downloadAnchorEl ? 'true' : undefined}
+                                    data-testid="marksheets-download-button"
+                                    sx={{ textTransform: 'none', fontWeight: 700, width: { xs: '100%', md: 'auto' } }}
+                                >
+                                    {exporting ? 'Preparing…' : 'Download'}
+                                </Button>
+                                <Menu
+                                    id="marksheets-download-menu"
+                                    anchorEl={downloadAnchorEl}
+                                    open={Boolean(downloadAnchorEl)}
+                                    onClose={() => setDownloadAnchorEl(null)}
+                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                                >
+                                    <MenuItem disabled data-testid="marksheets-export-current-term">
+                                        {currentTerm
+                                            ? `Current term · ${currentTerm.name}${currentYear ? ` · ${currentYear.name}` : ''}`
+                                            : 'No current term configured'}
+                                    </MenuItem>
+                                    <Divider />
+                                    <MenuItem
+                                        disabled={!classId || !subjectId || !currentTerm || dirtyIds.length > 0 || exporting}
+                                        onClick={() => { void handleExport('selected'); }}
+                                        data-testid="marksheets-export-selected-subject"
+                                    >
+                                        Selected subject · Excel (.xlsx)
+                                    </MenuItem>
+                                    <MenuItem
+                                        disabled={!currentTerm || dirtyIds.length > 0 || exporting}
+                                        onClick={() => { void handleExport('allWorkbook'); }}
+                                        data-testid="marksheets-export-all-workbook"
+                                    >
+                                        All classes · one Excel workbook
+                                    </MenuItem>
+                                    <MenuItem
+                                        disabled={!currentTerm || dirtyIds.length > 0 || exporting}
+                                        onClick={() => { void handleExport('allZip'); }}
+                                        data-testid="marksheets-export-all-zip"
+                                    >
+                                        All classes · ZIP of Excel files
+                                    </MenuItem>
+                                </Menu>
+                            </Box>
                         )}
                     </Stack>
                 </Card>

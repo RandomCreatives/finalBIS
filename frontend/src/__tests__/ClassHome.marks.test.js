@@ -115,5 +115,43 @@ test('the Year 4 Magenta main-teacher dropdown lists its subjects and loads exis
         termId: 'term-1',
     }));
     expect(await screen.findByDisplayValue('84')).toBeInTheDocument();
+    expect(await screen.findByTestId('marks-class-average-assessment-subject-mat'))
+        .toHaveTextContent('84.0 / 100');
+    expect(screen.getByTestId('marks-class-average-final')).toHaveTextContent('84.0%');
+    expect(screen.getByTestId('marks-class-average-grade')).toHaveTextContent('A');
     expect(api.assessmentApi.saveMarks).not.toHaveBeenCalled();
+});
+
+test('shows class averages for each assessment and the final grade across the roster', async () => {
+    const secondStudentId = 'magenta-student-2';
+    api.studentApi.list.mockResolvedValue([
+        { id: STUDENT_ID, name: 'Test Pupil', rollNum: 1 },
+        { id: secondStudentId, name: 'Second Pupil', rollNum: 2 },
+    ]);
+    api.assessmentApi.list.mockImplementation(({ subjectId }) => Promise.resolve(subjectId === 'subject-mat' ? [
+        {
+            id: 'quiz-math', label: 'Quiz 1', maxMarks: 10, sortOrder: 1,
+            marks: { [STUDENT_ID]: 8, [secondStudentId]: 6 },
+        },
+        {
+            id: 'classwork-math', label: 'Classwork', maxMarks: 20, sortOrder: 2,
+            marks: { [STUDENT_ID]: 15 },
+        },
+    ] : []));
+
+    renderClassHome();
+    fireEvent.click(screen.getByRole('button', { name: 'Marksheets' }));
+    const subjectSelect = await screen.findByRole('combobox');
+    fireEvent.mouseDown(subjectSelect);
+    fireEvent.click(await screen.findByRole('option', { name: 'Mathematics' }));
+
+    expect(await screen.findByTestId('marks-class-average-quiz-math'))
+        .toHaveTextContent('7.0 / 10');
+    expect(screen.getByTestId('marks-class-average-quiz-math')).toHaveTextContent('2/2 marked');
+    expect(screen.getByTestId('marks-class-average-classwork-math'))
+        .toHaveTextContent('15.0 / 20');
+    expect(screen.getByTestId('marks-class-average-classwork-math')).toHaveTextContent('1/2 marked');
+    expect(screen.getByTestId('marks-class-average-final')).toHaveTextContent('68.3%');
+    expect(screen.getByTestId('marks-class-average-final')).toHaveTextContent('2/2 graded');
+    expect(screen.getByTestId('marks-class-average-grade')).toHaveTextContent('B');
 });

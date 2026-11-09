@@ -675,14 +675,15 @@ router.put(
     marksheets.upsertMarksheet
 );
 
-// Bulk marksheet exports expose every class's current-term marks, so they are
-// intentionally reserved for administrators and return a read-only snapshot.
+// Current-term marksheet exports are read-only and intentionally admin-only,
+// including the selected-subject and all-class snapshots.
 router.get(
     '/marksheets/export',
     authenticate,
     authorize(ROLES.ADMIN),
     query('termId').isUUID().withMessage('termId is required'),
     query('classId').optional().isUUID().withMessage('classId must be a valid id'),
+    query('subjectId').optional().isUUID().withMessage('subjectId must be a valid id'),
     validate,
     marksheets.exportMarksheetData,
 );
