@@ -7,8 +7,10 @@ import {
 import SchoolIcon from '@mui/icons-material/School';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import { classApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
 import { dashboardPathForUser, requestedPathFromState, roleLabel } from '../auth/roleRouting';
+import { readClassLogin, saveClassLogin, clearClassLogin, slugFor } from '../data/classes';
 
 /**
  * The single sign-in screen for all staff.
@@ -43,6 +45,41 @@ export default function Login() {
                 setError(`This account is for ${roleLabel(profile?.role)}, not ${roleLabel(expectedRole)}. Choose the sign-in for your role.`);
                 return;
             }
+
+            // Main teachers open their own class — never the administrator
+            // workspace. If they signed in with email and have no class-card
+            // session yet, look up their homeroom so one login opens the right
+            // class with no re-pick.
+            if (profile.role === 'main_teacher') {
+                const session = readClassLogin();
+                // A stale class-card session for another teacher's class must
+                // not steer this teacher into the wrong class or the admin area.
+                if (session && session.userId && session.userId !== profile.id) {
+                    clearClassLogin();
+                }
+                if (!session?.classId) {
+                    try {
+                        const classes = await classApi.list({ mine: true });
+                        const mine = (classes || []).find(
+                            (c) => c.mainTeacher && c.mainTeacher.id === profile.id
+                        );
+                        if (mine) {
+                            saveClassLogin(
+                                { name: mine.name, mainTeacher: profile.name },
+                                { classId: mine.id, userId: profile.id, teacher: profile.name }
+                            );
+                            navigate(`/class-home/${slugFor(mine.name)}`, { replace: true });
+                            return;
+                        }
+                    } catch {
+                        // fall through to the clear message below
+                    }
+                    logout();
+                    setError('Your account is not assigned to a class this year. Ask the administrator to assign you as main teacher, then sign in with your class card.');
+                    return;
+                }
+            }
+
             const next = destination || dashboardPathForUser(profile);
             navigate(next, { replace: true });
         } catch (err) {
