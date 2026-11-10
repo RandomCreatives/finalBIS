@@ -226,7 +226,6 @@ function PageFourPanel({ student, report }) {
                     </TableRow>
                     {attainmentKey.map((rating) => (
                         <TableRow key={rating}>
-                            <TableCell sx={{ bgcolor: '#666', color: '#fff', fontWeight: 900 }}>{rating}</TableCell>
                             <TableCell colSpan={3} sx={{ bgcolor: '#d1d1d1', fontWeight: 700 }}>
                                 {RATING_LABELS[rating]}:- the expected level for the grade.
                             </TableCell>
@@ -234,7 +233,6 @@ function PageFourPanel({ student, report }) {
                     ))}
                 </TableBody>
             </Table>
-            </Box>
 
             <Box sx={{ mt: '22mm', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
                 {SCHOOL_ADDRESS.map((line, index) => (
@@ -780,7 +778,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                 #settling-in-pdf-area .settling-in-page-one { display: flex; flex-direction: column; }
                 #settling-in-pdf-area .settling-in-subject-panel { display: block; }
                 #settling-in-pdf-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                @page { size: A4 landscape; margin: 7.5mm 4mm; }
+                @page { size: A4 landscape; margin: 10mm; }
                 @media print {
                     html, body { margin: 0 !important; }
                     body * { visibility: hidden; }
@@ -788,7 +786,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     #settling-in-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
                     #settling-in-print-area .settling-in-sheet {
                         display: grid !important; grid-template-columns: 1fr 1fr !important;
-                        width: 100% !important; max-width: none !important; height: 194mm !important;
+                        width: 100% !important; max-width: none !important; height: 190mm !important;
                         min-height: 0 !important; aspect-ratio: auto !important; margin: 0 !important;
                         padding: 0 !important; border: 0 !important; overflow: hidden !important;
                         page-break-inside: avoid; break-inside: avoid;
@@ -797,7 +795,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         page-break-after: always; break-after: page;
                     }
                     #settling-in-print-area .settling-in-last-sheet { page-break-after: auto; break-after: auto; }
-                    #settling-in-print-area .settling-in-panel { height: 190mm !important; padding: 0mm !important; }
+                    #settling-in-print-area .settling-in-panel { height: 186mm !important; padding: 0mm !important; }
                     #settling-in-print-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}</style>
