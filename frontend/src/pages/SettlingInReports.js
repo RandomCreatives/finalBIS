@@ -169,7 +169,7 @@ function PageFourPanel({ student, report }) {
                     fontSize: '14pt',
                     lineHeight: 1,
                     px: '0.4mm',
-                    py: '0.45mm',
+                    py: '0.6mm',
                     textAlign: 'center',
                     verticalAlign: 'middle',
                 },
@@ -203,14 +203,15 @@ function PageFourPanel({ student, report }) {
                 width: '100%',
                 tableLayout: 'fixed',
                 borderCollapse: 'collapse',
-                mt: '10mm',
+                flex: 1,
+                mt: 0,
                 '& th, & td': {
                     border: '0.6pt solid #333',
                     fontFamily: '"Times New Roman", Georgia, serif',
                     fontSize: '14pt',
                     lineHeight: 1,
                     px: '0.7mm',
-                    py: '0.35mm',
+                    py: '0.6mm',
                     verticalAlign: 'middle',
                 },
                 '& th:first-of-type, & td:first-of-type': { width: '27%', fontWeight: 900 },
@@ -249,8 +250,8 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
     return (
         <Box className="settling-in-panel settling-in-page-one" data-testid={`settling-in-page-${student.id}-1`}>
             <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
-                sx={{ width: '100%', height: '36%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
-            <Box sx={{ textAlign: 'center', mt: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+                sx={{ width: '100%', height: '42%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
+            <Box sx={{ textAlign: 'center', mt: '8%', fontFamily: '"Times New Roman", Georgia, serif' }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '17pt', lineHeight: 1.4 }}>
                     {report.term?.name || 'Term'}
                 </Typography>
@@ -261,7 +262,7 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                     SETTLING IN REPORT
                 </Typography>
             </Box>
-            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '6%', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '2%', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Name:</b> {student.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
@@ -785,7 +786,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     #settling-in-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
                     #settling-in-print-area .settling-in-sheet {
                         display: grid !important; grid-template-columns: 1fr 1fr !important;
-                        width: 100% !important; max-width: none !important; height: 195mm !important;
+                        width: 100% !important; max-width: none !important; height: 190mm !important;
                         min-height: 0 !important; aspect-ratio: auto !important; margin: 0 !important;
                         padding: 0 !important; border: 0 !important; overflow: hidden !important;
                         page-break-inside: avoid; break-inside: avoid;
@@ -794,7 +795,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         page-break-after: always; break-after: page;
                     }
                     #settling-in-print-area .settling-in-last-sheet { page-break-after: auto; break-after: auto; }
-                    #settling-in-print-area .settling-in-panel { height: 191mm !important; padding: 2mm !important; }
+                    #settling-in-print-area .settling-in-panel { height: 186mm !important; padding: 2mm !important; }
                     #settling-in-print-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}</style>
