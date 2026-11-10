@@ -234,7 +234,7 @@ function PageFourPanel({ student, report }) {
                 </TableBody>
             </Table>
 
-            <Box sx={{ mt: '22mm', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
+            <Box sx={{ mt: '30mm', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
                 {SCHOOL_ADDRESS.map((line, index) => (
                     <Typography key={line} sx={{ fontFamily: 'inherit', fontStyle: 'italic', fontSize: '14pt', fontWeight: index === 0 ? 700 : 500, lineHeight: 1.28 }}>
                         {line}
@@ -262,7 +262,7 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                     SETTLING IN REPORT
                 </Typography>
             </Box>
-            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '45mm', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+            <Stack spacing={1.2} sx={{ mt: '35mm', mb: '45mm', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Name:</b> {student.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
