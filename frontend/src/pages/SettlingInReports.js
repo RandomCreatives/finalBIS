@@ -199,14 +199,13 @@ function PageFourPanel({ student, report }) {
                 </TableBody>
             </Table>
 
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <Table size="small" sx={{
                     width: '100%',
                     tableLayout: 'fixed',
                     borderCollapse: 'collapse',
-                    flex: 1,
-                    mt: '3mm',
-                    minHeight: 0,
+
+                    mt: '24mm',
+
                     '& th, & td': {
                         border: '0.6pt solid #333',
                         fontFamily: '"Times New Roman", Georgia, serif',
@@ -237,7 +236,7 @@ function PageFourPanel({ student, report }) {
             </Table>
             </Box>
 
-            <Box sx={{ mt: 'auto', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
+            <Box sx={{ mt: '22mm', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
                 {SCHOOL_ADDRESS.map((line, index) => (
                     <Typography key={line} sx={{ fontFamily: 'inherit', fontStyle: 'italic', fontSize: '14pt', fontWeight: index === 0 ? 700 : 500, lineHeight: 1.28 }}>
                         {line}
@@ -265,7 +264,7 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                     SETTLING IN REPORT
                 </Typography>
             </Box>
-            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '2%', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '45mm', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Name:</b> {student.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
