@@ -205,7 +205,7 @@ function PageFourPanel({ student, report }) {
                     tableLayout: 'fixed',
                     borderCollapse: 'collapse',
                     flex: 1,
-                    mt: 0,
+                    mt: '3mm',
                     minHeight: 0,
                     '& th, & td': {
                         border: '0.6pt solid #333',
