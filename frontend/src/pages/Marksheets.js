@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert, Box, Button, Card, Chip, Divider, IconButton, InputAdornment, Menu, MenuItem, Paper, Snackbar,
+    Alert, Box, Button, Card, Chip, Divider, IconButton, InputAdornment, Menu, MenuItem, Paper,
     Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
     Tooltip, Typography,
 } from '@mui/material';
@@ -10,6 +10,8 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import DownloadIcon from '@mui/icons-material/Download';
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog';
+import CheckmarkToast from '../components/CheckmarkToast';
 import { Link as RouterLink } from 'react-router-dom';
 import {
     academicYearApi, assignmentApi, classApi, marksheetApi, studentApi, studentRequestApi, termApi,
@@ -61,6 +63,7 @@ export default function Marksheets() {
     const [toast, setToast] = useState('');
     const [downloadAnchorEl, setDownloadAnchorEl] = useState(null);
     const [exporting, setExporting] = useState(false);
+    const [deleteDialog, setDeleteDialog] = useState({ open: false, studentId: null });
 
     // -------------------------------------------------------------------------
     // Teaching scope. A subject teacher may hold several classes, so the class
@@ -328,10 +331,20 @@ export default function Marksheets() {
         }
     };
 
-    const handleDelete = async (studentId) => {
-        const id = savedIds[studentId];
-        if (!id) return;
+    const handleDelete = (studentId) => {
+        setDeleteDialog({ open: true, studentId });
+    };
 
+    const handleConfirmDelete = async () => {
+        const { studentId } = deleteDialog;
+        if (!studentId) return;
+        const id = savedIds[studentId];
+        if (!id) {
+            setDeleteDialog({ open: false, studentId: null });
+            return;
+        }
+
+        setSaving(true);
         try {
             await marksheetApi.remove(id);
             const nextEntries = { ...entriesRef.current, [studentId]: { marks: '', maxMarks: '100' } };
@@ -347,9 +360,13 @@ export default function Marksheets() {
             const nextBaseline = JSON.stringify(parsed);
             baselineRef.current = nextBaseline;
             setBaseline(nextBaseline);
+            setDeleteDialog({ open: false, studentId: null });
             setToast('Result removed');
         } catch (err) {
+            setDeleteDialog({ open: false, studentId: null });
             setError(err.message || 'Failed to delete result');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -740,9 +757,21 @@ export default function Marksheets() {
                 </Box>
             )}
 
-            <Snackbar
-                open={Boolean(toast)} autoHideDuration={3000}
-                onClose={() => setToast('')} message={toast}
+            <CheckmarkToast
+                open={Boolean(toast)}
+                message={toast}
+                onClose={() => setToast('')}
+                autoHideDuration={3000}
+            />
+            <ConfirmDeleteDialog
+                open={deleteDialog.open}
+                onClose={() => setDeleteDialog({ open: false, studentId: null })}
+                onConfirm={handleConfirmDelete}
+                title="Remove this result?"
+                message="This mark will be deleted and cannot be undone. The student's row stays on the sheet — you can enter a new mark at any time."
+                confirmLabel="Delete result"
+                cancelLabel="Cancel"
+                loading={saving}
             />
         </>
     );
