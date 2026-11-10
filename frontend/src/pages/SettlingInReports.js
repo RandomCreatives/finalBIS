@@ -106,7 +106,7 @@ function PrintSubjectPanel({ student, report, subjectKeys, pageNumber }) {
                 '& th, & td': {
                     border: '0.6pt solid #333',
                     fontFamily: '"Times New Roman", Georgia, serif',
-                    fontSize: '12pt',
+                    fontSize: '14pt',
                     lineHeight: 1,
                     px: '0.4mm',
                     py: '0.15mm',
@@ -119,7 +119,7 @@ function PrintSubjectPanel({ student, report, subjectKeys, pageNumber }) {
                     {subjects.map((subject, subjectIndex) => (
                         <Fragment key={subject.key}>
                             <TableRow>
-                                <TableCell className="criterion-cell" sx={{ fontWeight: 900, bgcolor: '#d6d6d6', fontSize: '12pt' }}>
+                                <TableCell className="criterion-cell" sx={{ fontWeight: 900, bgcolor: '#d6d6d6', fontSize: '14pt' }}>
                                     {subject.label}
                                 </TableCell>
                                 {ratingOrder.map((rating) => (
@@ -166,7 +166,7 @@ function PageFourPanel({ student, report }) {
                 '& th, & td': {
                     border: '0.6pt solid #333',
                     fontFamily: '"Times New Roman", Georgia, serif',
-                    fontSize: '12pt',
+                    fontSize: '14pt',
                     lineHeight: 1,
                     px: '0.4mm',
                     py: '0.45mm',
@@ -177,9 +177,9 @@ function PageFourPanel({ student, report }) {
             }}>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontSize: '12pt' }} />
+                        <TableCell sx={{ fontSize: '14pt' }} />
                         {mainTeacherTemplate.ratingOrder.map((rating) => (
-                            <TableCell key={rating} sx={{ fontWeight: 700, fontSize: '12pt' }}>
+                            <TableCell key={rating} sx={{ fontWeight: 700, fontSize: '14pt' }}>
                                 {mainTeacherTemplate.ratings[rating]}
                             </TableCell>
                         ))}
@@ -188,9 +188,9 @@ function PageFourPanel({ student, report }) {
                 <TableBody>
                     {mainTeacherTemplate.categories.map((category) => (
                         <TableRow key={category.key}>
-                            <TableCell sx={{ fontSize: '12pt' }}>{category.label}</TableCell>
+                            <TableCell sx={{ fontSize: '14pt' }}>{category.label}</TableCell>
                             {mainTeacherTemplate.ratingOrder.map((rating) => (
-                                <TableCell key={rating} sx={{ fontSize: '12pt' }}>
+                                <TableCell key={rating} sx={{ fontSize: '14pt' }}>
                                     {ratings[category.key] === rating ? '✓' : ''}
                                 </TableCell>
                             ))}
@@ -203,11 +203,11 @@ function PageFourPanel({ student, report }) {
                 width: '100%',
                 tableLayout: 'fixed',
                 borderCollapse: 'collapse',
-                mt: '24mm',
+                mt: '10mm',
                 '& th, & td': {
                     border: '0.6pt solid #333',
                     fontFamily: '"Times New Roman", Georgia, serif',
-                    fontSize: '12pt',
+                    fontSize: '14pt',
                     lineHeight: 1,
                     px: '0.7mm',
                     py: '0.35mm',
@@ -218,7 +218,7 @@ function PageFourPanel({ student, report }) {
                 <TableBody>
                     <TableRow>
                         <TableCell sx={{ bgcolor: '#666', color: '#fff' }}>Letter Grade</TableCell>
-                        <TableCell colSpan={3} sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '12pt' }}>
+                        <TableCell colSpan={3} sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '14pt' }}>
                             Curriculum Attainment
                         </TableCell>
                     </TableRow>
@@ -235,7 +235,7 @@ function PageFourPanel({ student, report }) {
 
             <Box sx={{ mt: 'auto', pt: 3, pb: 1, textAlign: 'center', fontFamily: 'cursive' }}>
                 {SCHOOL_ADDRESS.map((line, index) => (
-                    <Typography key={line} sx={{ fontFamily: 'inherit', fontStyle: 'italic', fontSize: '12pt', fontWeight: index === 0 ? 700 : 500, lineHeight: 1.28 }}>
+                    <Typography key={line} sx={{ fontFamily: 'inherit', fontStyle: 'italic', fontSize: '14pt', fontWeight: index === 0 ? 700 : 500, lineHeight: 1.28 }}>
                         {line}
                     </Typography>
                 ))}
@@ -261,10 +261,10 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                     SETTLING IN REPORT
                 </Typography>
             </Box>
-            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '18%', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Name:</b> {student.name}</Typography>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
+            <Stack spacing={1.2} sx={{ mt: 'auto', mb: '6%', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Name:</b> {student.name}</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: '14pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
             </Stack>
         </Box>
     );
@@ -333,20 +333,20 @@ function SubjectSectionPage({ report, student, subject, teacherName }) {
             <Typography sx={{ fontWeight: 800, fontSize: '13pt', textAlign: 'center', mt: 0.25 }}>
                 Settling In — {subject.label}
             </Typography>
-            <Typography sx={{ fontSize: '12pt', textAlign: 'center', color: '#444', mb: 2 }}>
+            <Typography sx={{ fontSize: '14pt', textAlign: 'center', color: '#444', mb: 2 }}>
                 {report.template.label} · {report.term.name}
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 2 }}>
-                <Typography sx={{ fontSize: '12pt' }}><strong>Student:</strong> {student.name}</Typography>
-                <Typography sx={{ fontSize: '12pt' }}><strong>Class:</strong> {report.class.name}</Typography>
-                <Typography sx={{ fontSize: '12pt' }}><strong>Roll number:</strong> {student.rollNum ?? '—'}</Typography>
-                <Typography sx={{ fontSize: '12pt' }}><strong>Admission no.:</strong> {student.admissionNo || '—'}</Typography>
+                <Typography sx={{ fontSize: '14pt' }}><strong>Student:</strong> {student.name}</Typography>
+                <Typography sx={{ fontSize: '14pt' }}><strong>Class:</strong> {report.class.name}</Typography>
+                <Typography sx={{ fontSize: '14pt' }}><strong>Roll number:</strong> {student.rollNum ?? '—'}</Typography>
+                <Typography sx={{ fontSize: '14pt' }}><strong>Admission no.:</strong> {student.admissionNo || '—'}</Typography>
             </Box>
             <Table size="small" aria-label={`${subject.label} Settling In ratings`} sx={{
                 tableLayout: 'fixed', borderCollapse: 'collapse',
                 '& th, & td': {
                     border: '1px solid #333', color: '#111',
-                    fontFamily: '"Times New Roman", Georgia, serif', fontSize: '12pt',
+                    fontFamily: '"Times New Roman", Georgia, serif', fontSize: '14pt',
                     lineHeight: 1.2, px: 1, py: 0.75,
                 },
                 '& th:first-of-type, & td:first-of-type': { width: '70%' },
@@ -374,10 +374,10 @@ function SubjectSectionPage({ report, student, subject, teacherName }) {
                 </TableBody>
             </Table>
             <Stack direction="row" justifyContent="space-between" gap={2} sx={{ mt: 1.5 }}>
-                <Typography sx={{ fontSize: '12pt' }}>
+                <Typography sx={{ fontSize: '14pt' }}>
                     Saved ratings: {student.sections?.[subject.key]?.ratedCount || 0} of {subject.criteria.length}
                 </Typography>
-                {teacherName && <Typography sx={{ fontSize: '12pt' }}>Subject teacher: {teacherName}</Typography>}
+                {teacherName && <Typography sx={{ fontSize: '14pt' }}>Subject teacher: {teacherName}</Typography>}
             </Stack>
         </Paper>
     );
@@ -777,7 +777,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                 #settling-in-pdf-area .settling-in-page-one { display: flex; flex-direction: column; }
                 #settling-in-pdf-area .settling-in-subject-panel { display: block; }
                 #settling-in-pdf-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                @page { size: A4 landscape; margin: 4mm; }
+                @page { size: A4 landscape; margin: 7.5mm 4mm; }
                 @media print {
                     html, body { margin: 0 !important; }
                     body * { visibility: hidden; }
@@ -785,7 +785,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     #settling-in-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
                     #settling-in-print-area .settling-in-sheet {
                         display: grid !important; grid-template-columns: 1fr 1fr !important;
-                        width: 100% !important; max-width: none !important; height: 202mm !important;
+                        width: 100% !important; max-width: none !important; height: 195mm !important;
                         min-height: 0 !important; aspect-ratio: auto !important; margin: 0 !important;
                         padding: 0 !important; border: 0 !important; overflow: hidden !important;
                         page-break-inside: avoid; break-inside: avoid;
@@ -794,7 +794,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         page-break-after: always; break-after: page;
                     }
                     #settling-in-print-area .settling-in-last-sheet { page-break-after: auto; break-after: auto; }
-                    #settling-in-print-area .settling-in-panel { height: 202mm !important; padding: 2mm !important; }
+                    #settling-in-print-area .settling-in-panel { height: 191mm !important; padding: 2mm !important; }
                     #settling-in-print-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}</style>
