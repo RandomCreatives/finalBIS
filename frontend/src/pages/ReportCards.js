@@ -34,13 +34,13 @@ function ReportSheet({ card, className, termName, yearName }) {
             className="report-sheet"
             data-testid={`report-card-${student.id}`}
             sx={{
-                border: '2px solid #1e3a8a', borderRadius: 1, p: { xs: 2, sm: 3.5 },
-                mb: 4, maxWidth: 820, mx: 'auto', bgcolor: '#fff', color: '#0f172a',
+                border: '2px solid #1e3a8a', borderRadius: 1, p: { xs: 1, sm: 2 },
+                mb: 2, maxWidth: '100%', bgcolor: '#fff', color: '#0f172a',
                 pageBreakAfter: 'always', breakInside: 'avoid',
             }}
         >
             {/* School head */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                 <Box sx={{
                     width: 44, height: 44, borderRadius: 1, bgcolor: '#1e3a8a', color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -65,10 +65,10 @@ function ReportSheet({ card, className, termName, yearName }) {
                     </Typography>
                 </Box>
             </Box>
-            <Divider sx={{ borderColor: '#1e3a8a', mb: 2 }} />
+            <Divider sx={{ borderColor: '#1e3a8a', mb: 1 }} />
 
             {/* Student line */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 1, sm: 3 }, mb: 2, ...font }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 0.5, sm: 1.5 }, mb: 1, ...font }}>
                 <Typography sx={{ ...font }}><b>Name:</b> {student.name}</Typography>
                 <Typography sx={{ ...font }}><b>Admission no:</b> {student.admissionNo || blankCell}</Typography>
                 <Typography sx={{ ...font }}><b>Class:</b> {className}</Typography>
@@ -79,6 +79,7 @@ function ReportSheet({ card, className, termName, yearName }) {
             <Table
                 size="small"
                 sx={{
+                    width: '100%',
                     '& th, & td': { border: '1px solid #94a3b8', py: 0.75, ...font },
                     '& th': { bgcolor: '#eef2ff', fontWeight: 800 },
                 }}
@@ -121,11 +122,11 @@ function ReportSheet({ card, className, termName, yearName }) {
             )}
 
             {/* Comment + signatures */}
-            <Box sx={{ mt: 3, ...font }}>
+            <Box sx={{ mt: 2, ...font }}>
                 <Typography sx={{ ...font, mb: 2 }}>
                     <b>Class teacher's comment:</b> ______________________________________________
                 </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 4 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 2 }}>
                     <Typography sx={{ ...font }}>Class teacher: ________________</Typography>
                     <Typography sx={{ ...font }}>Principal: ________________</Typography>
                     <Typography sx={{ ...font }}>Date: ____________</Typography>
@@ -161,18 +162,18 @@ function BISSummaryPage({ student, className, termName, term, homeroomTeacher, y
     return (
         <Box sx={{
             bgcolor: '#fff', color: '#0f172a', border: '2px solid #1e3a8a',
-            p: { xs: 2, sm: 3 }, mb: 3, maxWidth: 900, mx: 'auto',
+            p: { xs: 1, sm: 2 }, mb: 2, maxWidth: '100%',
             minHeight: { sm: 680 }, pageBreakAfter: 'always', ...font,
         }}>
             <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa logo"
-                sx={{ display: 'block', width: { xs: '75%', sm: 360 }, height: 'auto', mx: 'auto', mb: 1.5 }} />
+                sx={{ display: 'block', width: { xs: '75%', sm: 360 }, height: 'auto', mx: 'auto', mb: 1 }} />
             <Typography align="center" sx={{ fontWeight: 800, fontSize: 14, ...font }}>Gerji Campus</Typography>
             <Typography align="center" sx={{ fontSize: 13, mt: 0.25, ...font }}>{monthYearFromTerm(term)}</Typography>
-            <Typography align="center" sx={{ fontWeight: 900, fontSize: 20, mt: 0.25, mb: 2, ...font }}>
+            <Typography align="center" sx={{ fontWeight: 900, fontSize: 20, mt: 0.25, mb: 1, ...font }}>
                 {termName} Report
             </Typography>
 
-            <Table size="small" sx={{ mb: 2, '& td': { border: '1px solid #94a3b8', py: 0.75, fontFamily: 'inherit' } }}>
+            <Table size="small" sx={{ width: '100%', mb: 1, '& td': { border: '1px solid #94a3b8', py: 0.75, fontFamily: 'inherit' } }}>
                 <TableBody>
                     <TableRow>
                         <TableCell><b>Student's Name:</b> {student.name}</TableCell>
@@ -185,8 +186,8 @@ function BISSummaryPage({ student, className, termName, term, homeroomTeacher, y
                 </TableBody>
             </Table>
 
-            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.75, ...font }}>Letter Grade Work Habits</Typography>
-            <Table size="small" sx={{ mb: 2, '& th, & td': { border: '1px solid #cbd5e1', py: 0.6, fontFamily: 'inherit', fontSize: 11 } }}>
+            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.5, ...font }}>Letter Grade Work Habits</Typography>
+            <Table size="small" sx={{ width: '100%', mb: 1, '& th, & td': { border: '1px solid #cbd5e1', py: 0.6, fontFamily: 'inherit', fontSize: 11 } }}>
                 <TableHead><TableRow><TableCell sx={{ fontWeight: 800 }}>Grade</TableCell><TableCell sx={{ fontWeight: 800 }}>Meaning</TableCell></TableRow></TableHead>
                 <TableBody>
                     <TableRow><TableCell><b>E — Excellent</b></TableCell><TableCell>The student has demonstrated the required knowledge and skills with a high degree of effectiveness. Achievement surpasses the standard.</TableCell></TableRow>
@@ -196,8 +197,8 @@ function BISSummaryPage({ student, className, termName, term, homeroomTeacher, y
                 </TableBody>
             </Table>
 
-            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.75, ...font }}>Curriculum Attainment</Typography>
-            <Table size="small" sx={{ mb: 2.5, '& th, & td': { border: '1px solid #cbd5e1', py: 0.6, fontFamily: 'inherit', fontSize: 11 } }}>
+            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.5, ...font }}>Curriculum Attainment</Typography>
+            <Table size="small" sx={{ width: '100%', mb: 1.5, '& th, & td': { border: '1px solid #cbd5e1', py: 0.6, fontFamily: 'inherit', fontSize: 11 } }}>
                 <TableBody>
                     <TableRow><TableCell sx={{ width: 70, fontWeight: 900 }}>WT</TableCell><TableCell>Working Towards — the expected level for the grade.</TableCell></TableRow>
                     <TableRow><TableCell sx={{ fontWeight: 900 }}>WW</TableCell><TableCell>Working Within — the expected level for the grade.</TableCell></TableRow>
@@ -205,11 +206,11 @@ function BISSummaryPage({ student, className, termName, term, homeroomTeacher, y
                 </TableBody>
             </Table>
 
-            <Stack spacing={1.25} sx={{ fontSize: 12, ...font }}>
+            <Stack spacing={1} sx={{ fontSize: 12, ...font }}>
                 <Typography sx={{ fontFamily: 'inherit' }}>Homeroom Teacher: <b>{homeroomTeacher || '—'}</b> &nbsp;&nbsp; Signature: __________________________</Typography>
                 <Typography sx={{ fontFamily: 'inherit' }}>Principal: <b>Leulseged W/Tensay</b> &nbsp;&nbsp; Signature: __________________________</Typography>
             </Stack>
-            <Divider sx={{ borderColor: '#1e3a8a', mt: 2, mb: 1 }} />
+            <Divider sx={{ borderColor: '#1e3a8a', mt: 1, mb: 0.5 }} />
             <Typography align="center" sx={{ fontSize: 10, lineHeight: 1.35, ...font }}>
                 British International School P.L.C · Sherif Building · Bole Ring Road · P.O. Box 5583 · Addis Ababa, Ethiopia<br />
                 Telephone: 0116-630707 Bole Campus · 0116-298601 Gerji Campus · Fax: 0116-614098
@@ -226,8 +227,8 @@ const PREVIEW_OBJECTIVES = [
 
 function PreviewSubject({ name, row }) {
     return (
-        <Box sx={{ border: '1px solid #94a3b8', mb: 1.5, p: 1.5, ...{ fontFamily: '"Times New Roman", Georgia, serif' } }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.75 }}>
+        <Box sx={{ border: '1px solid #94a3b8', mb: 1, p: 1.25, ...{ fontFamily: '"Times New Roman", Georgia, serif' } }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.5 }}>
                 <Typography sx={{ fontWeight: 900, fontFamily: 'inherit', fontSize: 15 }}>{name}</Typography>
                 <Typography sx={{ fontSize: 11, color: '#475569', fontFamily: 'inherit' }}>
                     Teacher: To be assigned
@@ -253,7 +254,7 @@ function PreviewSubject({ name, row }) {
                     ))}
                 </TableBody>
             </Table>
-            <Stack direction="row" spacing={2} sx={{ mt: 1, fontSize: 11, color: '#475569' }}>
+            <Stack direction="row" spacing={1.5} sx={{ mt: 0.5, fontSize: 11, color: '#475569' }}>
                 <span>Effort: —</span>
                 <span>Exam: {row?.percentage == null ? 'N/A' : `${row.percentage}%`}</span>
                 <span>Targets: To be defined</span>
@@ -267,10 +268,10 @@ function BISPreviewPage({ pageNumber, title, children, student, className, termN
     return (
         <Box sx={{
             bgcolor: '#fff', color: '#0f172a', border: '2px solid #1e3a8a',
-            p: { xs: 2, sm: 3 }, mb: 3, maxWidth: 900, mx: 'auto',
+            p: { xs: 1, sm: 2 }, mb: 2, maxWidth: '100%',
             minHeight: { sm: 680 }, pageBreakAfter: 'always', ...font,
         }}>
-            <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
                 <Box sx={{ width: 40, height: 40, bgcolor: '#1e3a8a', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 18 }}>
                     B
                 </Box>
@@ -283,13 +284,13 @@ function BISPreviewPage({ pageNumber, title, children, student, className, termN
                     <Typography sx={{ fontSize: 11, color: '#475569', ...font }}>Page {pageNumber} of 5 · {yearName}</Typography>
                 </Box>
             </Stack>
-            <Divider sx={{ borderColor: '#1e3a8a', mb: 1.5 }} />
-            <Stack direction="row" spacing={2.5} flexWrap="wrap" sx={{ mb: 1.5, ...font }}>
+            <Divider sx={{ borderColor: '#1e3a8a', mb: 1 }} />
+            <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mb: 1, ...font }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: 12 }}><b>Student:</b> {student.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: 12 }}><b>Class:</b> {className}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: 12 }}><b>Roll:</b> {student.rollNum || '—'}</Typography>
             </Stack>
-            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 1, ...font }}>{title}</Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: 15, mb: 0.5, ...font }}>{title}</Typography>
             {children}
         </Box>
     );
@@ -377,6 +378,7 @@ function TermReportCards() {
         <>
             {/* Print rules: show only the card stack, one sheet per page. */}
             <style>{`
+                @page { size: A4 portrait; margin: 8mm; }
                 @media print {
                     body * { visibility: hidden; }
                     #report-print-area, #report-print-area * { visibility: visible; }
