@@ -251,18 +251,20 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
     const formTutor = classRecord?.mainTeacher?.name || '—';
     return (
         <Box className="settling-in-panel settling-in-page-one" data-testid={`settling-in-page-${student.id}-1`}>
-            <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
-                sx={{ width: '100%', height: '42%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
-            <Box sx={{ textAlign: 'center', mt: '8%', fontFamily: '"Times New Roman", Georgia, serif' }}>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: '17pt', lineHeight: 1.4 }}>
-                    {report.term?.name || 'Term'}
-                </Typography>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: '17pt', lineHeight: 1.4 }}>
-                    {formatPrintAcademicYear(yearName)}
-                </Typography>
-                <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '14pt', mt: '13%', lineHeight: 1.25 }}>
-                    SETTLING IN REPORT
-                </Typography>
+            <Box sx={{ p: '2mm', border: '0.6pt solid #1e3a8a', borderRadius: 1, bgcolor: '#fff', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
+                    sx={{ width: '100%', height: '28%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
+                <Box sx={{ textAlign: 'center', mt: 0.5, fontFamily: '"Times New Roman", Georgia, serif' }}>
+                    <Typography sx={{ fontFamily: 'inherit', fontSize: '16pt', lineHeight: 1.4 }}>
+                        {report.term?.name || 'Term'}
+                    </Typography>
+                    <Typography sx={{ fontFamily: 'inherit', fontSize: '16pt', lineHeight: 1.4 }}>
+                        {formatPrintAcademicYear(yearName)}
+                    </Typography>
+                    <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '16pt', mt: '1mm', lineHeight: 1.25 }}>
+                        SETTLING IN REPORT
+                    </Typography>
+                </Box>
             </Box>
             <Stack spacing={1.5} sx={{ mt: '20mm', mb: '15mm', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Name:</b> {student.name}</Typography>
