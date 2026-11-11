@@ -155,7 +155,6 @@ function PrintSubjectPanel({ student, report, subjectKeys, pageNumber }) {
 function PageFourPanel({ student, report }) {
     const mainTeacherTemplate = getMainTeacherTemplate(report.template);
     const ratings = student.mainTeacherSection?.ratings || {};
-    const attainmentKey = ['WT', 'WW', 'WA'];
 
     return (
         <Box className="settling-in-panel settling-in-page-four" data-testid={`settling-in-page-${student.id}-4`}>
@@ -204,7 +203,7 @@ function PageFourPanel({ student, report }) {
                     tableLayout: 'fixed',
                     borderCollapse: 'collapse',
 
-                    mt: '24mm',
+                    mt: '30mm',
 
                     '& th, & td': {
                         border: '0.6pt solid #333',
@@ -219,18 +218,21 @@ function PageFourPanel({ student, report }) {
                 }}>
                 <TableBody>
                     <TableRow>
-                        <TableCell sx={{ bgcolor: '#666', color: '#fff' }}>Letter Grade</TableCell>
-                        <TableCell colSpan={3} sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '12pt' }}>
-                            Curriculum Attainment
-                        </TableCell>
+                        <TableCell sx={{ bgcolor: '#666', color: '#fff', fontWeight: 900, fontSize: '12pt' }}>Letter Grade</TableCell>
+                        <TableCell sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '12pt' }}>Curriculum Attainment</TableCell>
                     </TableRow>
-                    {attainmentKey.map((rating) => (
-                        <TableRow key={rating}>
-                            <TableCell colSpan={3} sx={{ bgcolor: '#d1d1d1', fontWeight: 700 }}>
-                                {RATING_LABELS[rating]}:- the expected level for the grade.
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                    <TableRow>
+                        <TableCell sx={{ fontSize: '12pt', fontWeight: 900 }}>WT</TableCell>
+                        <TableCell sx={{ fontSize: '12pt' }}>Working Towards:- the expected level for the grade.</TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell sx={{ fontSize: '12pt', fontWeight: 900 }}>WW</TableCell>
+                        <TableCell sx={{ fontSize: '12pt' }}>Working Within:- the expected level for the grade.</TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell sx={{ fontSize: '12pt', fontWeight: 900 }}>WA</TableCell>
+                        <TableCell sx={{ fontSize: '12pt' }}>Working Above:- the expected level for the grade.</TableCell>
+                    </TableRow>
                 </TableBody>
             </Table>
 
