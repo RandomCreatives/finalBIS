@@ -264,7 +264,7 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                     SETTLING IN REPORT
                 </Typography>
             </Box>
-            <Stack spacing={1.5} sx={{ mt: '35mm', mb: '45mm', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
+            <Stack spacing={1.5} sx={{ mt: '20mm', mb: '15mm', px: '10%', fontFamily: '"Times New Roman", Georgia, serif' }}>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Name:</b> {student.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Class:</b> {classRecord?.name || report.class.name}</Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: '12pt' }}><b>Form Tutor:</b> {formTutor}</Typography>
@@ -788,9 +788,9 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     #settling-in-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
                     #settling-in-print-area .settling-in-sheet {
                         display: grid !important; grid-template-columns: 1fr 1fr !important;
-                        width: 100% !important; max-width: none !important; height: 190mm !important;
-                        min-height: 0 !important; aspect-ratio: auto !important; margin: 0 !important;
-                        padding: 0 !important; border: 0 !important; overflow: hidden !important;
+                        width: 100% !important; max-width: none !important; height: auto !important;
+                        min-height: 190mm !important; aspect-ratio: auto !important; margin: 0 !important;
+                        padding: 0 !important; border: 0 !important; overflow: visible !important;
                         page-break-inside: avoid; break-inside: avoid;
                     }
                     #settling-in-print-area .settling-in-sheet:not(.settling-in-last-sheet) {
