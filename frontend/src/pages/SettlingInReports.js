@@ -209,7 +209,7 @@ function PageFourPanel({ student, report }) {
                     '& th, & td': {
                         border: '0.6pt solid #333',
                         fontFamily: '"Times New Roman", Georgia, serif',
-                        fontSize: '14pt',
+                        fontSize: '12pt',
                         lineHeight: 1,
                         px: '0.7mm',
                         py: '0.6mm',
@@ -220,7 +220,7 @@ function PageFourPanel({ student, report }) {
                 <TableBody>
                     <TableRow>
                         <TableCell sx={{ bgcolor: '#666', color: '#fff' }}>Letter Grade</TableCell>
-                        <TableCell colSpan={3} sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '14pt' }}>
+                        <TableCell colSpan={3} sx={{ bgcolor: '#c8c8c8', fontWeight: 900, fontSize: '12pt' }}>
                             Curriculum Attainment
                         </TableCell>
                     </TableRow>
