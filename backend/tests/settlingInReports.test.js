@@ -108,7 +108,7 @@ describe('Settling In Report class templates', () => {
         assert.deepEqual(res.body.template.ratingOrder, ['WT', 'WW', 'WA']);
         assert.deepEqual(
             Object.fromEntries(res.body.template.subjects.map((subject) => [subject.key, subject.criteria.length])),
-            { english: 5, mathematics: 9, science: 5, global_citizenship: 5, amharic: 3 },
+            { english: 5, mathematics: 9, science: 4, global_citizenship: 5, amharic: 3 },
         );
         assert.equal(res.body.template.subjects.find((subject) => subject.key === 'mathematics').assessorRole, 'main_teacher');
         assert.equal(res.body.template.subjects.find((subject) => subject.key === 'english').assessorRole, 'subject_teacher');
