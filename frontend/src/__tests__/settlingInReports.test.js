@@ -493,9 +493,9 @@ describe('Settling In Report workspace', () => {
         expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-3`)).toHaveTextContent('Global Citizenship');
         expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-3`)).toHaveTextContent('Amharic');
         expect(within(preview).getByTestId(`settling-in-subject-panel-${STUDENT_1}-2`).querySelector('td'))
-            .toHaveStyle({ fontSize: '14pt' });
+            .toHaveStyle({ fontSize: '12pt' });
         expect(within(preview).getByTestId(`settling-in-main-teacher-print-${STUDENT_1}`).querySelector('th'))
-            .toHaveStyle({ fontSize: '14pt' });
+            .toHaveStyle({ fontSize: '12pt' });
         expect(within(preview).getAllByText(/Form Tutor:/i)).toHaveLength(1);
         expect(within(preview).getByText('2026-27')).toBeInTheDocument();
         expect(within(preview).getByText('P. O. Box 5583')).toBeInTheDocument();
