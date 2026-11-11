@@ -255,10 +255,10 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                 <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
                     sx={{ width: '100%', height: '28%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
                 <Box sx={{ textAlign: 'center', mt: 0.5, fontFamily: '"Times New Roman", Georgia, serif' }}>
-                    <Typography sx={{ fontFamily: 'inherit', fontSize: '16pt', lineHeight: 1.4 }}>
+                    <Typography sx={{ fontFamily: 'inherit', fontSize: '18pt', lineHeight: 1.4 }}>
                         {report.term?.name || 'Term'}
                     </Typography>
-                    <Typography sx={{ fontFamily: 'inherit', fontSize: '16pt', lineHeight: 1.4 }}>
+                    <Typography sx={{ fontFamily: 'inherit', fontSize: '18pt', lineHeight: 1.4 }}>
                         {formatPrintAcademicYear(yearName)}
                     </Typography>
                     <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '16pt', mt: '1mm', lineHeight: 1.25 }}>
