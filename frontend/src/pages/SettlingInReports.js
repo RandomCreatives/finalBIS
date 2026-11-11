@@ -107,9 +107,9 @@ function PrintSubjectPanel({ student, report, subjectKeys, pageNumber }) {
                     border: '0.6pt solid #333',
                     fontFamily: '"Times New Roman", Georgia, serif',
                     fontSize: '12pt',
-                    lineHeight: 1.2,
-                    px: '0.5mm',
-                    py: '0.3mm',
+                    lineHeight: 1.1,
+                    px: '0.4mm',
+                    py: '0.2mm',
                     verticalAlign: 'top',
                 },
                 '& .criterion-cell': { width: '76%', overflowWrap: 'anywhere' },
@@ -791,7 +791,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         width: 100% !important; max-width: none !important; height: auto !important;
                         min-height: 190mm !important; aspect-ratio: auto !important; margin: 0 !important;
                         padding: 0 !important; border: 0 !important; overflow: visible !important;
-                        page-break-inside: avoid; break-inside: avoid;
+                        page-break-inside: auto; break-inside: auto;
                     }
                     #settling-in-print-area .settling-in-sheet:not(.settling-in-last-sheet) {
                         page-break-after: always; break-after: page;
