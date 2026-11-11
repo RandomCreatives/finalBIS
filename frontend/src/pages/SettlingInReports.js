@@ -795,7 +795,7 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                         page-break-after: always; break-after: page;
                     }
                     #settling-in-print-area .settling-in-last-sheet { page-break-after: auto; break-after: auto; }
-                    #settling-in-print-area .settling-in-panel { height: 186mm !important; padding: 0mm !important; }
+                    #settling-in-print-area .settling-in-panel { height: 100% !important; padding: 0mm !important; overflow: visible !important; }
                     #settling-in-print-area table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}</style>
