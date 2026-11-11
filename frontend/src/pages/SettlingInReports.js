@@ -253,7 +253,7 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
         <Box className="settling-in-panel settling-in-page-one" data-testid={`settling-in-page-${student.id}-1`}>
             <Box sx={{ p: '2mm', border: '0.6pt solid #1e3a8a', borderRadius: 1, bgcolor: '#fff', display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Box component="img" src="/bis-logo.png" alt="British International School Addis Ababa"
-                    sx={{ width: '100%', height: '28%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
+                    sx={{ width: '100%', height: '38%', objectFit: 'contain', border: '0.4pt solid #ddd' }} />
                 <Box sx={{ textAlign: 'center', mt: 0.5, fontFamily: '"Times New Roman", Georgia, serif' }}>
                     <Typography sx={{ fontFamily: 'inherit', fontSize: '18pt', lineHeight: 1.4 }}>
                         {report.term?.name || 'Term'}
@@ -261,7 +261,7 @@ function PageOnePanel({ student, report, classRecord, yearName }) {
                     <Typography sx={{ fontFamily: 'inherit', fontSize: '18pt', lineHeight: 1.4 }}>
                         {formatPrintAcademicYear(yearName)}
                     </Typography>
-                    <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '16pt', mt: '1mm', lineHeight: 1.25 }}>
+                    <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '18pt', mt: '1mm', lineHeight: 1.25 }}>
                         SETTLING IN REPORT
                     </Typography>
                 </Box>
@@ -286,6 +286,7 @@ function PrintReportSide({ student, report, classRecord, yearName, side, isLast,
                 boxSizing: 'border-box',
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                gap: '20mm',
                 width: pdfMode ? '289mm' : '100%',
                 maxWidth: pdfMode ? 'none' : 1120,
                 height: pdfMode ? '202mm' : undefined,
