@@ -37,6 +37,7 @@ const CRITERIA = {
             'To identify adaptations that help Owls and Impala survive in their environment.',
             'To compare animals in contrasting habitats.',
             'To identify major components of snail habitat.',
+            'To classify animals into different groups based on their features.',
         ],
         global_citizenship: [
             'To define the meaning of justice, injustice, and social justice.',
