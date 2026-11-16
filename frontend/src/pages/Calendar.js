@@ -66,9 +66,9 @@ export default function Calendar() {
         () => calendarApi.list({ from: iso(monthStart), to: iso(monthEnd) }),
         [cursor.getFullYear(), cursor.getMonth()]
     );
-    const terms = useApi(() => termApi.list(), []);
-    const current = useApi(() => termApi.current(), []);
-    const classes = useApi(() => classApi.list(), []);
+    const terms = useApi(() => termApi.list(), [], { cacheKey: 'terms-list' });
+    const current = useApi(() => termApi.current(), [], { cacheKey: 'current-term' });
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
 
     const setField = (f) => (e) => {
         const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;

@@ -33,9 +33,9 @@ export default function Assignments({ embedded = false, activeTab = 'all' } = {}
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const classes = useApi(() => classApi.list(), []);
-    const subjects = useApi(() => subjectApi.list(), []);
-    const staff = useApi(() => userApi.list(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
+    const subjects = useApi(() => subjectApi.list(), [], { cacheKey: 'subjects-list' });
+    const staff = useApi(() => userApi.list(), [], { cacheKey: 'users-list' });
     const workload = useApi(() => assignmentApi.workload(), []);
     const subjectAssignments = useApi(() => assignmentApi.subjects(), []);
     const unassigned = useApi(() => studentApi.unassigned(), [], { syncTopic: 'students' });

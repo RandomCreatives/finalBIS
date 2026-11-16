@@ -240,7 +240,7 @@ export default function Attendance() {
     const [downloadingReport, setDownloadingReport] = useState(false);
     const [reportError, setReportError] = useState('');
 
-    const classes = useApi(() => classApi.list(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
     const subjects = useApi(
         () => (classId ? subjectApi.list({ classId }) : Promise.resolve([])),
         [classId]

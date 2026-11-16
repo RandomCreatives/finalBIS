@@ -65,7 +65,7 @@ export default function Store() {
 
     // Single list, filtered by chips instead of status tabs.
     const requests = useApi(() => storeApi.list({}), []);
-    const classes = useApi(() => classApi.list(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
 
     const allRequests = requests.data || [];
     const counts = FILTERS.filter((f) => f.value !== 'all').reduce((acc, f) => {
