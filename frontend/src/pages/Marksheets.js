@@ -106,8 +106,8 @@ export default function Marksheets() {
         if (!classId && classOptions.length === 1) setClassId(classOptions[0].id);
     }, [classOptions, classId]);
 
-    const terms = useApi(() => termApi.list(), []);
-    const years = useApi(() => academicYearApi.list(), []);
+    const terms = useApi(() => termApi.list(), [], { cacheKey: 'terms-list' });
+    const years = useApi(() => academicYearApi.list(), [], { cacheKey: 'academic-years' });
     const yearNameById = useMemo(
         () => new Map((years.data || []).map((year) => [String(year.id), year.name])),
         [years.data],

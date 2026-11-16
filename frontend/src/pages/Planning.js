@@ -66,7 +66,7 @@ export default function Planning() {
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const current = useApi(() => termApi.current(), []);
+    const current = useApi(() => termApi.current(), [], { cacheKey: 'current-term' });
     // Teachers author here; the admin only reviews, so these stay empty for them.
     const schemes = useApi(
         () => (isAdmin ? Promise.resolve([]) : planningApi.schemes({ mine: 'true' })),

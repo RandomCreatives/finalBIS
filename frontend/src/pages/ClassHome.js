@@ -637,7 +637,7 @@ function MarksSection({ klass, classId, roster }) {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState('');
 
-    const currentTerm = useApi(() => termApi.current().then((d) => d.term), []);
+    const currentTerm = useApi(() => termApi.current().then((d) => d.term), [], { cacheKey: 'current-term' });
     const termId = currentTerm.data?.id ?? null;
 
     // Subjects offered in this class.

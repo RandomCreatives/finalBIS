@@ -331,11 +331,11 @@ function TermReportCards() {
     const [view, setView] = useState('grid');
     const [previewStudentId, setPreviewStudentId] = useState('');
 
-    const classes = useApi(() => classApi.list(), []);
-    const subjects = useApi(() => subjectApi.list(), []);
-    const terms = useApi(() => termApi.list(), []);
-    const years = useApi(() => academicYearApi.list(), []);
-    const current = useApi(() => termApi.current(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
+    const subjects = useApi(() => subjectApi.list(), [], { cacheKey: 'subjects-list' });
+    const terms = useApi(() => termApi.list(), [], { cacheKey: 'terms-list' });
+    const years = useApi(() => academicYearApi.list(), [], { cacheKey: 'academic-years' });
+    const current = useApi(() => termApi.current(), [], { cacheKey: 'current-term' });
     const resolvedTermId = termId || current.data?.term?.id || '';
 
     const students = useApi(

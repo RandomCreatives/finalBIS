@@ -50,7 +50,7 @@ export default function Students() {
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
 
-    const classes = useApi(() => classApi.list(), [], { syncTopic: 'assignments' });
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list', syncTopic: 'assignments' });
     const students = useApi(
         () => studentApi.list({ classId: classFilter || undefined, search: search || undefined }),
         [classFilter, search],

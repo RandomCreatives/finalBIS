@@ -702,7 +702,7 @@ function TeacherDashboard() {
 
 export default function Dashboard() {
     const { user, isAdmin } = useAuth();
-    const { data: termData } = useApi(() => termApi.current(), []);
+    const { data: termData } = useApi(() => termApi.current(), [], { cacheKey: 'current-term' });
 
     const termLine = termData?.term
         ? `${termData.term.name}${termData.currentWeek ? ` · week ${termData.currentWeek} of ${termData.term.weekCount}` : ''}`

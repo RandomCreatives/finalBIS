@@ -425,9 +425,9 @@ export default function SettlingInReports({ initialClass = null } = {}) {
                     : undefined)),
         [hasLoginClassContext, isMainTeacher, isSubjectTeacher, academicYearId, loginClass],
     );
-    const terms = useApi(() => termApi.list(), []);
-    const years = useApi(() => academicYearApi.list(), []);
-    const current = useApi(() => termApi.current(), []);
+    const terms = useApi(() => termApi.list(), [], { cacheKey: 'terms-list' });
+    const years = useApi(() => academicYearApi.list(), [], { cacheKey: 'academic-years' });
+    const current = useApi(() => termApi.current(), [], { cacheKey: 'current-term' });
 
     const resolvedAcademicYearId = academicYearId
         || current.data?.term?.academicYearId

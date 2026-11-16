@@ -42,8 +42,8 @@ export default function StudentPortal() {
     const [classId, setClassId] = useState('');
     const [studentId, setStudentId] = useState('');
 
-    const classes = useApi(() => classApi.list(), []);
-    const currentTerm = useApi(() => termApi.current(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
+    const currentTerm = useApi(() => termApi.current(), [], { cacheKey: 'current-term' });
     const classOptions = useMemo(
         () => [...(classes.data || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
         [classes.data],

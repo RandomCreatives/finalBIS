@@ -22,7 +22,7 @@ export default function Classes() {
     const [formError, setFormError] = useState('');
     const [toast, setToast] = useState('');
 
-    const classes = useApi(() => classApi.list(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
 
     const handleSave = async () => {
         setSaving(true);

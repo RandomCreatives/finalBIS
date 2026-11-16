@@ -47,7 +47,7 @@ export default function Messages() {
     // Admins can address anyone; teachers reach the office and each other.
     const staff = useApi(() => (isAdmin ? userApi.list() : Promise.resolve([])), [isAdmin]);
     const students = useApi(() => studentApi.list(), [], { syncTopic: 'students' });
-    const classes = useApi(() => classApi.list(), []);
+    const classes = useApi(() => classApi.list(), [], { cacheKey: 'classes-list' });
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
