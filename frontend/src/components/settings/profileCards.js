@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-    Alert, Avatar, Box, Button, Card, CardContent, Chip, IconButton,
-    InputAdornment, Link, Stack, Switch, TextField, Typography,
+    Alert, Avatar, Box, Button, Card, CardContent, Chip, FormControl, IconButton,
+    InputAdornment, Link, MenuItem, Select, Stack, Switch, TextField, Typography,
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import LockIcon from '@mui/icons-material/Lock';
@@ -17,6 +17,8 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import IosShareIcon from '@mui/icons-material/IosShare';
+import LanguageIcon from '@mui/icons-material/Language';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { alpha } from '@mui/material/styles';
 import { authApi } from '../../api/endpoints';
 import { subscriptionState, subscribePush, unsubscribePush } from '../../services/push';
@@ -485,28 +487,95 @@ export function TeachingCard({ title = 'My teaching', items = [], emptyHint }) {
 export function PreferencesCard() {
     const { mode, toggleColorScheme } = useColorScheme();
     const dark = mode === 'dark';
+    const [language, setLanguage] = useState('en');
+    const [timezone, setTimezone] = useState('Africa/Addis_Ababa');
+
+    const LANGUAGES = [
+        { code: 'en', label: 'English' },
+        { code: 'am', label: 'Amharic (አማርኛ)' },
+    ];
+
+    const TIMEZONES = [
+        { value: 'Africa/Addis_Ababa', label: 'East Africa Time (Addis Ababa, UTC+3)' },
+        { value: 'UTC', label: 'Coordinated Universal Time (UTC)' },
+    ];
+
     return (
         <CardShell icon={TuneIcon} title="Preferences" subtitle="This device only">
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="column" spacing={2}>
+                {/* Dark mode */}
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        {dark ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+                        <Box>
+                            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Dark mode</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Switches instantly and is remembered here.
+                            </Typography>
+                        </Box>
+                    </Stack>
+                    <Switch checked={dark} onChange={toggleColorScheme}
+                        inputProps={{ 'aria-label': 'Toggle dark mode' }} />
+                </Stack>
+
+                {/* Language */}
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                    {dark ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
-                    <Box>
-                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Dark mode</Typography>
+                    <LanguageIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Language</Typography>
                         <Typography variant="caption" color="text.secondary">
-                            Switches instantly and is remembered here.
+                            Changes the interface language.
                         </Typography>
                     </Box>
+                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <Select
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            displayEmpty
+                            inputProps={{ 'aria-label': 'Interface language' }}
+                        >
+                            {LANGUAGES.map((lang) => (
+                                <MenuItem key={lang.code} value={lang.code}>
+                                    {lang.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
                 </Stack>
-                <Switch checked={dark} onChange={toggleColorScheme}
-                    inputProps={{ 'aria-label': 'Toggle dark mode' }} />
-            </Stack>
+
+                {/* Timezone */}
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                    <AccessTimeIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Timezone</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            Used for schedule and attendance displays.
+                        </Typography>
+                    </Box>
+                    <FormControl size="small" sx={{ minWidth: 220 }}>
+                        <Select
+                            value={timezone}
+                            onChange={(e) => setTimezone(e.target.value)}
+                            displayEmpty
+                            inputProps={{ 'aria-label': 'Timezone' }}
+                        >
+                            {TIMEZONES.map((tz) => (
+                                <MenuItem key={tz.value} value={tz.value}>
+                                    {tz.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Stack>
+
                 <Typography variant="caption" color="text.secondary"
                     sx={{ display: 'block', mt: 2, lineHeight: 1.55 }}>
                     Notice and message preferences arrive with the Notices module.
                 </Typography>
-            </CardShell>
-        );
-    }
+            </Stack>
+        </CardShell>
+    );
+}
 
 /* ── push ────────────────────────────────────────────────── */
 /** One device, one subscription: morning attendance reminders and office
