@@ -8,6 +8,7 @@ import {
     IdentityCard, TelegramCard, SecurityCard, TeachingCard, PreferencesCard,
     PushCard, PwaInstallCard,
 } from '../components/settings/profileCards';
+import { EmailCard } from '../components/settings/EmailCard';
 
 const ROLE_LABELS = {
     admin: 'System Administrator',
@@ -88,6 +89,7 @@ export default function Settings() {
                             roleLabel={ROLE_LABELS[user?.role] || user?.role}
                             canEditName
                         />
+                        <EmailCard />
                         <SecurityCard mode="self-service" />
                     </Stack>
                 </Grid>
